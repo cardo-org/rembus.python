@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=43.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rembus"
+version = "0.1.0"
+license = { file = "LICENSE" }
+authors = [
+  { name="Attilio Donà", email="attilio.dona@gmail.com" },
+]
+description = "Rembus for python"
+readme = "README.md"
+keywords = ["rembus", "rpc", "publish", "subscribe", "websocket", "cbor"]
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha",
+]
+
+dependencies = [
+  "async-timeout",
+  "platformdirs",
+  "pandas",
+  "pyarrow",
+  "websockets",
+  "cbor2",
+  "cryptography"
+]
+
+#
+#   $ pip install rembus[dev]
+#
+# Similar to `dependencies` above, these must be valid existing
+# projects.
+[project.optional-dependencies]
+dev = ["check-manifest", "bumpver"]
+test = ["coverage", "mock", "pytest", "pytest-asyncio", "pytest-mock"]
+
+[project.urls]
+"Homepage" = "https://github.com/cardo-org/rembus.python"
+"Bug Tracker" = "https://github.com/cardo-org/rembus.python/issues"
+
+[tool.bumpver]
+current_version = "0.1.0"
+version_pattern = "MAJOR.MINOR.PATCH"
+commit_message = "bump version {old_version} -> {new_version}"
+tag_message = "{new_version}"
+tag_scope = "default"
+pre_commit_hook = ""
+post_commit_hook = ""
+commit = true
+tag = true
+push = true
+
+[tool.bumpver.file_patterns]
+"pyproject.toml" = [
+    'current_version = "{version}"',
+]
+"README.md" = [
+    "{version}",
+    "{pep440_version}",
+]
+"src/reader/__init__.py" = [
+  "{version}",
+]
