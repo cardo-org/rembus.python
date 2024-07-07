@@ -68,7 +68,7 @@ class RembusError(RembusException):
             return f'{retcode[self.status]}'
 
 def request_timeout():
-    return os.environ.get('REMBUS_TIMEOUT', 3)
+    return float(os.environ.get('REMBUS_TIMEOUT', 10.0))
 
 
 def msg_status(response):
