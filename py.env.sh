@@ -41,3 +41,7 @@ else
     #echo "activating a standard virtual env"
     pip_activate
 fi
+
+# Verify installation
+echo "Verifying installation of rembus module"
+python -c "import rembus; print('rembus module is installed')"

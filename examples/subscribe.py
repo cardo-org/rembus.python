@@ -9,7 +9,7 @@ import signal
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
 
 def receiveSignal(handle, loop):
-    asyncio.run_coroutine_threadsafe(handle.close(), loop)
+    asyncio.run_coroutine_threadsafe(handle.shutdown(), loop)
 
 async def foo(arg):
     print(f'[foo]: {arg}')

@@ -40,14 +40,7 @@ import rembus
 
 async def main():
     rb = await rembus.component(client_name)
-
-    await rb.publish("mytopic", 
-                         {
-                            'name': 'sensor_1',
-                            'metric': 'T',
-                            'value':21.6
-                         })
-
+    await rb.publish("mytopic", {'name': 'sensor_1','metric': 'T','value':21.6})
     await rb.close()
 
 

@@ -14,9 +14,11 @@ import websockets
 
 from .protocol import *
 
+# Configure the logger
+logging.basicConfig(level=logging.INFO)
+
 # create logger
 logger = logging.getLogger("rembus")
-
 
 def tohex(bytes):
     """Return a string with bytes as hex numbers with 0xNN format."""
@@ -37,7 +39,6 @@ def msg_str(dir, msg):
     payload = ", ".join(str(el) for el in msg[2:])
     s = f'{dir}: [{msg[0]}, {field_repr(msg[1])}, {payload}]'
     return s
-
 
 class Component:
 

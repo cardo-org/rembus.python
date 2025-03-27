@@ -1,5 +1,7 @@
 import os
 
+WS_FRAME_MAXSIZE = 60 * 1024 * 1024
+
 TYPE_IDENTITY = 0
 TYPE_PUB = 1
 TYPE_RPC = 2
@@ -40,10 +42,10 @@ retcode = {
 
 BROKER_CONFIG = '__config__'
 COMMAND = 'cmd'
-ADD_INTEREST = 'add_interest'
-REMOVE_INTEREST = 'remove_interest'
-ADD_IMPL = 'add_impl'
-REMOVE_IMPL = 'remove_impl'
+ADD_INTEREST = 'subscribe'
+REMOVE_INTEREST = 'unsubscribe'
+ADD_IMPL = 'expose'
+REMOVE_IMPL = 'unexpose'
 
 class RembusException(Exception):
     pass

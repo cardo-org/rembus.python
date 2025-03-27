@@ -4,16 +4,42 @@ from rembus.common import *
 
 logger = logging.getLogger("rembus")
 
+background_tasks = set()
+
+async def component_task(cmp):
+    while True:
+        msg = await cmp.inbox.get()
+        logger.debug(f"component task: {msg}")
+        if msg == "shutdown":
+            break
+
+        logger.debug(f"{cmp.name}: reconnecting ...")
+        try:
+            await cmp.connect()
+            await cmp.reactive()
+        except Exception as e:
+            logger.error(f"{cmp.name} connect: {e}")
+            await asyncio.sleep(2)
+            cmp.inbox.put_nowait("reconnect")
 
 async def component(name=None):
-    return await Rembus(name).connect()
-
+    if name in connected_components:
+        return connected_components[name]
+    else:
+        cmp = Rembus(name)
+        await cmp.connect()
+        add_component(name, cmp)
+        cmp.task = asyncio.create_task(component_task(cmp))
+        cmp.task.add_done_callback(background_tasks.discard)
+        return cmp
 
 class Rembus:
     def __init__(self, name=None):
+        self.name = name
         self.ws = None
         self.receiver = None
         self.component = Component(name)
+        self.inbox = asyncio.Queue()
 
         # outstanding requests
         self.outreq = {}
@@ -97,6 +123,10 @@ class Rembus:
         except Exception as e:
             logger.warning(f"closing: {e}")
         finally:
+
+            # for now send a message to task
+            await self.inbox.put("reconnect")
+
             await self.close()
 
     async def connect(self):
@@ -110,7 +140,7 @@ class Rembus:
             if os.path.isfile(ca_crt):
                 ssl_context.load_verify_locations(ca_crt)
             else:
-                logger.warn(f"CA file not found: {ca_crt}")
+                logger.warning(f"CA file not found: {ca_crt}")
 
         self.ws = await websockets.connect(broker_url, ssl=ssl_context)
         self.receiver = asyncio.create_task(self.receive())
@@ -138,7 +168,7 @@ class Rembus:
         challenge = await self.send_wait(
             lambda id: encode([TYPE_IDENTITY, id, self.component.name])
         )
-        if challenge:
+        if challenge and isinstance(challenge, bytes):
             logger.debug(f"challenge: {challenge}")
             plain = [bytes(challenge), self.component.name]
             message = cbor2.dumps(plain)
@@ -218,6 +248,9 @@ class Rembus:
         self.handler.pop(topic, None)
         await self.setting(topic, REMOVE_IMPL)
 
+    async def shutdown(self):
+        await self.inbox.put("shutdown")
+        
     async def close(self):
         self.receiver.cancel()
         if self.ws:
@@ -226,5 +259,4 @@ class Rembus:
 
     async def forever(self):
         await self.reactive()
-        if self.receiver != None:
-            await self.receiver
+        await self.task

@@ -4,38 +4,55 @@ import time
 from websockets.sync.client import connect
 from rembus.common import *
 
+# Global dictionary to store connected components
+connected_components = {}
 
-def component(name=None):
-    return Rembus(name).connect()
+def add_component(name, component):
+    """Add a component to the connected components dictionary."""
+    connected_components[name] = component
 
+def get_component(name):
+    """Retrieve a component from the connected components dictionary."""
+    return connected_components.get(name)
 
-def connector(cmp, max_retries):
+def remove_component(name):
+    """Remove a component from the connected components dictionary."""
+    if name in connected_components:
+        del connected_components[name]
+
+def connector(cmp):
     retries = 0
-    while retries < max_retries:
-        logger.info("waiting ...")
+    while True:
         if cmp.ws:
             with cmp.isdone:
                 cmp.isdone.wait()
 
+        if cmp.isclosing():
+            break
+
         time.sleep(4)
-        logger.info("reconnecting ...")
+        logger.debug(f"{cmp.name}: reconnecting ...")
         cmp.connect()
         retries += 1
 
-
-def process(name=None, max_retries=10):
-    cmp = Rembus(name)
-    cmp.connect()
-
-    conn = threading.Thread(
-        target=connector, args=(cmp, max_retries),
-        daemon=False)
-    conn.start()
-    return cmp
-
+def component(name=None):
+    if name in connected_components:
+        return connected_components[name]
+    else:
+        cmp = Rembus(name)
+        cmp.connect()
+        add_component(name, cmp)
+    
+        conn = threading.Thread(
+            target=connector, args=(cmp,),
+            daemon=False)
+        conn.start()
+        return cmp
 
 class Rembus:
     def __init__(self, name=None):
+        self.name = name
+        self.status = 'IDLE'
         self.ws = None
         self.receiver = None
         self.component = Component(name)
@@ -101,17 +118,16 @@ class Rembus:
         if condition == None:
             logger.warning(f"recv unknown msg id {tohex(msgid)}")
             return
-
-        if type == TYPE_RESPONSE:
-            sts = msg[2]
-            if sts == OK:
-                self.outreq[msgid] = tag2df(msg[3])
-            elif sts == CHALLENGE:
-                self.outreq[msgid] = msg[3]
-            else:
-                self.outreq[msgid] = RembusError(sts, msg[3])
-
         with condition:
+            if type == TYPE_RESPONSE:
+                sts = msg[2]
+                if sts == OK:
+                    self.outreq[msgid] = tag2df(msg[3])
+                elif sts == CHALLENGE:
+                    self.outreq[msgid] = msg[3]
+                else:
+                    self.outreq[msgid] = RembusError(sts, msg[3])
+
             condition.notify()
 
     def receive(self):
@@ -124,19 +140,21 @@ class Rembus:
                 self.parse_input(msg)
         except websockets.exceptions.ConnectionClosedError:
             logger.info("unexpected ws close connection")
+        except Exception as e:
+            logger.info(f"closing ({type(e)}): {e}")
+        finally:
+            self.close_connection()
+
             with self.isdone:
                 self.isdone.notify()
-        except Exception as e:
-            logger.debug(f"closing ({type(e)}): {e}")
-
-        finally:
-            self.close()
+            
             # notify all outstanding requests
             for reqid in self.outreq:
                 cond = self.outreq[reqid]
-                self.outreq[reqid] = RembusConnectionClosed()
-                with cond:
-                    cond.notify()
+                if isinstance(cond, threading.Condition):
+                    with cond:
+                        self.outreq[reqid] = RembusConnectionClosed()
+                        cond.notify()
 
     def connect(self):
         self.isdone = threading.Condition()
@@ -149,10 +167,10 @@ class Rembus:
             if os.path.isfile(ca_crt):
                 ssl_context.load_verify_locations(ca_crt)
             else:
-                logger.warn(f"CA file not found: {ca_crt}")
+                logger.warning(f"CA file not found: {ca_crt}")
 
         try:
-            self.ws = connect(broker_url, ssl_context=ssl_context)
+            self.ws = connect(broker_url, max_size=WS_FRAME_MAXSIZE, ssl_context=ssl_context)
             self.receiver = threading.Thread(
                 target=self.receive, args=(), daemon=False)
             self.receiver.start()
@@ -160,7 +178,8 @@ class Rembus:
                 try:
                     self.login()
                 except Exception as e:
-                    raise RembusError("login failed")
+                    raise RembusError(IDENTIFICATION_ERROR)
+            self.status = 'CONNECTED'
         except ConnectionRefusedError:
             with self.isdone:
                 self.isdone.notify()
@@ -168,9 +187,10 @@ class Rembus:
 
     def timeout(self, reqid):
         cond = self.outreq[reqid]
-        self.outreq[reqid] = RembusTimeout()
-        with cond:
-            cond.notify()
+        if isinstance(cond, threading.Condition):
+            with cond:
+                self.outreq[reqid] = RembusTimeout()
+                cond.notify()
 
     def send_wait(self, builder):
         """:meta private:"""
@@ -186,16 +206,19 @@ class Rembus:
 
         with condition:
             condition.wait()
-
         timer.cancel()
-        return self.outreq.pop(reqid)
+        result = self.outreq.pop(reqid)
+        if isinstance(result, RembusException):
+            raise result
+        
+        return result
 
     def login(self):
         """:meta private:"""
         challenge = self.send_wait(
             lambda id: encode([TYPE_IDENTITY, id, self.component.name])
         )
-        if challenge:
+        if challenge and isinstance(challenge, bytes):
             logger.debug(f"challenge: {challenge}")
             plain = [bytes(challenge), self.component.name]
             message = cbor2.dumps(plain)
@@ -274,10 +297,24 @@ class Rembus:
         self.handler.pop(topic, None)
         self.setting(topic, REMOVE_IMPL)
 
-    def close(self):
+    def close_connection(self):
+        if not self.isclosing():
+            self.status = 'DISCONNECTED'
+
         if self.ws:
             self.ws.close()
             self.ws = None
+
+    def close(self):
+        self.status = 'CLOSED'
+        remove_component(self.name)
+        self.close_connection()
+
+    def isclosing(self):
+        return self.status == 'CLOSED'
+    
+    def isopen(self):
+        return self.status == 'CONNECTED'
 
     def forever(self):
         self.reactive()
