@@ -14,8 +14,8 @@ The fastest way is to pull and run a docker image:
 
 .. code-block:: shell
 
-   docker pull rembus/caronte
-   docker run --rm -p 8000:8000 -t rembus/caronte
+   docker pull rembus/broker
+   docker run --rm -p 8000:8000 -t rembus/broker
 
 Otherwise, if you have `Julia <https://julialang.org>`_ installed,
 you may download the `Rembus.jl <https://github.com/cardo-org/Rembus.jl>`_ 
