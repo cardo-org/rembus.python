@@ -20,6 +20,22 @@ logging.basicConfig(level=logging.ERROR)
 # create logger
 logger = logging.getLogger("rembus")
 
+# Global dictionary to store connected components
+connected_components = {}
+
+def add_component(name, component):
+    """Add a component to the connected components dictionary."""
+    connected_components[name] = component
+
+def get_component(name):
+    """Retrieve a component from the connected components dictionary."""
+    return connected_components.get(name)
+
+def remove_component(name):
+    """Remove a component from the connected components dictionary."""
+    if name in connected_components:
+        del connected_components[name]
+
 def tohex(bytes):
     """Return a string with bytes as hex numbers with 0xNN format."""
     return ' '.join(f'0x{x:02x}' for x in bytes)

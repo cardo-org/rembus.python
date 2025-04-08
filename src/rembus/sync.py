@@ -4,22 +4,6 @@ import time
 from websockets.sync.client import connect
 from rembus.common import *
 
-# Global dictionary to store connected components
-connected_components = {}
-
-def add_component(name, component):
-    """Add a component to the connected components dictionary."""
-    connected_components[name] = component
-
-def get_component(name):
-    """Retrieve a component from the connected components dictionary."""
-    return connected_components.get(name)
-
-def remove_component(name):
-    """Remove a component from the connected components dictionary."""
-    if name in connected_components:
-        del connected_components[name]
-
 def connector(cmp):
     retries = 0
     while True:
@@ -194,6 +178,8 @@ class Rembus:
 
     def send_wait(self, builder):
         """:meta private:"""
+        if self.ws is None:
+            raise RembusConnectionClosed()
         reqid = id()
         condition = threading.Condition()
         self.outreq[reqid] = condition

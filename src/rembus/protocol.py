@@ -56,7 +56,7 @@ class RembusTimeout(RembusException):
 
 class RembusConnectionClosed(RembusException):
     def __str__(self):
-        return 'connection closed'
+        return 'connection down'
 
 class RembusError(RembusException):
     def __init__(self, status_code, msg=None):

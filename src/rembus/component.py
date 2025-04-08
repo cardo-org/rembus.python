@@ -154,6 +154,8 @@ class Rembus:
 
     async def send_wait(self, builder):
         """:meta private:"""
+        if self.ws is None:
+            raise RembusConnectionClosed()
         reqid = id()
         await self.ws.send(builder(reqid))
         self.outreq[reqid] = asyncio.get_running_loop().create_future()
@@ -252,7 +254,9 @@ class Rembus:
         await self.inbox.put("shutdown")
         
     async def close(self):
+        remove_component(self.name)
         self.receiver.cancel()
+        self.task.cancel()
         if self.ws:
             await self.ws.close()
             self.ws = None
