@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rembus"
-version = "0.1.5"
+version = "0.1.6"
 license = { file = "LICENSE" }
 authors = [
   { name="Attilio Donà", email="attilio.dona@gmail.com" },
@@ -44,7 +44,7 @@ test = ["coverage", "mock", "pytest", "pytest-asyncio", "pytest-mock"]
 "Bug Tracker" = "https://github.com/cardo-org/rembus.python/issues"
 
 [tool.bumpver]
-current_version = "0.1.5"
+current_version = "0.1.6"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "bump version {old_version} -> {new_version}"
 tag_message = "{new_version}"
@@ -58,5 +58,8 @@ push = true
 [tool.bumpver.file_patterns]
 "pyproject.toml" = [
     'current_version = "{version}"',
+    'version = "{version}"',
+]
+"src/rembus/__init__.py" = [
     'version = "{version}"',
 ]
