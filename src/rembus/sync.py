@@ -33,6 +33,11 @@ def component(name=None):
         conn.start()
         return cmp
 
+def register(cid, pin, tenant=None):
+    rb = component()
+    rb.register(cid, pin, tenant)
+    rb.close()
+    
 class Rembus:
     def __init__(self, name=None):
         self.name = name
@@ -181,9 +186,11 @@ class Rembus:
         if self.ws is None:
             raise RembusConnectionClosed()
         reqid = id()
+        req = builder(reqid)
         condition = threading.Condition()
-        self.outreq[reqid] = condition
-        self.ws.send(builder(reqid))
+        kid = bytes(reqid)
+        self.outreq[kid] = condition
+        self.ws.send(req)
 
         timer = threading.Timer(
             request_timeout(), lambda reqid: self.timeout(reqid), args=(reqid,)
@@ -193,7 +200,7 @@ class Rembus:
         with condition:
             condition.wait()
         timer.cancel()
-        result = self.outreq.pop(reqid)
+        result = self.outreq.pop(kid)
         if isinstance(result, RembusException):
             raise result
         
@@ -237,6 +244,23 @@ class Rembus:
         data = df2tag(args)
         return self.send_wait(
             lambda id: encode([TYPE_RPC, id, topic, None, data]))
+
+    def register(self, cid, pin, tenant=None):
+        try:
+            privkey = create_private_key()
+            pubkey = pem_public_key(privkey)
+
+            response = self.send_wait(
+                lambda id: encode([TYPE_REGISTER, regid(id, pin), cid, tenant, pubkey, 1]))
+
+            if response.status == OK:
+                logger.info(f"cid {cid} registered")
+                save_private_key(cid, privkey)
+        except Exception as e:
+            logger.error(f"cid {cid} registration failed: {e}")
+            raise e
+            
+        return None
 
     def direct(self, target, topic, *args):
         data = df2tag(args)

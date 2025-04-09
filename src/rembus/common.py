@@ -1,6 +1,7 @@
 import cbor2
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 import logging
 import os
@@ -137,10 +138,14 @@ def df2tag(data):
         data = encode_dataframe(data)
     return data
 
+def regid(id: bytearray, pin: str) -> bytearray:
+    bpin = bytes.fromhex(pin[::-1])
+    id[:4] = bpin[:4]
+    return id
 
 def id():
     """Return an array of 16 random bytes."""
-    return uuid.uuid4().bytes
+    return bytearray(os.urandom(16))
 
 
 def config_dir():
@@ -149,15 +154,32 @@ def config_dir():
     app_author = "Rembus"
     return user_config_dir("rembus", app_author)
 
+def create_private_key():
+    return rsa.generate_private_key(public_exponent=65537,key_size=2048
+)
+
+def pem_public_key(private_key):
+    return private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
 
 def save_private_key(cid, private_key):
-    dir = config_dir()
+    dir = os.path.join(config_dir(), cid)
+    
     if not os.path.exists(dir):
         os.makedirs(dir)
 
-    fn = os.path.join(dir, cid)
+    fn = os.path.join(dir, ".secret")
     private_key_file = open(fn, "wb")
-    private_key_file.write(private_key)
+ 
+    pem_private_key = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+
+    private_key_file.write(pem_private_key)
     private_key_file.close()
 
 

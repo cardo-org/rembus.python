@@ -14,7 +14,7 @@ This API version supports only the WebSocket protocol.
 
 ## Getting Started
 
-Start a Rembus broker, for example [caronte](https://cardo-org.github.io/Rembus.jl/stable/).
+Start the [Rembus](https://cardo-org.github.io/Rembus.jl/stable/) broker.
 
 Install the package:
 
