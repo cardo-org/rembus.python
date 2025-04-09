@@ -1,10 +1,42 @@
 import asyncio
+import atexit
 from async_timeout import timeout
 from rembus.common import *
+import threading
 
 logger = logging.getLogger("rembus")
 
 background_tasks = set()
+
+# This should live at module level if not already defined
+_loop_runner = None
+
+def get_loop_runner():
+    global _loop_runner
+    if _loop_runner is None:
+        _loop_runner = AsyncLoopRunner()
+    return _loop_runner
+
+class AsyncLoopRunner:
+    def __init__(self):
+        self.loop = asyncio.new_event_loop()
+        self._thread = threading.Thread(target=self._start_loop, daemon=True)
+        self._thread.start()
+        atexit.register(self.shutdown)
+
+    def _start_loop(self):
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_forever()
+
+    def run(self, coro):
+        future = asyncio.run_coroutine_threadsafe(coro, self.loop)
+        return future.result()
+    
+    def shutdown(self):
+        if self.loop.is_running():
+            self.loop.call_soon_threadsafe(self.loop.stop)
+            self._thread.join()
+
 
 async def component_task(cmp):
     while True:
@@ -123,11 +155,8 @@ class Rembus:
         except Exception as e:
             logger.warning(f"closing: {e}")
         finally:
-
             # for now send a message to task
             await self.inbox.put("reconnect")
-
-            await self.close()
 
     async def connect(self):
         """Connect to the broker."""
@@ -157,11 +186,13 @@ class Rembus:
         if self.ws is None:
             raise RembusConnectionClosed()
         reqid = id()
-        await self.ws.send(builder(reqid))
-        self.outreq[reqid] = asyncio.get_running_loop().create_future()
+        req = builder(reqid)  
+        kid = bytes(reqid)
+        await self.ws.send(req)
+        self.outreq[kid] = asyncio.get_running_loop().create_future()
         try:
             async with timeout(3):
-                return await self.outreq[reqid]
+                return await self.outreq[kid]
         except TimeoutError:
             raise RembusTimeout()
 
@@ -212,6 +243,23 @@ class Rembus:
             lambda id: encode([TYPE_RPC, id, topic, target, data])
         )
 
+    async def register(self, cid, pin, tenant=None):
+        try:
+            privkey = create_private_key()
+            pubkey = pem_public_key(privkey)
+
+            response = await self.send_wait(
+                lambda id: encode([TYPE_REGISTER, regid(id, pin), cid, tenant, pubkey, 1]))
+
+            if response.status == OK:
+                logger.info(f"cid {cid} registered")
+                save_private_key(cid, privkey)
+        except Exception as e:
+            logger.error(f"cid {cid} registration failed: {e}")
+            raise e
+            
+        return None
+
     async def reactive(self):
         await self.broker_setting("reactive", {"status": True})
         return self
@@ -252,15 +300,69 @@ class Rembus:
 
     async def shutdown(self):
         await self.inbox.put("shutdown")
+        await self.close()
         
     async def close(self):
         remove_component(self.name)
-        self.receiver.cancel()
-        self.task.cancel()
+
+        if self.task:
+            self.task.cancel()
+            try:
+                await self.task
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.error(f"Error in task: {e}")
+            self.task = None
+
         if self.ws:
             await self.ws.close()
             self.ws = None
 
+        if self.receiver:
+            self.receiver.cancel()
+            try:
+                await self.receiver 
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.error(f"Error in receiver: {e}")
+            self.receiver = None
+
+
     async def forever(self):
         await self.reactive()
         await self.task
+
+class node:
+    def __init__(self, name=None):
+        self._runner = AsyncLoopRunner()
+        self._rb = self._runner.run(component(name))
+
+    def rpc(self, topic, *args):
+        return self._runner.run(self._rb.rpc(topic, *args))
+
+    def publish(self, topic, *args):
+        return self._runner.run(self._rb.publish(topic, *args))
+
+    def subscribe(self, fn, retroactive=False):
+        return self._runner.run(self._rb.subscribe(fn, retroactive))
+
+    def expose(self, fn):
+        return self._runner.run(self._rb.expose(fn))
+
+    def shutdown(self):
+        return self._runner.run(self._rb.shutdown())
+    
+    def close(self):
+        try:
+            self.shutdown()
+        except Exception:
+            pass
+    
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
