@@ -22,24 +22,22 @@ Install the package:
 pip install rembus
 ```
 
-then import `rembus.sync` for using the synchronous Python API:  
-
 ```python
-import rembus.sync as rembus
+import rembus
 
-rb = rembus.component()
+rb = rembus.node()
 rb.publish({'name': 'sensor_1', 'metric': 'T', 'value':21.6})
 rb.close()
 ```
 
-or import `rembus` for using the asynchronous Python API:
+or call `component("myname")` for the asynchronous Python API:
 
 ```python
 import asyncio
 import rembus
 
 async def main():
-    rb = await rembus.component(client_name)
+    rb = await rembus.component("myname")
     await rb.publish("mytopic", {'name': 'sensor_1','metric': 'T','value':21.6})
     await rb.close()
 
@@ -59,16 +57,16 @@ The url argument of the `component` function define the component identity and t
 import rembus
 
 # Broker endpoint and named component
-rb = rembus.component('ws://hostname:port/component_name')
+rb = await rembus.component('ws://hostname:port/component_name')
 
 # Broker endpoint and anonymous component 
-rb = rembus.component('ws://hostname:port')
+rb = await rembus.component('ws://hostname:port')
 
 # Default broker and named component 
-rb = rembus.component('component_name')
+rb = await rembus.component('component_name')
 
 # Default broker and anonymous component 
-rb = rembus.component()
+rb = await rembus.component()
 ```
 
 The `component` builder function returns a Rembus handler that will be used for interacting with the components via Pub/Sub and RPC messages.
@@ -91,7 +89,6 @@ Where the arguments `arg_i` comprise the message data payload that gets received
 
 A subscribed component interested to the topic `mytopic` have to define a function named as the topic of interest and with the same numbers of arguments:
 
-
 ```python
 # do something each time a message published to topic mytopic is published
 def mytopic(arg_1, arg_2, ..., arg_N):
@@ -108,7 +105,7 @@ The optional second argument of `subscribe` define the "retroactive" feature of 
 subscribed topic.
 
 If the second argument is `True` then the messages published when the component is offline will be delivered as soon as the component will get online again, otherwise
-the messages published before connecting will be lost. 
+the messages published before connecting will be lost.
 
 > **NOTE**: To cache messages for an offline component the broker needs to know that such component has subscribed for a specific topic. This imply that messages published before the first subscribe happens will be lost. If you want all message will be delivered subscribe first and publish after.  
 
@@ -117,12 +114,12 @@ the messages published before connecting will be lost.
 A RPC service is implemented with a function named as the exposed service.
 
 ```python
-import rembus.sync as rembus
+import rembus as rembus
 
 def add(x,y):
     return x+y
 
-rb = rembus.component('calculator')
+rb = rembus.node('calculator')
 
 rb.expose(add)
 
@@ -132,9 +129,9 @@ rb.forever()
 The `calculator` component expose the `add` service, the RPC client will invoke as:
 
 ```python
-import rembus.sync as rembus
+import rembus as rembus
 
-rb = rembus.component()
+rb = rembus.node()
 result = rb.rpc('add', 1, 2)
 ```
 
