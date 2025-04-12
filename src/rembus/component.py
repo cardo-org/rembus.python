@@ -107,8 +107,6 @@ def msg_id(response:list[Any]):
 
 logger = logging.getLogger("rembus")
 
-background_tasks: set[asyncio.Task[Any]] = set()
-
 _loop_runner = None
 
 logging.basicConfig(level=logging.ERROR)
@@ -308,7 +306,6 @@ async def get_response(obj:Any) -> Any:
 
 class Rembus:
     def __init__(self, name:str|None=None):
-        #self.name = name
         self.ws: websockets.ClientConnection | None = None
         self.receiver = None
         self.component = Component(name)
@@ -319,6 +316,10 @@ class Rembus:
         self.handler: dict[str, Callable[..., Awaitable[Any]]] = {}
         self.task: Optional[asyncio.Task[None]] = None
 
+    def isopen(self) -> bool:
+        """Check if the connection is open."""
+        return self.ws is not None and self.ws.state == websockets.State.OPEN 
+
     async def evaluate(self, topic:str, data:Any) -> Any:
         """Invoke the handler associate with the message topic.
 
@@ -326,14 +327,11 @@ class Rembus:
         """
         if isinstance(data, list):
             output = await get_response(self.handler[topic](*data))
-            #output = await self.handler[topic](*data)
         elif isinstance(data, bytes):
             args = list(data)
             output = await get_response(self.handler[topic](*args))
-            #output = await self.handler[topic](*args)
         else:
             output = await get_response(self.handler[topic](data))
-            #output = await self.handler[topic](data)
         return output
 
     async def parse_input(self, msg: list[Any]):
@@ -597,6 +595,10 @@ class node:
         self._runner = AsyncLoopRunner()
         self._rb = self._runner.run(component(name))
 
+    def isopen(self) -> bool:
+        """Check if the connection is open."""
+        return self._rb.isopen()
+    
     def register(self, cid:str, pin:str, tenant:str|None=None):
         return self._runner.run(self._rb.register(cid, pin, tenant))
 
@@ -635,20 +637,20 @@ class node:
         self.close()
 
 # Global dictionary to store connected components
-connected_components: dict[str, Rembus]  = {}
+_components: dict[str, Rembus]  = {}
 
 def add_component(name:str, component:Rembus):
     """Add a component to the connected components dictionary."""
-    connected_components[name] = component
+    _components[name] = component
 
 def get_component(name:str)->Rembus|None:
     """Retrieve a component from the connected components dictionary."""
-    return connected_components.get(name)
+    return _components.get(name)
 
 def remove_component(name:str):
     """Remove a component from the connected components dictionary."""
-    if name in connected_components:
-        del connected_components[name]
+    if name in _components:
+        del _components[name]
 
 async def component_task(cmp:Rembus):
     while True:
@@ -662,19 +664,18 @@ async def component_task(cmp:Rembus):
             await cmp.connect()
             await cmp.reactive()
         except Exception as e:
-            logger.error(f"{cmp.component.name} connect: {e}")
+            logger.info(f"{cmp.component.name} connect: {e}")
             await asyncio.sleep(2)
             cmp.inbox.put_nowait("reconnect")
 
 async def component(name:str|None):
-    if name in connected_components:
-        return connected_components[name]
+    if name in _components:
+        return _components[name]
     else:
         cmp = Rembus(name)
         await cmp.connect()
         add_component(cmp.component.name, cmp)
         cmp.task = asyncio.create_task(component_task(cmp))
-        cmp.task.add_done_callback(background_tasks.discard)
         return cmp
 
 def register(cid:str, pin:str, tenant:str|None=None):

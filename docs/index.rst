@@ -1,9 +1,9 @@
-.. Rembus.py documentation master file, created by
-   sphinx-quickstart on Fri Apr  5 16:51:28 2024.
+.. Rembus documentation master file, created by
+   sphinx-quickstart on Sat Apr 12 11:04:55 2025.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Rembus API for Python
+Rembus
 =====================================
 
 Rembus is both a cross-language protocol specification and a middleware
@@ -25,15 +25,15 @@ package and run caronte:
 
    git clone https://github.com/cardo-org/Rembus.jl
    cd Rembus.jl
-   bin/caronte
+   bin/broker
 
 Rembus.py provide a synchronous API:
 
 .. code-block:: python
 
-   import rembus.sync as rembus
+   import rembus
 
-   rb = rembus.component()
+   rb = rembus.node("mynode")
    rb.rpc("version")
 
 
@@ -44,16 +44,14 @@ and an asynchronous API:
    import rembus
 
    async main():
-      rb = await rembus.component()
+      rb = await rembus.component("mynode")
       await rb.rpc("version")
-
-
 
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
-
+   
    source/modules.rst
 
 Indices and tables

@@ -1,4 +1,8 @@
-from rembus.common import *
 from rembus.component import *
 
-version = "0.1.7"
+__all__ = [
+    'component',
+    'node',
+    'register',
+]
+__version__ = "0.1.7"

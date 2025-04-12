@@ -5,3 +5,4 @@ rembus
    :maxdepth: 4
 
    rembus
+   publish

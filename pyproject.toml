@@ -61,5 +61,5 @@ push = true
     'version = "{version}"',
 ]
 "src/rembus/__init__.py" = [
-    'version = "{version}"',
+    '__version__ = "{version}"',
 ]
