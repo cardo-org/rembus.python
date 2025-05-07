@@ -2,7 +2,7 @@ import asyncio
 from websockets import connection
 from functools import partial
 import logging
-import rembus.sync as rembus
+import rembus
 import pandas as pd
 import signal
 
@@ -21,14 +21,14 @@ def mytopic(msg):
 
 
 def main():
-    handle = rembus.component("sub_a")
+    handle = rembus.node("sub_a")
     signal.signal(
         signal.SIGINT,
         lambda signum, frame: receiveSignal(handle),
     )
 
     handle.subscribe(mytopic, True)
-    handle.forever()
+    handle.wait()
 
 
 if __name__ == "__main__":

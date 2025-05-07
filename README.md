@@ -96,7 +96,7 @@ def mytopic(arg_1, arg_2, ..., arg_N):
 
 rb.subscribe(mytopic)
 
-rb.forever()
+rb.wait()
 ```
 
 The first argument to `subscribe` is the function, named as the topic of interest, that will be called each time a message is published.
@@ -123,7 +123,7 @@ rb = rembus.node('calculator')
 
 rb.expose(add)
 
-rb.forever()
+rb.wait()
 ```
 
 The `calculator` component expose the `add` service, the RPC client will invoke as:
@@ -149,7 +149,7 @@ async def main():
     rb = await rembus.component()
     
     await rb.expose(add)
-    await rb.forever()
+    await rb.wait()
 
 loop = asyncio.new_event_loop()
 loop.run_until_complete(main())
@@ -169,4 +169,10 @@ async def main():
 
 loop = asyncio.new_event_loop()
 loop.run_until_complete(main())
+```
+
+## Test
+
+```shell
+pytest --cov=rembus --cov-report=lcov:lcov.info
 ```

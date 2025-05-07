@@ -1,5 +1,6 @@
 import logging
 import rembus
+import rembus.protocol as rp
 import websockets
 
 async def myservice(data):
@@ -8,23 +9,40 @@ async def myservice(data):
 
 async def test_rpc_method_exception(mocker, WebSocketMockFixture):
     responses = [
-        [rembus.TYPE_RESPONSE, rembus.OK, None], # identity
-        [rembus.TYPE_RESPONSE, rembus.OK, None], # expose
-        [rembus.TYPE_RPC], # rpc request
+        [rp.TYPE_RESPONSE, rp.STS_OK, None], # identity
+        [rp.TYPE_RESPONSE, rp.STS_OK, None], # expose
+        [rp.TYPE_RPC], # rpc request
     ]
 
-    mocker.patch(
+    responses = [
+        {
+            #identity
+            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
+        },
+        {
+            #expose 
+            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None] 
+        },
+        {
+            # rpc
+        }, 
+    ]
+
+    mocked_connect = mocker.patch(
         "websockets.connect",mocker.AsyncMock(return_value=WebSocketMockFixture(responses))
     )
     rb = await rembus.component('bar')
-    websockets.connect.assert_called_once_with('ws://localhost:8000/bar', ssl=None)
+
+    mocked_connect.assert_called_once()
+    assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000/bar"
+
     await rb.expose(myservice)
 
     try:
         await rb.rpc(myservice.__name__)
     except Exception as e:
         logging.info(e)
-        assert isinstance(e, rembus.RembusError)
-        assert e.status == rembus.METHOD_EXCEPTION
+        assert isinstance(e, rp.RembusError)
+        assert e.status == rp.STS_METHOD_EXCEPTION
         assert e.message == "myservice() missing 1 required positional argument: 'data'"
     await rb.close()   

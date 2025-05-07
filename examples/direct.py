@@ -2,9 +2,8 @@ import asyncio
 import logging
 import pandas as pd
 import pyarrow as pa
-import rembus.component as rb
+import rembus
 import sys
-import time
 
 logging.basicConfig(encoding='utf-8', level=logging.INFO)
 
@@ -13,7 +12,7 @@ if len(sys.argv) > 1:
     client_name = sys.argv[1]
 
 async def main():
-    handle = await rb.client(client_name)
+    handle = await rembus.component(client_name)
 
     try:
         response = await handle.direct("main", "mymethod", 4)

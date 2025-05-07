@@ -2,6 +2,8 @@ import asyncio
 import cbor2
 import pytest
 import rembus
+import rembus.protocol
+import logging
 
 class WebSocketMock:
     def __init__(self, responses):
@@ -16,28 +18,29 @@ class WebSocketMock:
         pass
 
     def build_response(self, msg):
-        type_reply = self.responses[self.count][0]
-        if type_reply in [rembus.TYPE_RPC, rembus.TYPE_PUB]:
-            # pass to application layer
-            response_msg = msg
-        else:
-            msgid = msg[1]
-            topic = msg[2]
-            #logging.debug(f'[{topic}]: building response')
-            sts = self.responses[self.count][1]
-            data = self.responses[self.count][2]
-            response_msg = [type_reply, msgid, sts, data]
-        
+        step = self.responses[self.count]
         self.count += 1
-        return cbor2.dumps(response_msg)
-       
+        if 'reply' in step:
+            response_msg = step['reply'](msg)
+            return cbor2.dumps(response_msg)
+        else:
+            return cbor2.dumps(msg)
+
     async def send(self, pkt):
-        # just to start wait before notifying
-        await asyncio.sleep(0.1)
-        msg = cbor2.loads(pkt)
-        type = msg[0]
-        # logging.debug(f'[wsmock] send: type {type} - send [{msg}]')
-        await self.queue.put(msg)
+        if self.count >= len(self.responses):
+            step = {}
+        else:
+            step = self.responses[self.count]
+
+        if not dict.get(step, "discard", False):
+            # just to start wait before notifying
+            await asyncio.sleep(0.1)
+            msg = cbor2.loads(pkt)
+            #logging.debug(f'ws mock send: {msg}')
+            await self.queue.put(msg)
+        else:
+            self.count += 1
+        
 
     async def close(self):
         pass
@@ -45,7 +48,8 @@ class WebSocketMock:
     async def recv(self):
         pkt = await self.queue.get()
         # logging.debug(f'[wsmock] recv: {pkt}')
-        if pkt[0] == rembus.TYPE_RESPONSE:
+        if pkt[0] in [rembus.protocol.TYPE_RESPONSE,
+                      rembus.protocol.TYPE_ACK]:
             # the message was already processed by rembus handler
             msg = cbor2.dumps(pkt)
         else:

@@ -8,7 +8,7 @@ async def main():
     rb = await rembus.component()
     
     await rb.expose(add)
-    await rb.forever()
+    await rb.wait()
 
 loop = asyncio.new_event_loop()
 loop.run_until_complete(main())

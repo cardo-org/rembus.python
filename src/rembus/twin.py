@@ -1,6 +1,6 @@
 import asyncio
-import atexit
 from async_timeout import timeout
+import atexit
 import cbor2
 from collections.abc import Coroutine
 from cryptography.hazmat.primitives import hashes, serialization
@@ -13,81 +13,58 @@ from platformdirs import user_config_dir
 import pyarrow as pa
 import ssl
 import threading
+import time
 from types import TracebackType
 from typing import Callable, Any, Awaitable, List, Optional, Type
 import uuid
 from urllib.parse import urlparse
 import websockets
 
-WS_FRAME_MAXSIZE = 60 * 1024 * 1024
+from .settings import Config
 
-TYPE_IDENTITY = 0
-TYPE_PUB = 1
-TYPE_RPC = 2
-TYPE_ADMIN = 3
-TYPE_RESPONSE = 4
-TYPE_ACK = 6
-TYPE_UNREGISTER = 9
-TYPE_REGISTER = 10
-TYPE_ATTESTATION = 11
+from .protocol import (
+    QOS0,
+    QOS1,
+    QOS2,
+    WS_FRAME_MAXSIZE,
+    TYPE_IDENTITY,
+    TYPE_PUB,
+    TYPE_RPC,
+    TYPE_ADMIN,
+    TYPE_RESPONSE,
+    TYPE_ACK,
+    TYPE_ACK2,
+    TYPE_UNREGISTER,
+    TYPE_REGISTER,
+    TYPE_ATTESTATION,
+    STS_OK,
+    STS_ERROR,
+    STS_CHALLENGE,
+    STS_IDENTIFICATION_ERROR,
+    STS_METHOD_EXCEPTION,
+    STS_METHOD_ARGS_ERROR,
+    STS_METHOD_NOT_FOUND,
+    STS_METHOD_UNAVAILABLE,
+    STS_METHOD_LOOPBACK,
+    STS_TARGET_NOT_FOUND,
+    STS_TARGET_DOWN,
+    STS_UNKNOWN_ADMIN_CMD,
+    DATAFRAME_TAG,
+    BROKER_CONFIG,
+    COMMAND,
+    ADD_INTEREST,
+    REMOVE_INTEREST,
+    ADD_IMPL,
+    REMOVE_IMPL,
+    id,
+    bytes2id,
+    RembusException,
+    RembusTimeout,
+    RembusConnectionClosed,
+    RembusError,
+)
 
-OK = 0
-ERROR = 0x0A
-CHALLENGE = 0x0B            # 11
-IDENTIFICATION_ERROR = 0X14 # 20
-METHOD_EXCEPTION = 0X28     # 40
-METHOD_ARGS_ERROR = 0X29    # 41
-METHOD_NOT_FOUND = 0X2A     # 42
-METHOD_UNAVAILABLE = 0X2B   # 43
-METHOD_LOOPBACK = 0X2C      # 44
-TARGET_NOT_FOUND = 0X2D     # 45
-TARGET_DOWN = 0X2E          # 46
-UNKNOWN_ADMIN_CMD = 0X2F    # 47
-
-DATAFRAME_TAG = 80
-
-retcode = {
-    OK: 'OK',
-    ERROR: 'Unknown error',
-    IDENTIFICATION_ERROR: 'IDENTIFICATION_ERROR',
-    METHOD_EXCEPTION: 'METHOD_EXCEPTION',
-    METHOD_ARGS_ERROR: 'METHOD_ARGS_ERROR',
-    METHOD_NOT_FOUND: 'METHOD_NOT_FOUND',
-    METHOD_UNAVAILABLE: 'METHOD_UNAVAILABLE',
-    METHOD_LOOPBACK: 'METHOD_LOOPBACK',
-    TARGET_NOT_FOUND: 'TARGET_NOT_FOUND',
-    TARGET_DOWN: 'TARGET_DOWN',
-    UNKNOWN_ADMIN_CMD: 'UNKNOWN_ADMIN_CMD',
-}
-
-BROKER_CONFIG = '__config__'
-COMMAND = 'cmd'
-ADD_INTEREST = 'subscribe'
-REMOVE_INTEREST = 'unsubscribe'
-ADD_IMPL = 'expose'
-REMOVE_IMPL = 'unexpose'
-
-class RembusException(Exception):
-    pass
-
-class RembusTimeout(RembusException):
-    def __str__(self):
-        return 'request timeout'
-
-class RembusConnectionClosed(RembusException):
-    def __str__(self):
-        return 'connection down'
-
-class RembusError(RembusException):
-    def __init__(self, status_code:int, msg:str|None=None):
-        self.status = status_code
-        self.message = msg
-
-    def __str__(self):
-        if self.message:
-            return f'{retcode[self.status]}:{self.message}'
-        else:
-            return f'{retcode[self.status]}'
+__all__ = ["component", "RbURL"]
 
 def randname() -> str:
     """Return a random name for a component."""
@@ -107,9 +84,8 @@ def msg_id(response:list[Any]):
 
 logger = logging.getLogger("rembus")
 
-_loop_runner = None
-
-logging.basicConfig(level=logging.ERROR)
+#logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.INFO)
 
 logger = logging.getLogger("rembus")
 
@@ -133,11 +109,12 @@ def msg_str(dir:str, msg:list[Any]):
     s = f'{dir}: [{msg[0]}, {field_repr(msg[1])}, {payload}]'
     return s
 
-class Component:
+class RbURL:
 
     def __init__(self, url:str|None=None) -> None:
+        baseurl = urlparse(os.getenv('REMBUS_BASE_URL', "ws://127.0.0.1:8000"))
         uri = urlparse(url)
-        if isinstance(uri.path, str):
+        if isinstance(uri.path, str) and uri.path:
             self.hasname = True
             self.name = uri.path[1:] if uri.path.startswith("/") else uri.path
         else:
@@ -146,17 +123,21 @@ class Component:
         if uri.scheme:
             self.scheme = uri.scheme
         else:
-            self.scheme = "ws"
-        if uri.netloc:
-            self.netloc = uri.netloc
+            self.scheme = baseurl.scheme
+        if uri.hostname:
+            self.hostname = uri.hostname
         else:
-            self.netloc = os.getenv('REMBUS_BASE_URL', 'localhost:8000')
+            self.hostname = baseurl.hostname
+        if uri.port:
+            self.port = uri.port
+        else:
+            self.port = baseurl.port
 
     def connection_url(self):
         if self.name:
-            return f"{self.scheme}://{self.netloc}/{self.name}"
+            return f"{self.scheme}://{self.hostname}:{self.port}/{self.name}"
         else:
-            return f"{self.scheme}://{self.netloc}"
+            return f"{self.scheme}://{self.hostname}:{self.port}"
 
 
 def decode_dataframe(data:bytes) -> pd.DataFrame:
@@ -221,11 +202,6 @@ def regid(id: bytearray, pin: str) -> bytearray:
     id[:4] = bpin[:4]
     return id
 
-def id():
-    """Return an array of 16 random bytes."""
-    return bytearray(os.urandom(16))
-
-
 def config_dir():
     """The directory for rembus secrets."""
     # appears in path only for Windows machine
@@ -270,33 +246,6 @@ def load_private_key(cid:str) -> PrivateKeyTypes:
 
     return private_key
 
-
-def get_loop_runner():
-    global _loop_runner
-    if _loop_runner is None:
-        _loop_runner = AsyncLoopRunner()
-    return _loop_runner
-
-class AsyncLoopRunner:
-    def __init__(self):
-        self.loop = asyncio.new_event_loop()
-        self._thread = threading.Thread(target=self._start_loop, daemon=True)
-        self._thread.start()
-        atexit.register(self.shutdown)
-
-    def _start_loop(self):
-        asyncio.set_event_loop(self.loop)
-        self.loop.run_forever()
-
-    def run(self, coro: Coroutine[Any, Any, Any]) -> Any:
-        future = asyncio.run_coroutine_threadsafe(coro, self.loop)
-        return future.result()
-    
-    def shutdown(self):
-        if self.loop.is_running():
-            self.loop.call_soon_threadsafe(self.loop.stop)
-            self._thread.join()
-
 async def get_response(obj:Any) -> Any:
     """Return the response of the object."""
     if asyncio.iscoroutine(obj):
@@ -308,13 +257,15 @@ class Rembus:
     def __init__(self, name:str|None=None):
         self.ws: websockets.ClientConnection | None = None
         self.receiver = None
-        self.component = Component(name)
+        self.component = RbURL(name)
         self.inbox: asyncio.Queue[str] = asyncio.Queue()
 
         # outstanding requests
         self.outreq: dict[bytes, asyncio.Future[Any]] = {}
         self.handler: dict[str, Callable[..., Awaitable[Any]]] = {}
         self.task: Optional[asyncio.Task[None]] = None
+        self.ackdf: dict[int, int] = {} # msgid => ts
+        self.config = Config(self.component.name)
 
     def isopen(self) -> bool:
         """Check if the connection is open."""
@@ -338,29 +289,48 @@ class Rembus:
         """:meta private:"""
         type_byte, msgid = msg[0:2]
 
-        type = type_byte & 0x3F
-        flags = type_byte & 0xC0
-        logger.debug(f"recv packet type {type}, flags:{flags}")
+        type = type_byte & 0x0F
+        flags = type_byte & 0xF0
+        #logger.debug(f"recv {msg} type {type}, flags:{flags}")
 
         if type == TYPE_PUB:
-            data = tag2df(msg[2])
+            if flags > QOS0:
+                topic = msg[2]
+                data = msg[3]
+                #logger.debug(f'[{self.component.name}] pubsub ack [{bytes2id(msgid)}]')
+                if self.ws:
+                    await self.ws.send(cbor2.dumps([TYPE_ACK, msgid]))
+
+                if flags == QOS2:
+                    id = bytes2id(msgid)
+                    if id in self.ackdf:
+                        # Already received, skip the message.
+                        return
+                    else:
+                        # Save the message id to guarantee exactly one delivery.
+                        self.ackdf[id] = int(time.time())
+            else:
+                topic = msgid
+                data = tag2df(msg[2])
+
             try:
-                await self.evaluate(msgid, data)
+                await self.evaluate(topic, data)
             except Exception as e:
-                logger.error(f"{e}")
+                logger.error(f"subscribe error: {e}")
+            
             return
         elif type == TYPE_RPC:
             data = tag2df(msg[4])
             topic = msg[2]
 
             if not topic in self.handler:
-                outmsg = [TYPE_RESPONSE, msgid, METHOD_NOT_FOUND, topic]
+                outmsg = [TYPE_RESPONSE, msgid, STS_METHOD_NOT_FOUND, topic]
             else:
-                status = OK
+                status = STS_OK
                 try:
                     output = await self.evaluate(topic, data)
                 except Exception as e:
-                    status = METHOD_EXCEPTION
+                    status = STS_METHOD_EXCEPTION
                     output = f"{e}"
                     logger.info(f"exception: {e}")
 
@@ -373,6 +343,8 @@ class Rembus:
             
             await self.ws.send(cbor2.dumps(outmsg))
             return
+        elif type == TYPE_ACK2:
+            return
 
         fut = self.outreq.pop(msgid, None)
         if fut == None:
@@ -382,12 +354,15 @@ class Rembus:
         if type == TYPE_RESPONSE:
             sts = msg[2]
             payload = (msg[3:] + [None])[0]
-            if sts == OK:
+            if sts == STS_OK:
                 fut.set_result(tag2df(payload))
-            elif sts == CHALLENGE:
+            elif sts == STS_CHALLENGE:
                 fut.set_result(payload)
             else:
                 fut.set_exception(RembusError(sts, payload))
+        elif type == TYPE_ACK:
+            logger.debug("pubsub ack")
+            fut.set_result(True)
 
     async def receive(self):
         """:meta private:"""
@@ -395,7 +370,7 @@ class Rembus:
             while True and self.ws is not None:
                 result:str|bytes = await self.ws.recv()
                 if isinstance(result, str):
-                    raise RembusError(ERROR, "unexpected text message")
+                    raise RembusError(STS_ERROR, "unexpected text message")
                 msg:list[Any] = cbor2.loads(result)
                 logger.debug(msg_str('in', msg))
                 await self.parse_input(msg)
@@ -420,14 +395,19 @@ class Rembus:
             else:
                 logger.warning(f"CA file not found: {ca_crt}")
 
-        self.ws = await websockets.connect(broker_url, ssl=ssl_context)
+        self.ws = await websockets.connect(
+            broker_url,
+            ping_interval=self.config.ws_ping_interval,
+            max_size=WS_FRAME_MAXSIZE,
+            ssl=ssl_context
+        )
         self.receiver = asyncio.create_task(self.receive())
 
         if self.component.hasname:
             try:
                 await self.login()
             except Exception as e:
-                raise RembusError(ERROR, "login failed")
+                raise RembusError(STS_ERROR, "login failed")
         return self
 
     async def send_wait(self, builder: Callable[[bytearray], bytes]) -> Any:
@@ -440,7 +420,7 @@ class Rembus:
         await self.ws.send(req)
         self.outreq[kid] = asyncio.get_running_loop().create_future()
         try:
-            async with timeout(3):
+            async with timeout(self.config.request_timeout):
                 return await self.outreq[kid]
         except TimeoutError:
             raise RembusTimeout()
@@ -466,11 +446,25 @@ class Rembus:
         else:
             logger.debug(f"cid {self.component.name}: free mode access")
 
-    async def publish(self, topic:str, *args:tuple[Any]):
+    async def publish(self, topic:str, *args:tuple[Any], **kwargs):
         data = df2tag(args)
         if self.ws is None:
             raise RuntimeError("connection down")
-        await self.ws.send(encode([TYPE_PUB, topic, data]))
+        qos = kwargs.get("qos", QOS0)
+        
+        if qos == QOS0:
+            await self.ws.send(encode([TYPE_PUB|qos, topic, data]))
+        else:
+            done = False
+            while not done:
+                try:
+                    done = await self.send_wait(
+                        lambda id: encode([TYPE_PUB|qos, id, topic, data])
+                    )
+                except RembusTimeout:
+                    pass
+
+        return None
 
     async def broker_setting(self, command:str, args:dict[str,Any]={}):
         data = {COMMAND: command} | args
@@ -503,7 +497,7 @@ class Rembus:
                     [TYPE_REGISTER, regid(id, pin), cid, tenant, pubkey, 1]
                 ))
 
-            logger.info(f"cid {cid} registered")
+            logger.debug(f"cid {cid} registered")
             save_private_key(cid, privkey)
         except Exception as e:
             logger.error(f"cid {cid} registration failed: {e}")
@@ -585,56 +579,10 @@ class Rembus:
                 logger.error(f"Error in receiver: {e}")
             self.receiver = None
 
-    async def forever(self):
+    async def wait(self):
         await self.reactive()
         if self.task is not None:
             await self.task
-
-class node:
-    def __init__(self, name:str|None=None):
-        self._runner = AsyncLoopRunner()
-        self._rb = self._runner.run(component(name))
-
-    def isopen(self) -> bool:
-        """Check if the connection is open."""
-        return self._rb.isopen()
-    
-    def register(self, cid:str, pin:str, tenant:str|None=None):
-        return self._runner.run(self._rb.register(cid, pin, tenant))
-
-    def unregister(self):
-        return self._runner.run(self._rb.unregister())
-
-    def rpc(self, topic:str, *args:tuple[Any]):
-        return self._runner.run(self._rb.rpc(topic, *args))
-
-    def publish(self, topic:str, *args:tuple[Any]):
-        return self._runner.run(self._rb.publish(topic, *args))
-
-    def subscribe(self, fn:Callable[..., Any], retroactive:bool=False):
-        return self._runner.run(self._rb.subscribe(fn, retroactive))
-
-    def expose(self, fn:Callable[..., Any]):
-        return self._runner.run(self._rb.expose(fn))
-
-    def shutdown(self):
-        return self._runner.run(self._rb.shutdown())
-    
-    def close(self):
-        try:
-            self.shutdown()
-        except Exception:
-            pass
-    
-    def __enter__(self):
-        return self
-
-    def __exit__(
-            self,
-            exc_type: Optional[Type[BaseException]],
-            exc_val: Optional[BaseException],
-            exc_tb: Optional[TracebackType]) -> Optional[bool]:
-        self.close()
 
 # Global dictionary to store connected components
 _components: dict[str, Rembus]  = {}
@@ -668,7 +616,8 @@ async def component_task(cmp:Rembus):
             await asyncio.sleep(2)
             cmp.inbox.put_nowait("reconnect")
 
-async def component(name:str|None):
+async def component(name:str|None)-> Rembus:
+    """Create a component and connect to the broker."""
     if name in _components:
         return _components[name]
     else:
@@ -677,8 +626,3 @@ async def component(name:str|None):
         add_component(cmp.component.name, cmp)
         cmp.task = asyncio.create_task(component_task(cmp))
         return cmp
-
-def register(cid:str, pin:str, tenant:str|None=None):
-    rb = node()
-    rb.register(cid, pin, tenant)
-    rb.close()

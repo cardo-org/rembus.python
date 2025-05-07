@@ -4,18 +4,40 @@
    contain the root `toctree` directive.
 
 Rembus
-=====================================
+======
 
 Rembus is both a cross-language protocol specification and a middleware
 for distributed applications using RPC and Pub/Sub communication styles.
 
-The standard setup requires a broker that decouples components.
-The fastest way is to pull and run a docker image:
+The standard setup requires a broker that links and decouples components.
+The fastest way is to pull and run a docker image for the broker:
 
-.. code-block:: shell
 
-   docker pull rembus/broker
-   docker run --rm -p 8000:8000 -t rembus/broker
+.. tab:: ws 
+
+      .. code-block:: shell
+
+         docker pull rembus/broker
+         docker run --rm \
+                    -p 8000:8000 \
+                    -e REMBUS_DIR=/etc/rembus \
+                    -v $HOME/.config/rembus:/etc/rembus \
+                    -t rembus/broker
+
+.. tab:: wss
+
+      .. code-block:: shell
+
+         docker pull rembus/broker
+         docker run --rm \
+                    -p 8000:8000 \
+                    -e REMBUS_DIR=/etc/rembus \
+                    -v $HOME/.config/rembus:/etc/rembus \
+                    -t rembus/broker -s
+
+      The Rembus broker expects the private key and certificate to be named `rembus.key` and
+      `rembus.crt` respectively and to be in the host directory
+      `$HOME/.config/rembus/keystore`.
 
 Otherwise, if you have `Julia <https://julialang.org>`_ installed,
 you may download the `Rembus.jl <https://github.com/cardo-org/Rembus.jl>`_ 
@@ -27,32 +49,38 @@ package and run caronte:
    cd Rembus.jl
    bin/broker
 
-Rembus.py provide a synchronous API:
-
-.. code-block:: python
-
-   import rembus
-
-   rb = rembus.node("mynode")
-   rb.rpc("version")
+Rembus provides both a synchronous and an asynchronous API.
 
 
-and an asynchronous API:
+.. tab:: sync
 
-.. code-block:: python
+   .. code-block:: python
 
-   import rembus
+         import rembus
 
-   async main():
-      rb = await rembus.component("mynode")
-      await rb.rpc("version")
+         rb = rembus.node("mynode")
+         rb.rpc("version")
+
+.. tab:: async
+
+   .. code-block:: python
+
+         import rembus
+
+         async main():
+            rb = await rembus.component("mynode")
+            await rb.rpc("version")
+
+`rembus.component` returns a coroutine object and `rembus.node` returns a blocking handle
+for interacting with the broker.
 
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
-   
-   source/modules.rst
+
+   reference/index
+   pubsub/index
 
 Indices and tables
 ==================

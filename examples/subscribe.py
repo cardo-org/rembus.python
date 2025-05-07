@@ -31,7 +31,7 @@ async def main():
 
     await handle.subscribe(mytopic, True)
     await handle.subscribe(foo, False)
-    await handle.forever()
+    await handle.wait()
 
 
 if __name__ == "__main__":

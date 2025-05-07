@@ -28,7 +28,7 @@ async def main():
     )
 
     await handle.expose(add_column)
-    await handle.forever()
+    await handle.wait()
 
 
 if __name__ == "__main__":

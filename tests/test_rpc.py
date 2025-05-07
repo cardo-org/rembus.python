@@ -1,5 +1,6 @@
 import logging
 import rembus
+import rembus.protocol as rp
 import websockets
 
 payload = 1
@@ -10,17 +11,29 @@ async def myservice(data):
 
 async def test_rpc(mocker, WebSocketMockFixture):
     responses = [
-        [rembus.TYPE_RESPONSE, rembus.OK, None], # identity
-        [rembus.TYPE_RESPONSE, rembus.OK, None], # expose
-        [rembus.TYPE_RPC], # rpc request
+        {
+            # identity
+            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
+        },
+        {
+            # expose 
+            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None] 
+        },
+        {
+            # rpc
+        },
+        {
+            # response from exposed method
+        }
     ]
 
-    mocker.patch(
+    mocked_connect = mocker.patch(
         "websockets.connect",mocker.AsyncMock(return_value=WebSocketMockFixture(responses))
     )
 
     rb = await rembus.component('bar')
-    websockets.connect.assert_called_once_with('ws://localhost:8000/bar', ssl=None)
+    mocked_connect.assert_called_once()
+    assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000/bar"
     await rb.expose(myservice)
 
     response = await rb.rpc(myservice.__name__, payload)

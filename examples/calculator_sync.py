@@ -7,4 +7,4 @@ rb = rembus.component('calculator')
 
 rb.expose(add)
 
-rb.forever()
+rb.wait()

@@ -19,8 +19,8 @@ async def mytopic(data):
     logging.info(f'[mytopic]: {data}')
     mytopic_received = payload
 
-async def test_publish_unknow_topic(mocker, WebSocketMockFixture):
-    topic = "unknown_topic"
+async def test_publish(mocker, WebSocketMockFixture):
+    global mytopic_received
 
     responses = [
         {
@@ -32,22 +32,37 @@ async def test_publish_unknow_topic(mocker, WebSocketMockFixture):
             'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None] 
         },
         {
-            # publish
+            #publish
+        }, 
+        {
+            #ack
+            'discard': True
+        }, 
+        {
+            #ack
+            'discard': False
         }, 
     ]
-
 
     mocked_connect = mocker.patch(
         "websockets.connect",mocker.AsyncMock(return_value=WebSocketMockFixture(responses))
     )
-    
-    rb = await rembus.component('foo')
 
+    rb = await rembus.component('foo')
     mocked_connect.assert_called_once()
     assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000/foo"
 
-    logging.info(f'name: {rb.component.name}')
-    
+    assert rb.component.name == 'foo'
+
     await rb.subscribe(mytopic)
-    await rb.publish(topic, payload)
+    await rb.publish(mytopic.__name__, payload, qos=rembus.QOS1)
+    await asyncio.sleep(0.1)
+    assert mytopic_received == payload
+
+#    mytopic_received = None
+#    await rb.unsubscribe(mytopic)
+#    await rb.publish(mytopic.__name__, (payload,))
+#
+#    await asyncio.sleep(0.1)
+#    assert mytopic_received == None
     await rb.close()
