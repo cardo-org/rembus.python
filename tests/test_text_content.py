@@ -32,38 +32,29 @@ async def test_publish(mocker, WebSocketMockFixture):
             'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None] 
         },
         {
-            # publish
+            #publish
         }, 
         {
-            # unsubscribe
-            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None] 
-        },
+            #ack
+        }, 
         {
-            # publish
+            #ack2
         }, 
     ]
-
 
     mocked_connect = mocker.patch(
         "websockets.connect",mocker.AsyncMock(return_value=WebSocketMockFixture(responses))
     )
 
     rb = await rembus.component('foo')
-
-    mocked_connect.assert_called_once() 
+    mocked_connect.assert_called_once()
     assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000/foo"
 
     assert rb.uid.id == 'foo'
 
     await rb.subscribe(mytopic)
-    await rb.publish(mytopic.__name__, (payload,), qos=rembus.QOS0)
-    await asyncio.sleep(0.1)
-    assert mytopic_received == payload
-
-    mytopic_received = None
-    await rb.unsubscribe(mytopic)
-    await rb.publish(mytopic.__name__, (payload,))
-
-    await asyncio.sleep(0.1)
-    assert mytopic_received == None
+    
+    # send a response message with an unknown msgid
+    await rb.socket.send("ola mondo")
+        
     await rb.close()

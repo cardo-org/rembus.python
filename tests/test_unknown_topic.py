@@ -46,7 +46,7 @@ async def test_publish_unknow_topic(mocker, WebSocketMockFixture):
     mocked_connect.assert_called_once()
     assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000/foo"
 
-    logging.info(f'name: {rb.component.name}')
+    logging.info(f'name: {rb.uid.id}')
     
     await rb.subscribe(mytopic)
     await rb.publish(topic, payload)

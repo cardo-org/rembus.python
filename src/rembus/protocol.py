@@ -3,6 +3,9 @@ from enum import Enum
 
 WS_FRAME_MAXSIZE = 60 * 1024 * 1024
 
+SIG_RSA = 0x1
+SIG_ECDSA = 0x2
+
 QOS0 = 0x00
 QOS1 = 0x10
 QOS2 = 0x30
@@ -30,6 +33,7 @@ STS_METHOD_LOOPBACK= 0X2C      # 44
 STS_TARGET_NOT_FOUND= 0X2D     # 45
 STS_TARGET_DOWN= 0X2E          # 46
 STS_UNKNOWN_ADMIN_CMD= 0X2F    # 47
+STS_NAME_ALREADY_TAKEN = 0X3C  # 60
 
 DATAFRAME_TAG = 80
 
@@ -96,3 +100,37 @@ class RembusError(RembusException):
         else:
             return f'{retcode[self.status]}'
 
+class AdminMsg:
+    def __init__(self, twin, payload:list):
+        self.id = payload[1]
+        self.topic = payload[2]
+        self.data = payload[3]
+        self.twin = twin
+
+    def __str__(self):
+        return f'AdminMsg:{self.topic}: {self.data}'
+
+class IdentityMsg:
+    def __init__(self, twin, payload:list):
+        self.id = payload[1]
+        self.cid = payload[2]
+        self.twin = twin
+
+    def __str__(self):
+        return f'IdentityMsg:{self.cid}'
+   
+class RegisterMsg:
+    def __init__(self, twin, payload:list):
+        self.id = payload[1]
+        self.cid = payload[2]
+        tenant = payload[3]
+        if tenant:
+            self.tenant = tenant
+        else:
+            self.tenant = 'broker'
+        self.pubkey = payload[4]
+        self.type = payload[5]
+        self.twin = twin
+
+    def __str__(self):
+        return f'IdentityMsg:{self.cid}'    

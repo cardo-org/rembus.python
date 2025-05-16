@@ -2,7 +2,7 @@ import asyncio
 import atexit
 from types import TracebackType
 from typing import Any, Callable, Coroutine, Optional, Type
-from rembus import component
+from rembus.twin import component, logger, _components
 import threading
 
 _loop_runner = None
@@ -30,20 +30,35 @@ class AsyncLoopRunner:
         return future.result()
     
     def shutdown(self):
+        cmps = list(_components.values())
+        for twin in cmps:
+            logger.debug(f"runner shutting down {twin.uid.rid()}")
+            #self.run(twin.router.shutdown())
+            twin.inbox.put_nowait("shutdown")
+
         if self.loop.is_running():
             self.loop.call_soon_threadsafe(self.loop.stop)
             self._thread.join()
 
 
 class node:
-    def __init__(self, name:str|None=None):
+    ### def __init__(self, name:str="ws:"):
+    def __init__(self, url:str|None = None, name:str='broker', port:int|None= None):
         self._runner = AsyncLoopRunner()
-        self._rb = self._runner.run(component(name))
+        self._rb = self._runner.run(component(url, name, port))
+
+    @property
+    def router(self):
+        return self._rb.router
 
     def isopen(self) -> bool:
         """Check if the connection is open."""
         return self._rb.isopen()
     
+    def inject(self, ctx:Any):
+        """Initialize the context object."""
+        return self._rb.inject(ctx)
+
     def register(self, cid:str, pin:str, tenant:str|None=None):
         return self._runner.run(self._rb.register(cid, pin, tenant))
 
@@ -74,14 +89,15 @@ class node:
     def wait(self):
         return self._runner.run(self._rb.wait())
 
-    def shutdown(self):
-        return self._runner.run(self._rb.shutdown())
+###    def shutdown(self):
+###        logger.debug(f"shutting down {self._rb.uid.rid()}")
+###        return self._runner.run(self._rb.shutdown())
     
     def close(self):
-        try:
-            self.shutdown()
-        except Exception:
-            pass
+        #try:
+        self._runner.run(self._rb.close())
+        #except Exception:
+        #    pass
     
     def __enter__(self):
         return self
@@ -94,6 +110,6 @@ class node:
         self.close()
 
 def register(cid:str, pin:str, tenant:str|None=None):
-    rb = node()
+    rb = node("ws:")
     rb.register(cid, pin, tenant)
     rb.close()

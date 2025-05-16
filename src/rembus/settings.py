@@ -1,17 +1,13 @@
 import json
 import os
 import tempfile
-
+from .store import rembus_dir
+ 
 class Config:
     def __init__(self, name: str):
         cfg = {}
         try:
-            homedir = os.environ.get("HOME", tempfile.gettempdir())
-            rembus_dir = os.environ.get(
-                "REMBUS_DIR", 
-                os.path.join(homedir, ".config", "rembus", name)
-            )
-            fn = os.path.join(rembus_dir, "settings.json")
+            fn = os.path.join(rembus_dir(), "settings.json")
             with open(fn, "r") as f:
                 cfg = json.loads(fn)
         except FileNotFoundError:

@@ -19,7 +19,7 @@ if len(sys.argv) > 1:
 
 
 async def main():
-    handle = await rb.component()
+    handle = await rb.uid()
 
     try:
         response = await handle.register(client_name, pin)

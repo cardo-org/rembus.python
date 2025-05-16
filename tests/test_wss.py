@@ -48,10 +48,10 @@ async def test_publish(mocker, WebSocketMockFixture):
         "websockets.connect",mocker.AsyncMock(return_value=WebSocketMockFixture(responses))
     )
 
-    rb = await rembus.component('foo')
+    rb = await rembus.component('wss://127.0.0.1:8000/foo')
 
     mocked_connect.assert_called_once() 
-    assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000/foo"
+    assert mocked_connect.call_args[0][0] == "wss://127.0.0.1:8000/foo"
 
     assert rb.uid.id == 'foo'
 

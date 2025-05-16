@@ -52,7 +52,7 @@ async def test_publish(mocker, WebSocketMockFixture):
     mocked_connect.assert_called_once()
     assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000/foo"
 
-    assert rb.component.name == 'foo'
+    assert rb.uid.id == 'foo'
 
     await rb.subscribe(mytopic)
     await rb.publish(mytopic.__name__, payload, qos=rembus.QOS1)
