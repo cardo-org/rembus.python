@@ -39,7 +39,7 @@ DATAFRAME_TAG = 80
 
 retcode = {
     STS_OK: 'OK',
-    STS_ERROR: 'Unknown error',
+    STS_ERROR: 'internal error',
     STS_IDENTIFICATION_ERROR: 'IDENTIFICATION_ERROR',
     STS_METHOD_EXCEPTION: 'METHOD_EXCEPTION',
     STS_METHOD_ARGS_ERROR: 'METHOD_ARGS_ERROR',
@@ -49,6 +49,7 @@ retcode = {
     STS_TARGET_NOT_FOUND: 'TARGET_NOT_FOUND',
     STS_TARGET_DOWN: 'TARGET_DOWN',
     STS_UNKNOWN_ADMIN_CMD: 'UNKNOWN_ADMIN_CMD',
+    STS_NAME_ALREADY_TAKEN: 'NAME_ALREADY_TAKEN',
 }
 
 BROKER_CONFIG = '__config__'
@@ -118,19 +119,32 @@ class IdentityMsg:
 
     def __str__(self):
         return f'IdentityMsg:{self.cid}'
-   
+
+class AttestationMsg:
+    def __init__(self, twin, payload:list):
+        self.id = payload[1]
+        self.cid = payload[2]
+        self.signature = payload[3]
+        self.twin = twin
+
+    def __str__(self):
+        return f'AttestationMsg:{self.cid}'
+
 class RegisterMsg:
     def __init__(self, twin, payload:list):
         self.id = payload[1]
         self.cid = payload[2]
-        tenant = payload[3]
-        if tenant:
-            self.tenant = tenant
-        else:
-            self.tenant = 'broker'
-        self.pubkey = payload[4]
-        self.type = payload[5]
+        self.pubkey = payload[3]
+        self.type = payload[4]
         self.twin = twin
 
     def __str__(self):
-        return f'IdentityMsg:{self.cid}'    
+        return f'RegisterMsg:{self.cid}'
+    
+class UnregisterMsg:
+    def __init__(self, twin, payload:list):
+        self.id = payload[1]
+        self.twin = twin
+
+    def __str__(self):
+        return f'UnregisterMsg:{self.twin}'    

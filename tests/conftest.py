@@ -1,10 +1,42 @@
 import asyncio
 import cbor2
+import json
+import os
 import pytest
 import rembus
 import rembus.protocol as rp
+import shutil
 import logging
 import websockets
+
+def pytest_configure(config):
+    logging.getLogger().setLevel(logging.DEBUG)
+
+    logging.getLogger('rembus').setLevel(logging.DEBUG)
+
+    logging.getLogger('websockets').setLevel(logging.INFO)
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_before(request):
+    """
+    Fixture to set up resources before the entire test session starts.
+    """
+    os.environ["REMBUS_DIR"] = os.path.join("tmp", "rembus")
+
+    rembus_dir = rembus.rembus_dir()
+    if os.path.exists(rembus_dir):
+        shutil.rmtree(rembus_dir)
+
+    broker_dir = os.path.join(rembus.rembus_dir(), rembus.DEFAULT_BROKER)
+    os.makedirs(broker_dir)
+
+    # Setup tenant settings
+    fn = os.path.join(broker_dir, rembus.TENANTS_FILE)
+    with open(fn, 'w') as f:
+        f.write(json.dumps({".": "11223344"}))
+
+    yield
+
 
 class WebSocketMock:
     def __init__(self, responses):

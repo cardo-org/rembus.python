@@ -1,4 +1,5 @@
 *.old
+*.sav
 lcov.info
 
 # Byte-compiled / optimized / DLL files

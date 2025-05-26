@@ -6,20 +6,7 @@ import rembus.protocol as rp
 import websockets
 from unittest.mock import patch
 
-payload = 1
-
-mytopic_received = None
-
-async def myservice(data):
-    logging.info(f'[myservice]: {data}')
-    return data*2
-
-async def mytopic(data):
-    global mytopic_received
-    logging.info(f'[mytopic]: {data}')
-    mytopic_received = payload
-
-async def test_publish(mocker, WebSocketMockFixture):
+async def test_send_text(mocker, WebSocketMockFixture):
     global mytopic_received
 
     responses = [
@@ -36,11 +23,9 @@ async def test_publish(mocker, WebSocketMockFixture):
         }, 
         {
             #ack
-            'discard': True
         }, 
         {
-            #ack
-            'discard': False
+            #ack2
         }, 
     ]
 
@@ -51,18 +36,8 @@ async def test_publish(mocker, WebSocketMockFixture):
     rb = await rembus.component('foo')
     mocked_connect.assert_called_once()
     assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000/foo"
-
     assert rb.uid.id == 'foo'
-
-    await rb.subscribe(mytopic)
-    await rb.publish(mytopic.__name__, payload, qos=rembus.QOS1)
+    # send a response message with an unknown msgid
+    await rb.socket.send("ola mondo")
     await asyncio.sleep(0.1)
-    assert mytopic_received == payload
-
-#    mytopic_received = None
-#    await rb.unsubscribe(mytopic)
-#    await rb.publish(mytopic.__name__, (payload,))
-#
-#    await asyncio.sleep(0.1)
-#    assert mytopic_received == None
     await rb.close()

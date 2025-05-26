@@ -10,10 +10,6 @@ payload = 1
 
 mytopic_received = None
 
-async def myservice(data):
-    logging.info(f'[myservice]: {data}')
-    return data*2
-
 async def mytopic(data):
     global mytopic_received
     logging.info(f'[mytopic]: {data}')
@@ -53,18 +49,17 @@ async def test_publish(mocker, WebSocketMockFixture):
     assert rb.uid.id == 'foo'
 
     await rb.subscribe(mytopic)
-    #await rb.publish(mytopic.__name__, payload, qos=rembus.QOS2)
     
+    # send two pubsub messages with the same msgid
+    msgid = bytes([i for i in range(16)])
     topic = mytopic.__name__
-    await rb.publish(topic, payload, qos=rembus.QOS2)
+    for i in range(3):
+        rb.outreq[msgid] = rembus.twin.FutureResponse(True)
+        req = rembus.twin.encode(
+                [rp.TYPE_PUB|rembus.QOS2, msgid, topic, payload]
+            )
+        await rb.socket.send(req)
         
     await asyncio.sleep(0.1)
     assert mytopic_received == payload
-
-#    mytopic_received = None
-#    await rb.unsubscribe(mytopic)
-#    await rb.publish(mytopic.__name__, (payload,))
-#
-#    await asyncio.sleep(0.1)
-#    assert mytopic_received == None
     await rb.close()

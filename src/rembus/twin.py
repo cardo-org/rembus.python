@@ -1,33 +1,35 @@
 import asyncio
 from websockets.asyncio.server import serve
 from async_timeout import timeout
-import atexit
 import cbor2
-from collections.abc import Coroutine
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.hazmat.primitives.asymmetric import padding, rsa, ec
 from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
+from cryptography.hazmat.backends import default_backend
 import logging
 import os
 import pandas as pd
 import pyarrow as pa
 import ssl
-import threading
 import time
-from types import TracebackType
-from typing import Callable, Any, Awaitable, List, Optional, Type
+from typing import Callable, Any, List, Optional
 import uuid
 from urllib.parse import urlparse
 import websockets
 
-from .settings import Config, rembus_dir
-from .store import (
+logger = logging.getLogger(__name__)
+
+from .settings import (
+    DEFAULT_BROKER,
+    Config,
+    rembus_dir,
     key_file,
     keys_dir,
+    keystore_dir,
     load_tenants,
-    load_tenant_component,
     isregistered,
-    save_tenant_component,
+    rembus_ca,
+    remove_pubkey,
     save_pubkey
 )
 
@@ -70,25 +72,28 @@ from .protocol import (
     REMOVE_IMPL,
     id,
     bytes2id,
-    RembusException,
     RembusTimeout,
     RembusConnectionClosed,
     RembusError,
     AdminMsg,
     IdentityMsg,
-    RegisterMsg
+    AttestationMsg,
+    RegisterMsg,
+    UnregisterMsg
 )
 
 __all__ = ["component", "RbURL"]
 
+def domain(s: str) -> str:
+    dot_index = s.find('.')
+    if dot_index != -1:
+        return s[dot_index + 1:]
+    else:
+        return "."
+
 def randname() -> str:
     """Return a random name for a component."""
     return str(uuid.uuid4())
-
-#logging.basicConfig(level=logging.ERROR)
-logging.basicConfig(level=logging.INFO)
-
-logger = logging.getLogger("rembus")
 
 def tohex(bytes:bytes):
     """Return a string with bytes as hex numbers with 0xNN format."""
@@ -101,7 +106,7 @@ def field_repr(bstr:bytes|str):
     The second field may be a 16-bytes message unique id or a topic string
     value.  
     """
-    return tohex(bstr) if isinstance(bstr, bytes) else bstr
+    return tohex(bstr) if not isinstance(bstr, str) else bstr
 
 
 def msg_str(dir:str, msg:list[Any]):
@@ -172,9 +177,11 @@ def regid(id: bytearray, pin: str) -> bytearray:
     id[:4] = bpin[:4]
     return id
 
-def create_private_key():
-    return rsa.generate_private_key(public_exponent=65537,key_size=2048
-)
+def rsa_private_key():
+    return rsa.generate_private_key(public_exponent=65537,key_size=2048)
+
+def ecdsa_private_key():
+    return ec.generate_private_key(ec.SECP256R1(), default_backend())
 
 def pem_public_key(private_key:PrivateKeyTypes) -> bytes:
     return private_key.public_key().public_bytes(
@@ -210,6 +217,24 @@ def load_private_key(cid:str) -> PrivateKeyTypes:
 
     return private_key
 
+def load_public_key(router, cid:str):
+    fn = key_file(router.id, cid)
+    try:
+        with open(fn, "rb") as f:
+            public_key = serialization.load_pem_public_key(
+                f.read(),
+            )
+    except ValueError:
+        try:
+            with open(fn, "rb") as f:
+                public_key = serialization.load_der_public_key(
+                    f.read(),
+                )
+        except ValueError:
+            raise ValueError(f"Could not load public key from file: {fn}")
+    
+    return public_key
+
 async def get_response(obj:Any) -> Any:
     """Return the response of the object."""
     if asyncio.iscoroutine(obj):
@@ -238,6 +263,7 @@ class RbURL:
             self.hostname = ''
             self.port = 0
             self.hasname = False
+            self.id = 'repl'
         else:
             if isinstance(uri.path, str) and uri.path:
                 self.hasname = True
@@ -261,9 +287,15 @@ class RbURL:
             else:
                 self.port = baseurl.port
 
+    def __repr__(self):
+        return f"{self.protocol}://{self.hostname}:{self.port}/{self.id}"
+
     def rid(self):
         """Return the unique id of the component."""
         return self.id
+
+    def isrepl(self):
+        return self.protocol == "repl"
 
     def connection_url(self):
         if self.hasname:
@@ -271,19 +303,80 @@ class RbURL:
         else:
             return f"{self.protocol}://{self.hostname}:{self.port}"
 
-class Router:
+class Supervised:
+    """
+    A superclass that provides task supervision and auto-restarting for
+    a designated task.
+    Subclasses must implement the '_task_impl' coroutine.
+    """
+    def __init__(self):
+        self._task: Optional[asyncio.Task[None]] = None
+        self._supervisor_task: Optional[asyncio.Task[None]] = None
+        self._should_run = True # Flag to control supervisor loop
+
+    async def _supervisor(self) -> None:
+        """
+        Supervises the _task_impl, restarting it if it exits
+        unexpectedly or due to an exception.
+        """
+        while self._should_run:
+            logger.debug(f"[{self}] starting supervised task")
+            self._task = asyncio.create_task(self._task_impl())
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                logger.debug(f"[{self}] task cancelled, exiting")
+                self._should_run = False # Ensure supervisor also stops
+                break
+            except Exception as e:
+                logger.error(f"[{self}] error: {e} (restarting)")
+                logging.exception("traceback for task error:")
+                if self._should_run: 
+                    await asyncio.sleep(0.5)
+
+    def start(self) -> None:
+        """Starts the supervisor task."""
+        self._should_run = True
+        self._supervisor_task = asyncio.create_task(self._supervisor())
+
+    async def shutdown(self) -> None:
+        """Gracefully stops the supervised worker and its supervisor."""
+        logger.debug(f"[{self}] shutting down")
+        self._should_run = False
+
+        await self._shutdown()
+
+        if self._task and not self._task.done():
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                logger.debug(f"[{self}] supervised task cancelled")
+                pass
+
+        if self._supervisor_task and not self._supervisor_task.done():
+            self._supervisor_task.cancel()
+            try:
+                await self._supervisor_task
+                logger.debug(f"[{self}] supervisor task cancelled")
+            except asyncio.CancelledError:
+                pass
+        logger.debug(f"[{self}] shutdown complete")
+
+
+class Router(Supervised):
     def __init__(self, name:str):
+        super().__init__()
         self.id = name
         self.id_twin: dict[str, Twin] = {}
         self.handler: dict[str, Callable[..., Any]] = {}
         self.inbox: asyncio.Queue[Any] = asyncio.Queue()
         self.shared: Any = None
         self.handler["rid"] = lambda: self.id
-        self.task: asyncio.Task[None] = asyncio.create_task(self.router_task())
         self.serve_task: Optional[asyncio.Task[None]] = None
         self.config = Config(name)
         self.owners = load_tenants(self)
-        self.component_owners = load_tenant_component(self)
+        self.start()
 
     def __str__(self):
         return f"{self.id}"
@@ -291,45 +384,35 @@ class Router:
     def __repr__(self):
         return f"{self.id}: {self.id_twin}"
 
-    def bind(self, ws, url:RbURL, isclient:bool=True):
-        """Bind the socket to a Twin."""
-        rid = url.rid()
-        if rid in self.id_twin:
-            twin = self.id_twin[rid]
-        else:
-            twin = Twin(url, self, isclient)
-            self.id_twin[rid] = twin
-            
-        twin.socket = ws    
-        return twin
-
     def isconnected(self, cid:str) -> bool:
         return cid in self.id_twin
 
-    async def router_task(self):
+    async def _shutdown(self):
+        """Cleanup logic when shutting down the router."""
+        logger.debug(f"[{self}] router shutdown")
+        if self.serve_task:
+            self.serve_task.cancel()
+            try:
+                await self.serve_task
+            except asyncio.CancelledError:
+                pass
+
+    async def _task_impl(self) -> None:
         logger.debug(f"[{self.id}] router started")
         while True:
             msg = await self.inbox.get()
-            if msg == "shutdown":
-                logger.warning(f"[{self.id}] router shutdown")
-                if self.serve_task:
-                    self.serve_task.cancel()
-                    try:
-                        await self.serve_task
-                    except asyncio.CancelledError:
-                        pass
-                break
-            elif isinstance(msg, IdentityMsg):
+            if isinstance(msg, IdentityMsg):
                 twin_id = msg.cid
                 sts = STS_OK
                 if self.isconnected(twin_id):
                     sts = STS_ERROR
-                    logger.warning(f"[{self}] node with id [$twin_id] is already connected")
+                    logger.warning(f"[{self}] node with id [{twin_id}] is already connected")
                     await msg.twin.close()
                 else:
                     logger.debug(f"[{self}] identity: {msg.cid}")
                     await self.auth_identity(msg)
-                
+            elif isinstance(msg, AttestationMsg):
+                sts = self.verify_signature(msg)
                 await msg.twin.response(sts, msg)
             elif isinstance(msg, AdminMsg):
                 logger.debug(f"[{self.id}] admin: {msg}")
@@ -337,17 +420,16 @@ class Router:
             elif isinstance(msg, RegisterMsg):
                 logger.debug(f"[{self.id}] register: {msg}")
                 await self.register_node(msg)
-            else:
-                # Process other messages
-                pass
-
+            elif isinstance(msg, UnregisterMsg):
+                logger.debug(f"[{self.id}] unregister: {msg}")
+                await self.unregister_node(msg)
 
     async def evaluate(self, twin, topic:str, data:Any) -> Any:
         """Invoke the handler associate with the message topic.
 
         :meta private:
         """
-        if self.shared:
+        if self.shared is not None:
             output = await get_response(
                 self.handler[topic](self.shared, twin, *getargs(data))
             )
@@ -358,16 +440,71 @@ class Router:
     
     async def client_receiver(self, ws):
         """Receive messages from the client component."""
-        twin = self.bind(ws, RbURL(), False)
+        url = RbURL()
+        rid = url.rid()
+        twin = Twin(url, self, False)
+        self.id_twin[rid] = twin
+        twin.socket = ws    
         await twin.twin_receiver()
 
     async def serve_ws(self, port:int, issecure:bool=False):
-        async with serve(self.client_receiver, "0.0.0.0", port) as server:
+        ssl_context = None
+        if issecure:
+            trust_store = keystore_dir()
+            cert_path = os.path.join(trust_store, "rembus.crt")
+            key_path = os.path.join(trust_store, "rembus.key")
+            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            if not os.path.isfile(cert_path) or not os.path.isfile(key_path):
+                raise RuntimeError(f"SSL secrets not found in {trust_store}")
+            else:
+                ssl_context.load_cert_chain(cert_path, keyfile=key_path)
+
+        async with serve(
+                self.client_receiver,
+                "0.0.0.0",
+                port,
+                ssl=ssl_context,
+                ping_interval=self.config.ws_ping_interval,) as server:
             await server.serve_forever()
 
     def if_authenticated(self, cid:str):
         """Check if the component needs authentication."""
-        return key_file(self.id, cid) is not None
+        try:
+            key_file(self.id, cid)
+            return True
+        except FileNotFoundError:
+            return False
+
+    def update_twin(self, twin, identity):
+        logger.debug(f"[{twin.rid}] setting name: [{identity}]")
+        self.id_twin[identity] = self.id_twin.pop(twin.rid, twin)
+        twin.rid = identity
+
+    def verify_signature(self, msg:AttestationMsg):
+        """Verify the signature of the attestation message."""
+        twin = msg.twin
+        cid = msg.cid
+        fn = twin.handler.pop("challenge")
+        challenge = fn(twin)
+        plain = cbor2.dumps([challenge, msg.cid])
+        try:
+            pubkey = load_public_key(self, cid)
+            if isinstance(pubkey, rsa.RSAPublicKey):
+                pubkey.verify(msg.signature, plain, padding.PKCS1v15(), hashes.SHA256())
+            elif isinstance(pubkey, ec.EllipticCurvePublicKey):
+                pubkey.verify(msg.signature, plain, ec.ECDSA(hashes.SHA256()))
+
+            self.update_twin(twin, msg.cid)
+            return STS_OK
+        except Exception as e:  # Catching potential verification errors
+            logger.error(f"verification failed: {e} ({type(e)})")
+            return STS_ERROR
+
+    def challenge(self, msg:IdentityMsg):
+        twin = msg.twin
+        challenge_val = os.urandom(4)
+        twin.handler["challenge"] = lambda twin: challenge_val
+        return [TYPE_RESPONSE, msg.id, STS_CHALLENGE, challenge_val]
 
     async def auth_identity(self, msg:IdentityMsg):
         """Authenticate the identity of the component."""
@@ -376,29 +513,19 @@ class Router:
 
         if self.if_authenticated(identity):
             # cid is registered, send the challenge
-            pass
+            response = self.challenge(msg)         
         else:
-            if twin.rid != identity:
-                logger.info(f"identity mismatch: {twin.rid} != {identity}")
-                self.id_twin[identity] = self.id_twin.pop(twin.rid, twin)
-                twin.rid = identity
-                ### raise RembusError(STS_IDENTIFICATION_ERROR, "identity mismatch")
-            else:
-                logger.debug(f"[{self.id}] identity: {identity}")
+            self.update_twin(twin, identity)
+            response = [TYPE_RESPONSE, msg.id, STS_OK]
 
-    def isenabled(self, msg:RegisterMsg):
-        """Check if the component is enabled."""
-        return True
+        await twin.send(cbor2.dumps(response))
+
 
     def get_token(self, tenant, id:bytes):
-        #vals = UInt8[(id>>24)&0xff, (id>>16)&0xff, (id>>8)&0xff, id&0xff]
         vals = id[3::-1]
-        
-        #token = bytes2hex(vals)
         token = vals.hex()
-
-        df = self.owners[(self.owners.pin==token) & (self.owners.tenant==tenant)]
-        if df.empty:
+        pin = self.owners.get(tenant)
+        if token != pin:
             logger.info(f"tenant {tenant}: invalid token {token}")
             return None
         else:
@@ -407,46 +534,52 @@ class Router:
 
     async def register_node(self, msg: RegisterMsg):
         """Set the node secret."""
-        sts = STS_OK
+        sts = STS_ERROR
         reason = None
-        if not self.isenabled(msg):
-            sts = STS_ERROR
-        else:
-            token = self.get_token(msg.tenant, msg.id)
+        token = self.get_token(domain(msg.cid), msg.id)
+        try:
             if token is None:
-                sts = STS_ERROR
                 reason = "wrong tenant/pin"
             elif isregistered(self.id, msg.cid):
                 sts = STS_NAME_ALREADY_TAKEN
-                reason = f"name {msg.cid} not available for registration"
+                reason = f"[{msg.cid}] not available"
             else:
                 kdir = keys_dir(self.id)
                 os.makedirs(kdir, exist_ok=True)
                 save_pubkey(self.id, msg.cid, msg.pubkey, msg.type)
-                
-                self.component_owners.loc[len(self.component_owners)] = [msg.tenant, msg.cid]
-                
-                save_tenant_component(self.id, self.component_owners)
+                sts = STS_OK
                 logger.debug(f"cid {msg.cid} registered")
+        finally:
+            await msg.twin.response(sts, msg, reason)
 
-        await msg.twin.response(sts, msg, reason)
+    async def unregister_node(self, msg:UnregisterMsg):
+        sts = STS_ERROR
+        reason = None
+        try:
+            cid = msg.twin.rid
+            remove_pubkey(self, cid)
+            sts = STS_OK
+        finally:
+            await msg.twin.response(sts, msg, reason)
 
-class Twin:
+class Twin(Supervised):
     def __init__(self, uid:RbURL, router:Router, isclient:bool=True):
+        super().__init__()
         self.isclient = isclient
         self._router = router
         self.socket: websockets.ClientConnection | None = None
         self.receiver = None
         self.uid = uid
         self.inbox: asyncio.Queue[str] = asyncio.Queue()
-
-        # outstanding requests
+        self.handler: dict[str, Callable[..., Any]] = {}
         self.outreq: dict[bytes, FutureResponse] = {}
-        self.task: Optional[asyncio.Task[None]] = None
+        self.reconnect_task: Optional[asyncio.Task[None]] = None
         self.ackdf: dict[int, int] = {} # msgid => ts
+        self.handler["phase"] = lambda : "CLOSED"
+        self.start()
 
     def __str__(self):
-        return self.uid.id
+        return f"{self.uid.id}"
 
     def __repr__(self):
         return self.uid.id
@@ -463,10 +596,6 @@ class Twin:
     def router(self):
         return self._router
 
-    @router.setter
-    def router(self, router):
-        self._router = router
-
     def isrepl(self) -> bool:
         """Check if twin is a REPL"""
         return self.uid.protocol == "repl"
@@ -477,9 +606,6 @@ class Twin:
 
     async def response(self, status:int, msg:Any, data:Any=None):
         """Send a response to the client."""
-        if self.socket is None:
-            raise RembusConnectionClosed()
-        
         outmsg: Any = [TYPE_RESPONSE, msg.id, status, data]
         await self.send(cbor2.dumps(outmsg))
 
@@ -487,56 +613,82 @@ class Twin:
         """Initialize the context object."""
         self.router.shared = data
 
-    async def twin_task(self):
-        logger.info(f"component task {self.uid.id} started {self}")
-        reconnect_task = None
+    async def reconnect(self): 
+        logger.debug(f"{self}: reconnecting ...")
+        while True:
+            try:
+                await self.connect()
+                await self.reactive()
+                self.reconnect_task = None
+                break
+            except Exception as e:
+                logger.warning(f"{self.uid.id} component_task error: {e}")
+                await asyncio.sleep(2)
+
+    async def _shutdown(self):
+        """Cleanup logic when shutting down the twin."""
+        logger.debug(f"[{self}] twin shutdown")
+        if self.socket:
+            await self.socket.close()
+            self.socket = None
+
+        if self.receiver:
+            self.receiver.cancel()
+            try:
+                await self.receiver
+            except asyncio.CancelledError:
+                pass
+            self.receiver = None
+
+        if self.reconnect_task:
+            self.reconnect_task.cancel()
+            try:
+                await self.reconnect_task
+            except asyncio.CancelledError:
+                pass
+            self.reconnect_task = None
+
+        if self.isclient or self.uid.isrepl():
+            await self.router.shutdown()
+
+
+    async def _task_impl(self):
+        logger.debug(f"[{self.uid.id} task started")
         while True:
             msg: str = await self.inbox.get()
-            logger.debug(f"component_task: {msg}")
-            if msg == "shutdown":
-                if reconnect_task:
-                    reconnect_task.cancel()
-                if self.isclient:
-                    await self.router.inbox.put("shutdown")
-                break
-            elif msg == "reconnect":
-                logger.debug(f"{self.uid.id}: reconnecting ...")
-                try:
-                    await self.connect()
-                    await self.reactive()
-                    reconnect_task = None
-                except Exception as e:
-                    logger.info(f"{self.uid.id} component_task error: {e}")
-                    await asyncio.sleep(2)
-                    reconnect_task = delayed_put(self.inbox, "reconnect", 2)
+            logger.debug(f"[{self}] twin_task: {msg}")
+            if msg == "reconnect":
+                if not self.reconnect_task:
+                    self.reconnect_task = asyncio.create_task(self.reconnect())
 
     async def twin_receiver(self):
-        logger.debug(f"{self.uid.id} client is connected")
+        logger.debug(f"[{self}] client is connected")
         try:
             while True and self.socket is not None:
                 result:str|bytes = await self.socket.recv()
                 if isinstance(result, str):
                     raise RembusError(STS_ERROR, "unexpected text message")
                 msg:list[Any] = cbor2.loads(result)
-                logger.debug(msg_str('in', msg))
+                logger.debug(f"[{self}] {msg_str('in', msg)}")
                 await self.parse_input(msg)
         except websockets.ConnectionClosedOK:
             logger.debug("connection closed")
         except Exception as e:
             logger.warning(f"connection closed ({type(e)}): {e}")
         finally:
-            if self.isclient:
-                logger.debug(f"{self.rid} twin_receiver done: {self.task}")
+            if self.isclient and self.handler["phase"]() == "CONNECTED":
+                logger.debug(f"[{self}] twin_receiver done")
                 await self.inbox.put("reconnect")
             else:
-                logger.debug(f"{self.rid} twin_receiver pop: {self.rid}")
+                logger.debug(f"[{self}] twin_receiver pop: {self.rid}")
                 self.router.id_twin.pop(self.rid, None)
+                await self.shutdown()
 
     async def future_request(self, msgid:bytes):
         """Return the future associated with the message id `msgid`."""
         fut = self.outreq.pop(msgid, None)
         if fut == None:
-            logger.warning(f"recv unknown msg id {tohex(msgid)}")
+            logger.warning(f"[{self}] recv unknown msg id {tohex(msgid)}")
         return fut
 
     async def parse_input(self, msg: list[Any]):
@@ -545,13 +697,10 @@ class Twin:
 
         type = type_byte & 0x0F
         flags = type_byte & 0xF0
-        #logger.debug(f"recv {msg} type {type}, flags:{flags}")
-
         if type == TYPE_PUB:
             if flags > QOS0:
                 topic = msg[2]
                 data = msg[3]
-                #logger.debug(f'[{self.uid.id}] pubsub ack [{bytes2id(msgid)}]')
                 if self.socket:
                     await self.socket.send(cbor2.dumps([TYPE_ACK, msgid]))
                 if flags == QOS2:
@@ -567,9 +716,10 @@ class Twin:
                 data = tag2df(msg[2])
 
             try:
-                await self.router.evaluate(self, topic, data)
+                if topic in self.router.handler:
+                    await self.router.evaluate(self, topic, data)
             except Exception as e:
-                logger.error(f"subscribe error: {e}")
+                logger.warning(f"[{self}] error in method invocation: {e}")
             
             return
         elif type == TYPE_RPC:
@@ -599,12 +749,14 @@ class Twin:
                 del self.ackdf[id]
             return
         elif type == TYPE_UNREGISTER:
-            pass
+            self.router.inbox.put_nowait(UnregisterMsg(self, msg))
         elif type == TYPE_REGISTER:
             self.router.inbox.put_nowait(RegisterMsg(self, msg))
         elif type == TYPE_IDENTITY:
             logger.debug(f"[{self}] identity: {msg[2]}")
             self.router.inbox.put_nowait(IdentityMsg(self, msg))
+        elif type == TYPE_ATTESTATION:
+            self.router.inbox.put_nowait(AttestationMsg(self, msg))
         elif type == TYPE_ADMIN:
             self.router.inbox.put_nowait(AdminMsg(self, msg))
         elif type == TYPE_RESPONSE:
@@ -627,24 +779,6 @@ class Twin:
                     await self.send(encode([TYPE_ACK2, msg[1]]))
                 fut.future.set_result(True)
 
-##     async def receive(self):
-##         """:meta private:"""
-##         try:
-##             while True and self.socket is not None:
-##                 result:str|bytes = await self.socket.recv()
-##                 if isinstance(result, str):
-##                     raise RembusError(STS_ERROR, "unexpected text message")
-##                 msg:list[Any] = cbor2.loads(result)
-##                 logger.debug(msg_str('in', msg))
-##                 await self.parse_input(msg)
-##         except websockets.ConnectionClosedOK:
-##             logger.debug("connection closed")
-##         except Exception as e:
-##             logger.warning(f"connection closed: {e}")
-##         finally:
-##             # for now send a message to task
-##             await self.inbox.put("reconnect")
-
     async def connect(self):
         """Connect to the broker."""
         broker_url = self.uid.connection_url()
@@ -652,7 +786,7 @@ class Twin:
         ssl_context = None
         if self.uid.protocol == "wss":
             ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            ca_crt = os.getenv("HTTP_CA_BUNDLE", "rembus-ca.crt")
+            ca_crt = os.getenv("HTTP_CA_BUNDLE", rembus_ca())
             if os.path.isfile(ca_crt):
                 ssl_context.load_verify_locations(ca_crt)
             else:
@@ -664,13 +798,18 @@ class Twin:
             max_size=WS_FRAME_MAXSIZE,
             ssl=ssl_context
         )
+        self.handler["phase"] = lambda : "CONNECTING"
         self.receiver = asyncio.create_task(self.twin_receiver())
 
         if self.uid.hasname:
             try:
                 await self.login()
             except Exception as e:
+                await self.close()
+                self.handler["phase"] = lambda : "CLOSED"
                 raise RembusError(STS_ERROR, "login failed")
+        
+        self.handler["phase"] = lambda : "CONNECTED"
         return self
 
     async def send(self, payload: bytes) -> Any:
@@ -704,9 +843,11 @@ class Twin:
             message = cbor2.dumps(plain)
             logger.debug(f"message: {message.hex()}")
             privatekey = load_private_key(self.uid.id)
-            signature:bytes = privatekey.sign(
-                message, padding.PKCS1v15(), hashes.SHA256()
-            )
+            if isinstance(privatekey, rsa.RSAPrivateKey):
+                signature:bytes = privatekey.sign(message, padding.PKCS1v15(), hashes.SHA256())
+            elif isinstance(privatekey, ec.EllipticCurvePrivateKey):
+                signature:bytes = privatekey.sign(message, ec.ECDSA(hashes.SHA256()))
+
             await self.send_wait(
                 lambda id: encode(
                     [TYPE_ATTESTATION, id, self.uid.id, signature])
@@ -717,7 +858,7 @@ class Twin:
     async def publish(self, topic:str, *args:tuple[Any], **kwargs):
         data = df2tag(args)
         if self.socket is None:
-            raise RuntimeError("connection down")
+            raise RembusConnectionClosed()
         qos = kwargs.get("qos", QOS0)
         
         if qos == QOS0:
@@ -758,21 +899,20 @@ class Twin:
             lambda id: encode([TYPE_RPC, id, topic, target, data])
         )
 
-    async def register(self, cid:str, pin:str, tenant:str|None=None):
-        try:
-            privkey = create_private_key()
-            pubkey = pem_public_key(privkey)
-            response = await self.send_wait(
-                lambda id: encode(
-                    [TYPE_REGISTER, regid(id, pin), cid, tenant, pubkey, SIG_RSA]
-                ))
+    async def register(self, cid:str, pin:str, scheme:int=SIG_RSA):
+        if scheme == SIG_RSA:
+            privkey = rsa_private_key()
+        elif scheme == SIG_ECDSA:
+            privkey = ecdsa_private_key()
 
-            logger.debug(f"cid {cid} registered")
-            save_private_key(cid, privkey)
-        except Exception as e:
-            logger.error(f"cid {cid} registration failed: {e}")
-            raise e
-            
+        pubkey = pem_public_key(privkey)
+        response = await self.send_wait(
+            lambda id: encode(
+                [TYPE_REGISTER, regid(id, pin), cid, pubkey, scheme]
+            ))
+
+        logger.debug(f"cid {cid} registered")
+        save_private_key(cid, privkey)
         return response
     
     async def unregister(self):
@@ -797,11 +937,7 @@ class Twin:
         return self
 
     async def unsubscribe(self, fn:Callable[..., Any]):
-        if isinstance(fn, str):
-            topic = fn
-        else:
-            topic = fn.__name__
-
+        topic = fn.__name__
         await self.setting(topic, REMOVE_INTEREST)
         self.router.handler.pop(topic, None)
         return self
@@ -812,85 +948,54 @@ class Twin:
         await self.setting(topic, ADD_IMPL)
 
     async def unexpose(self, fn:Callable[..., Any]):
-        if isinstance(fn, str):
-            topic = fn
-        else:
-            topic = fn.__name__
-
+        topic = fn.__name__
         self.router.handler.pop(topic, None)
         await self.setting(topic, REMOVE_IMPL)
 
     async def close(self):
-        await self.inbox.put("shutdown")
-        remove_component(self.uid.id)
+        await self.shutdown()
 
-        if self.socket:
-            await self.socket.close()
-            self.socket = None
-
-        if self.receiver:
-            self.receiver.cancel()
-            try:
-                await self.receiver 
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                logger.error(f"Error in receiver: {e}")
-            self.receiver = None
-
-    async def wait(self):
-        await self.reactive()
-        if self.task is not None:
-            await self.task
-
-# Global dictionary to store connected components
-_components: dict[str, Twin]  = {}
-
-def add_component(name:str, component:Twin):
-    """Add a component to the connected components dictionary."""
-    _components[name] = component
-
-def get_component(name:str)->Twin|None:
-    """Retrieve a component from the connected components dictionary."""
-    return _components.get(name)
-
-def remove_component(name:str):
-    """Remove a component from the connected components dictionary."""
-    if name in _components:
-        del _components[name]
-
-async def sleep_put(queue: asyncio.Queue, item, delay: float):
-    await asyncio.sleep(delay)
-    await queue.put(item)
-
-def delayed_put(queue: asyncio.Queue, item, delay: float):
-    return asyncio.create_task(sleep_put(queue, item, delay))
+    async def wait(self, timeout:float|None=None):
+        if not self.isrepl():
+            await self.reactive()
+        if self._supervisor_task is not None:
+            return await asyncio.wait([self._supervisor_task], timeout=timeout)
 
 async def component(
-        url:str|None = None, name:str='broker', port:int|None= None
+        url:str|None = None,
+        name:str|None=None,
+        port:int|None= None,
+        secure:bool=False
     )-> Twin:
     """Return a Rembus component."""
+    isserver = (port!=None) and (url==None)
     if url:
         uid = RbURL(url)
     else:
-        uid = RbURL("repl://")
-        uid.id = name
-    
-    if uid.id in _components:
-        return _components[uid.id]
+        uid = RbURL("repl://") if isserver else RbURL()
+    router_name = name if name else DEFAULT_BROKER
+    router = Router(router_name)
+    logger.debug(f"component {uid.id} created, port: {port}")
+    # start a websocket server
+    if port:
+        router.serve_task = asyncio.create_task(router.serve_ws(port, secure))
+        done, pending = await asyncio.wait([router.serve_task], timeout=0.1)
+        if router.serve_task in done:
+            try:
+                await router.serve_task
+            except Exception as e:
+                router.serve_task = None
+                logger.error(f"[{router}] start failed: {e}")
+                #await router.shutdown()
+                raise
     else:
-        router = Router(name)
-        logger.debug(f"component {uid.id} created, port: {port}")
-        # start a websocket server
-        if port:
-            router.serve_task = asyncio.create_task(router.serve_ws(port))
-        else:
-            router.serve_task = None
-        
-        cmp = Twin(uid, router)
-        if uid.protocol != "repl":
+        router.serve_task = None
+
+    cmp = Twin(uid, router, not isserver)
+    try:
+        if not isserver:
             await cmp.connect()
-        
-        add_component(cmp.uid.id, cmp)
-        cmp.task = asyncio.create_task(cmp.twin_task())
-        return cmp
+    except Exception:
+        await cmp.close()
+        raise
+    return cmp

@@ -10,10 +10,6 @@ payload = 1
 
 mytopic_received = None
 
-async def myservice(data):
-    logging.info(f'[myservice]: {data}')
-    return data*2
-
 async def mytopic(data):
     global mytopic_received
     logging.info(f'[mytopic]: {data}')

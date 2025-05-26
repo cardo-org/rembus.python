@@ -10,10 +10,6 @@ payload = 1
 
 mytopic_received = None
 
-async def myservice(data):
-    logging.info(f'[myservice]: {data}')
-    return data*2
-
 async def mytopic(data):
     global mytopic_received
     logging.info(f'[mytopic]: {data}')
@@ -32,31 +28,36 @@ async def test_publish(mocker, WebSocketMockFixture):
             'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None] 
         },
         {
-            # publish
+            #publish
         }, 
         {
-            # unsubscribe
-            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None] 
+            #ack
+            'discard': True
+        }, 
+        {
+            #ack
+            'discard': False
         },
         {
-            # publish
-        }, 
+            #unsubscribe
+        },
+        {
+            #publish
+        }
     ]
-
 
     mocked_connect = mocker.patch(
         "websockets.connect",mocker.AsyncMock(return_value=WebSocketMockFixture(responses))
     )
 
-    rb = await rembus.component('wss://127.0.0.1:8000/foo')
-
-    mocked_connect.assert_called_once() 
-    assert mocked_connect.call_args[0][0] == "wss://127.0.0.1:8000/foo"
+    rb = await rembus.component('foo')
+    mocked_connect.assert_called_once()
+    assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000/foo"
 
     assert rb.uid.id == 'foo'
 
     await rb.subscribe(mytopic)
-    await rb.publish(mytopic.__name__, (payload,), qos=rembus.QOS0)
+    await rb.publish(mytopic.__name__, payload, qos=rembus.QOS1)
     await asyncio.sleep(0.1)
     assert mytopic_received == payload
 

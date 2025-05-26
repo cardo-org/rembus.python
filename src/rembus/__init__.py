@@ -1,6 +1,18 @@
+import logging
 from .twin import component, RbURL
+from .settings import (
+    rembus_dir,
+    DEFAULT_BROKER,
+    TENANTS_FILE
+)
+from .protocol import (
+    QOS0,
+    QOS1,
+    QOS2,
+    SIG_ECDSA,
+    SIG_RSA
+)
 from .sync import node, register
-from .protocol import QOS0, QOS1, QOS2
 
 __all__ = [
     'component',
@@ -9,3 +21,6 @@ __all__ = [
 ]
 
 __version__ = "0.1.7"
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger("rembus")

@@ -1,17 +1,16 @@
 import asyncio
 import atexit
+import logging
 from types import TracebackType
 from typing import Any, Callable, Coroutine, Optional, Type
-from rembus.twin import component, logger, _components
+from rembus import (
+    component,
+    SIG_ECDSA,
+    SIG_RSA
+)
 import threading
 
-_loop_runner = None
-
-def get_loop_runner():
-    global _loop_runner
-    if _loop_runner is None:
-        _loop_runner = AsyncLoopRunner()
-    return _loop_runner
+logger = logging.getLogger(__name__)
 
 class AsyncLoopRunner:
     """:meta private:"""
@@ -30,40 +29,54 @@ class AsyncLoopRunner:
         return future.result()
     
     def shutdown(self):
-        cmps = list(_components.values())
-        for twin in cmps:
-            logger.debug(f"runner shutting down {twin.uid.rid()}")
-            #self.run(twin.router.shutdown())
-            twin.inbox.put_nowait("shutdown")
-
         if self.loop.is_running():
             self.loop.call_soon_threadsafe(self.loop.stop)
             self._thread.join()
 
 
 class node:
-    ### def __init__(self, name:str="ws:"):
-    def __init__(self, url:str|None = None, name:str='broker', port:int|None= None):
+    def __init__(
+            self,
+            url:str|None=None,
+            name:str|None=None,
+            port:int|None=None,
+            secure:bool=False
+        ):
         self._runner = AsyncLoopRunner()
-        self._rb = self._runner.run(component(url, name, port))
+        self._rb = self._runner.run(component(url, name, port, secure))
 
     @property
     def router(self):
         return self._rb.router
 
+    @property
+    def uid(self):
+        return self._rb.uid
+
+    @property
+    def rid(self):
+        return self._rb.rid
+
     def isopen(self) -> bool:
         """Check if the connection is open."""
         return self._rb.isopen()
+    
+    def isrepl(self) -> bool:
+        """Check if the connection is a REPL (Read-Eval-Print Loop)."""
+        return self._rb.isrepl()
     
     def inject(self, ctx:Any):
         """Initialize the context object."""
         return self._rb.inject(ctx)
 
-    def register(self, cid:str, pin:str, tenant:str|None=None):
-        return self._runner.run(self._rb.register(cid, pin, tenant))
+    def register(self, cid:str, pin:str, scheme:int=SIG_RSA):
+        return self._runner.run(self._rb.register(cid, pin, scheme))
 
     def unregister(self):
         return self._runner.run(self._rb.unregister())
+
+    def direct(self, target:str, topic:str, *args:tuple[Any]):
+        return self._runner.run(self._rb.direct(target, topic, *args))
 
     def rpc(self, topic:str, *args:tuple[Any]):
         return self._runner.run(self._rb.rpc(topic, *args))
@@ -85,19 +98,15 @@ class node:
     
     def reactive(self):
         return self._runner.run(self._rb.reactive())
-    
-    def wait(self):
-        return self._runner.run(self._rb.wait())
+        
+    def unreactive(self):
+        return self._runner.run(self._rb.unreactive())
 
-###    def shutdown(self):
-###        logger.debug(f"shutting down {self._rb.uid.rid()}")
-###        return self._runner.run(self._rb.shutdown())
-    
+    def wait(self, timeout:float|None=None):
+        return self._runner.run(self._rb.wait(timeout))
+
     def close(self):
-        #try:
         self._runner.run(self._rb.close())
-        #except Exception:
-        #    pass
     
     def __enter__(self):
         return self
@@ -109,7 +118,12 @@ class node:
             exc_tb: Optional[TracebackType]) -> Optional[bool]:
         self.close()
 
-def register(cid:str, pin:str, tenant:str|None=None):
+def register(cid:str, pin:str, scheme:int=SIG_RSA):
     rb = node("ws:")
-    rb.register(cid, pin, tenant)
-    rb.close()
+    try:
+        rb.register(cid, pin, scheme)
+    except Exception as e:
+        logger.error(f"[{cid}] register: {e}")
+        raise
+    finally:    
+        rb.close()
