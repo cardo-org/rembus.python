@@ -1,7 +1,7 @@
 import logging
 import pytest
 import rembus.protocol as rp
-import rembus.twin as rc
+import rembus.core as rc
 
 def test_bytes2id():
     byte_data = bytearray(range(16))  # 0x00 to 0x0F

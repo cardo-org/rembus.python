@@ -39,7 +39,7 @@ async def test_publish(mocker, WebSocketMockFixture):
     assert rb.uid.id == 'foo'
     # send a response message with an unknown msgid
     msgid = bytes([i for i in range(16)])
-    req = rembus.twin.encode(
+    req = rembus.core.encode(
                 [rp.TYPE_RESPONSE, msgid, 'topic', 'payload']
             )
     await rb.socket.send(req)

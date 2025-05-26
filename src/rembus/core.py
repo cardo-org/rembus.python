@@ -82,8 +82,6 @@ from .protocol import (
     UnregisterMsg
 )
 
-__all__ = ["component", "RbURL"]
-
 def domain(s: str) -> str:
     dot_index = s.find('.')
     if dot_index != -1:
@@ -622,7 +620,7 @@ class Twin(Supervised):
                 self.reconnect_task = None
                 break
             except Exception as e:
-                logger.warning(f"{self.uid.id} component_task error: {e}")
+                logger.info(f"[{self}] reconnect: {e}")
                 await asyncio.sleep(2)
 
     async def _shutdown(self):
@@ -674,7 +672,7 @@ class Twin(Supervised):
         except websockets.ConnectionClosedOK:
             logger.debug("connection closed")
         except Exception as e:
-            logger.warning(f"connection closed ({type(e)}): {e}")
+            logger.info(f"connection closed ({type(e)}): {e}")
         finally:
             if self.isclient and self.handler["phase"]() == "CONNECTED":
                 logger.debug(f"[{self}] twin_receiver done")

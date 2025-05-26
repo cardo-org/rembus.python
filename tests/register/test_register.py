@@ -29,7 +29,7 @@ def test_register():
         rembus.register("invalid_pin", "00000000")
 
     server.close()
-    assert rembus.twin.isregistered(rembus.settings.DEFAULT_BROKER, name)
+    assert rembus.core.isregistered(rembus.settings.DEFAULT_BROKER, name)
 
 def test_register_ecdsa():
     myname = "test_register_ecdsa"
@@ -43,7 +43,7 @@ def test_register_ecdsa():
 
     server = rembus.node(port=8000)
     rembus.register(myname, pin, rp.SIG_ECDSA)
-    assert rembus.twin.isregistered(rembus.settings.DEFAULT_BROKER, myname)
+    assert rembus.core.isregistered(rembus.settings.DEFAULT_BROKER, myname)
     
     rb = rembus.node(myname)
     rb.unregister()

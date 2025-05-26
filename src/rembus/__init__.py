@@ -1,5 +1,5 @@
 import logging
-from .twin import component, RbURL
+from .core import component, RbURL
 from .settings import (
     rembus_dir,
     DEFAULT_BROKER,
@@ -22,5 +22,5 @@ __all__ = [
 
 __version__ = "0.1.7"
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger("rembus")

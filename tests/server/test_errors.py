@@ -5,7 +5,7 @@ import os
 import pytest
 import rembus
 import rembus.protocol as rp
-import rembus.twin as core
+import rembus.core as core
 import rembus.settings as rs
 import stat
 import time

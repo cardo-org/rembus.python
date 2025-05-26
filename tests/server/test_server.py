@@ -26,7 +26,6 @@ def test_reconnect():
 
 def test_named():
     server = rembus.node(port=8010)
-    #time.sleep(1)
     rb1 = rembus.node("ws://:8010/test_mycomponent")
     rb2 = rembus.node("ws://:8010/test_another")
     

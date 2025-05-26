@@ -54,8 +54,8 @@ async def test_publish(mocker, WebSocketMockFixture):
     msgid = bytes([i for i in range(16)])
     topic = mytopic.__name__
     for i in range(3):
-        rb.outreq[msgid] = rembus.twin.FutureResponse(True)
-        req = rembus.twin.encode(
+        rb.outreq[msgid] = rembus.core.FutureResponse(True)
+        req = rembus.core.encode(
                 [rp.TYPE_PUB|rembus.QOS2, msgid, topic, payload]
             )
         await rb.socket.send(req)
