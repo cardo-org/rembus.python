@@ -19,6 +19,8 @@ import websockets
 
 logger = logging.getLogger(__name__)
 
+from . import __version__
+
 from .settings import (
     DEFAULT_BROKER,
     Config,
@@ -370,10 +372,11 @@ class Router(Supervised):
         self.handler: dict[str, Callable[..., Any]] = {}
         self.inbox: asyncio.Queue[Any] = asyncio.Queue()
         self.shared: Any = None
-        self.handler["rid"] = lambda: self.id
         self.serve_task: Optional[asyncio.Task[None]] = None
         self.config = Config(name)
         self.owners = load_tenants(self)
+        self.start_ts = time.time()
+        self.builtins()
         self.start()
 
     def __str__(self):
@@ -384,6 +387,15 @@ class Router(Supervised):
 
     def isconnected(self, cid:str) -> bool:
         return cid in self.id_twin
+
+    def uptime(self) -> str:
+        """Return the uptime of the router."""
+        return f"up for {int(time.time() - self.start_ts)} seconds"
+
+    def builtins(self):
+        self.handler["rid"] = lambda: self.id
+        self.handler["version"] = lambda: __version__
+        self.handler["uptime"] = lambda: self.uptime()
 
     async def _shutdown(self):
         """Cleanup logic when shutting down the router."""

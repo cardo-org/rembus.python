@@ -32,6 +32,12 @@ def test_named():
     rid = rb1.rpc("rid")
     assert rid == rembus.settings.DEFAULT_BROKER
     
+    verion = rb1.rpc("version")
+    assert verion == rembus.__version__
+
+    uptime = rb1.rpc("uptime")
+    assert isinstance(uptime, str)
+
     server.close()
     rb1.close()
     rb2.close()

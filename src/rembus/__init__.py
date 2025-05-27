@@ -1,3 +1,5 @@
+__version__ = "0.1.7"
+
 import logging
 from .core import component, RbURL
 from .settings import (
@@ -20,7 +22,6 @@ __all__ = [
     'register',
 ]
 
-__version__ = "0.1.7"
 
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger("rembus")
