@@ -1,11 +1,7 @@
 import asyncio
-from websockets import connection
-from functools import partial
 import logging
-import rembus
-import pandas as pd
 import signal
-import time
+import rembus
 
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
 
@@ -24,7 +20,8 @@ async def main():
     handle = await rembus.component("df_transformer")
     signal.signal(
         signal.SIGINT,
-        lambda signum, frame: receiveSignal(handle, asyncio.get_running_loop()),
+        lambda signum, frame: receiveSignal(
+            handle, asyncio.get_running_loop()),
     )
 
     await handle.expose(add_column)

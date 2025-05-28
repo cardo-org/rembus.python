@@ -1,9 +1,11 @@
 import rembus.sync as rembus
 
-def add(x,y):
+
+def add(x, y):
     return x+y
 
-rb = rembus.component('calculator')
+
+rb = rembus.node('calculator')
 
 rb.expose(add)
 

@@ -1,12 +1,14 @@
 import asyncio
 import rembus
 
+
 async def add(x, y):
     return x+y
 
+
 async def main():
     rb = await rembus.component()
-    
+
     await rb.expose(add)
     await rb.wait()
 

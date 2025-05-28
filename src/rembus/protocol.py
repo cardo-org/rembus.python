@@ -1,5 +1,16 @@
 import os
-from enum import Enum
+import logging
+from typing import Any, List
+import cbor2
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa, ec
+from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
+from cryptography.hazmat.backends import default_backend
+import pandas as pd
+import pyarrow as pa
+import rembus.settings as rs
+
+logger = logging.getLogger(__name__)
 
 WS_FRAME_MAXSIZE = 60 * 1024 * 1024
 
@@ -24,15 +35,15 @@ TYPE_ATTESTATION = 11
 STS_OK = 0
 STS_ERROR = 0x0A
 STS_CHALLENGE = 0x0B            # 11
-STS_IDENTIFICATION_ERROR = 0X14 # 20
+STS_IDENTIFICATION_ERROR = 0X14  # 20
 STS_METHOD_EXCEPTION = 0X28     # 40
 STS_METHOD_ARGS_ERROR = 0X29    # 41
-STS_METHOD_NOT_FOUND= 0X2A     # 42
-STS_METHOD_UNAVAILABLE= 0X2B   # 43
-STS_METHOD_LOOPBACK= 0X2C      # 44
-STS_TARGET_NOT_FOUND= 0X2D     # 45
-STS_TARGET_DOWN= 0X2E          # 46
-STS_UNKNOWN_ADMIN_CMD= 0X2F    # 47
+STS_METHOD_NOT_FOUND = 0X2A     # 42
+STS_METHOD_UNAVAILABLE = 0X2B   # 43
+STS_METHOD_LOOPBACK = 0X2C      # 44
+STS_TARGET_NOT_FOUND = 0X2D     # 45
+STS_TARGET_DOWN = 0X2E          # 46
+STS_UNKNOWN_ADMIN_CMD = 0X2F    # 47
 STS_NAME_ALREADY_TAKEN = 0X3C  # 60
 
 DATAFRAME_TAG = 80
@@ -59,9 +70,11 @@ REMOVE_INTEREST = 'unsubscribe'
 ADD_IMPL = 'expose'
 REMOVE_IMPL = 'unexpose'
 
-def id():
+
+def msgid():
     """Return an array of 16 random bytes."""
     return bytearray(os.urandom(16))
+
 
 def bytes2id(byte_data: bytearray) -> int:
     """
@@ -79,19 +92,23 @@ def bytes2id(byte_data: bytearray) -> int:
     # Convert bytes to integer (assuming little-endian, adjust if big-endian)
     return int.from_bytes(byte_data, byteorder='little', signed=False)
 
+
 class RembusException(Exception):
     pass
+
 
 class RembusTimeout(RembusException):
     def __str__(self):
         return 'request timeout'
 
+
 class RembusConnectionClosed(RembusException):
     def __str__(self):
         return 'connection down'
 
+
 class RembusError(RembusException):
-    def __init__(self, status_code:int, msg:str|None=None):
+    def __init__(self, status_code: int, msg: str | None = None):
         self.status = status_code
         self.message = msg
 
@@ -101,8 +118,9 @@ class RembusError(RembusException):
         else:
             return f'{retcode[self.status]}'
 
+
 class AdminMsg:
-    def __init__(self, twin, payload:list):
+    def __init__(self, twin, payload: list):
         self.id = payload[1]
         self.topic = payload[2]
         self.data = payload[3]
@@ -111,8 +129,9 @@ class AdminMsg:
     def __str__(self):
         return f'AdminMsg:{self.topic}: {self.data}'
 
+
 class IdentityMsg:
-    def __init__(self, twin, payload:list):
+    def __init__(self, twin, payload: list):
         self.id = payload[1]
         self.cid = payload[2]
         self.twin = twin
@@ -120,8 +139,9 @@ class IdentityMsg:
     def __str__(self):
         return f'IdentityMsg:{self.cid}'
 
+
 class AttestationMsg:
-    def __init__(self, twin, payload:list):
+    def __init__(self, twin, payload: list):
         self.id = payload[1]
         self.cid = payload[2]
         self.signature = payload[3]
@@ -130,8 +150,9 @@ class AttestationMsg:
     def __str__(self):
         return f'AttestationMsg:{self.cid}'
 
+
 class RegisterMsg:
-    def __init__(self, twin, payload:list):
+    def __init__(self, twin, payload: list):
         self.id = payload[1]
         self.cid = payload[2]
         self.pubkey = payload[3]
@@ -140,11 +161,192 @@ class RegisterMsg:
 
     def __str__(self):
         return f'RegisterMsg:{self.cid}'
-    
+
+
 class UnregisterMsg:
-    def __init__(self, twin, payload:list):
+    def __init__(self, twin, payload: list):
         self.id = payload[1]
         self.twin = twin
 
     def __str__(self):
-        return f'UnregisterMsg:{self.twin}'    
+        return f'UnregisterMsg:{self.twin}'
+
+
+def isregistered(router_id, cid: str):
+    try:
+        rs.key_file(router_id, cid)
+        return True
+    except FileNotFoundError:
+        return False
+
+
+def tohex(bs: bytes):
+    """Return a string with bytes as hex numbers with 0xNN format."""
+    return ' '.join(f'0x{x:02x}' for x in bs)
+
+
+def field_repr(bstr: bytes | str):
+    """String repr of the second field of a rembus message.
+
+    The second field may be a 16-bytes message unique id or a topic string
+    value.
+    """
+    return tohex(bstr) if not isinstance(bstr, str) else bstr
+
+
+def msg_str(direction: str, msg: list[Any]):
+    """Return a printable dump of rembus message `msg`."""
+    payload = ", ".join(str(el) for el in msg[2:])
+    s = f'{direction}: [{msg[0]}, {field_repr(msg[1])}, {payload}]'
+    return s
+
+
+def decode_dataframe(data: bytes) -> pd.DataFrame:
+    """Decode a CBOR tagged value `data` to a pandas dataframe."""
+    writer = pa.BufferOutputStream()
+    writer.write(data)
+    buf: pa.Buffer = writer.getvalue()
+    reader = pa.ipc.open_stream(buf)
+    with pa.ipc.open_stream(buf) as reader:
+        return reader.read_pandas()
+
+
+def encode_dataframe(df: pd.DataFrame) -> cbor2.CBORTag:
+    """Encode a pandas dataframe `df` to a CBOR tag value."""
+    table = pa.Table.from_pandas(df)
+    sink = pa.BufferOutputStream()
+    with pa.ipc.new_stream(sink, table.schema) as writer:
+        writer.write(table)
+    buf = sink.getvalue()
+    stream = pa.input_stream(buf)
+    return cbor2.CBORTag(DATAFRAME_TAG, stream.read())
+
+
+def encode(msg: list[Any]) -> bytes:
+    """Encode message `msg`."""
+    logger.debug(msg_str('out', msg))
+    return cbor2.dumps(msg)
+
+
+def tag2df(data: Any) -> Any:
+    """Loop over `data` items and decode tagged values to dataframes."""
+    if isinstance(data, list):
+        for idx, val in enumerate(data):
+            if isinstance(val, cbor2.CBORTag) and val.tag == DATAFRAME_TAG:
+                data[idx] = decode_dataframe(val.value)
+    elif isinstance(data, cbor2.CBORTag):
+        return decode_dataframe(data.value)
+    return data
+
+
+def df2tag(data: Any) -> Any:
+    """Loop over `data` items and encode dataframes to tag values."""
+    if isinstance(data, tuple):
+        lst: List[Any] = []
+        for idx, val in enumerate(data):
+            if isinstance(val, pd.DataFrame):
+                lst.append(encode_dataframe(val))
+            else:
+                lst.append(val)
+        return lst
+    elif isinstance(data, list):
+        for idx, val in enumerate(data):
+            if isinstance(val, pd.DataFrame):
+                data[idx] = encode_dataframe(val)
+
+    elif isinstance(data, pd.DataFrame):
+        data = encode_dataframe(data)
+    return data
+
+
+def regid(msgid: bytearray, pin: str) -> bytearray:
+    bpin = bytes.fromhex(pin[::-1])
+    msgid[:4] = bpin[:4]
+    return msgid
+
+
+def rsa_private_key():
+    return rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+
+def ecdsa_private_key():
+    return ec.generate_private_key(ec.SECP256R1(), default_backend())
+
+
+def pem_public_key(private_key: PrivateKeyTypes) -> bytes:
+    return private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+
+
+def save_private_key(cid: str, private_key: PrivateKeyTypes):
+    dir = os.path.join(rs.rembus_dir(), cid)
+
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+
+    fn = os.path.join(dir, ".secret")
+    private_key_file = open(fn, "wb")
+
+    pem_private_key = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+
+    private_key_file.write(pem_private_key)
+    private_key_file.close()
+
+
+def load_private_key(cid: str) -> PrivateKeyTypes:
+    fn = os.path.join(rs.rembus_dir(), cid, ".secret")
+    # fn = os.path.join(rembus_dir(), cid)
+    with open(fn, "rb") as key_file:
+        private_key = serialization.load_pem_private_key(
+            key_file.read(), password=None)
+
+    return private_key
+
+
+def load_public_key(router, cid: str):
+    fn = rs.key_file(router.id, cid)
+    try:
+        with open(fn, "rb") as f:
+            public_key = serialization.load_pem_public_key(
+                f.read(),
+            )
+    except ValueError:
+        try:
+            with open(fn, "rb") as f:
+                public_key = serialization.load_der_public_key(
+                    f.read(),
+                )
+        except ValueError:
+            raise ValueError(f"Could not load public key from file: {fn}")
+
+    return public_key
+
+
+def save_pubkey(router_id: str, cid: str, pubkey: bytes, type: int):
+    name = rs.key_base(router_id, cid)
+    format = "der"
+    # check if pubkey start with -----BEGIN chars
+    if pubkey[0:10] == bytes(
+        [0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x42, 0x45, 0x47, 0x49, 0x4e]
+    ):
+        format = "pem"
+
+    if type == SIG_RSA:
+        typestr = "rsa"
+    else:
+        typestr = "ecdsa"
+
+    fn = f"{name}.{typestr}.{format}"
+    with open(fn, "wb") as f:
+        f.write(pubkey)
+
+
+def remove_pubkey(router, cid: str):
+    fn = rs.key_file(router.id, cid)
+    os.remove(fn)

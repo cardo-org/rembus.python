@@ -1,31 +1,33 @@
 import logging
 import rembus
 import rembus.protocol as rp
-import websockets
 
 payload = 1
 
+
 async def myservice(data):
-    logging.info(f'[myservice]: {data}')
+    logging.info('[myservice]: %s', data)
     return data*2
+
 
 async def test_rpc_method_unkown(mocker, WebSocketMockFixture):
     responses = [
         {
-            #identity
+            # identity
             'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
-            #expose 
-            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None] 
+            # expose
+            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
             # rpc
-        }, 
+        },
     ]
 
     mocked_connect = mocker.patch(
-        "websockets.connect",mocker.AsyncMock(return_value=WebSocketMockFixture(responses))
+        "websockets.connect", mocker.AsyncMock(
+            return_value=WebSocketMockFixture(responses))
     )
     rb = await rembus.component('bar')
 
@@ -36,9 +38,8 @@ async def test_rpc_method_unkown(mocker, WebSocketMockFixture):
 
     invalid_method = 'invalid_method'
     try:
-        response = await rb.rpc(invalid_method, payload)
-    except Exception as e:
-        logging.info(e.message)
+        await rb.rpc(invalid_method, payload)
+    except rp.RembusError as e:
         assert isinstance(e, rp.RembusError)
         assert e.status == rp.STS_METHOD_NOT_FOUND
         assert e.message == invalid_method

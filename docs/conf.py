@@ -21,7 +21,7 @@ extensions = [
     'sphinx_inline_tabs',
 ]
 
-#'sphinx_tabs.tabs',
+# 'sphinx_tabs.tabs',
 
 autodoc_default_options = {
     'members': True,
@@ -31,7 +31,6 @@ autodoc_default_options = {
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
-
 
 
 # -- Options for HTML output -------------------------------------------------

@@ -1,13 +1,13 @@
 __version__ = "0.1.7"
 
 import logging
-from .core import component, RbURL
-from .settings import (
+from .core import component, RbURL  # noqa: F401
+from .settings import (  # noqa: F401
     rembus_dir,
     DEFAULT_BROKER,
     TENANTS_FILE
 )
-from .protocol import (
+from .protocol import (  # noqa: F401
     QOS0,
     QOS1,
     QOS2,
@@ -23,5 +23,6 @@ __all__ = [
 ]
 
 
-logging.basicConfig(level=logging.WARNING)
+# logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("rembus")

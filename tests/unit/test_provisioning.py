@@ -1,24 +1,18 @@
-import logging
 import os
+import pytest
 import rembus
 import rembus.protocol as rp
-import pytest
-
 import rembus.settings
 
 
 @pytest.fixture(scope="function")
 def setup_teardown():
-    # Setup
-    print("Setup eseguito")
-    state = {'name':'bar'}
+    state = {'name': 'bar'}
     yield state
     # Teardown
-    logging.info(f"Teardown eseguito: {state}")
-    
+
 
 async def test_register(setup_teardown, mocker, WebSocketMockFixture):
-    logging.info(f"Valore dalla fixture: {setup_teardown}")
     name = setup_teardown['name']
     responses = [
         {
@@ -27,7 +21,7 @@ async def test_register(setup_teardown, mocker, WebSocketMockFixture):
         },
         {
             # identity
-            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None] 
+            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
             # rpc
@@ -38,15 +32,16 @@ async def test_register(setup_teardown, mocker, WebSocketMockFixture):
     ]
 
     mocked_connect = mocker.patch(
-        "websockets.connect",mocker.AsyncMock(return_value=WebSocketMockFixture(responses))
+        "websockets.connect", mocker.AsyncMock(
+            return_value=WebSocketMockFixture(responses))
     )
 
     rembus.register(name, '11223344')
     mocked_connect.assert_called_once()
     assert mocked_connect.call_args[0][0].startswith("ws://127.0.0.1:8000")
 
+
 async def test_unregister(setup_teardown, mocker, WebSocketMockFixture):
-    logging.info(f"Valore dalla fixture: {setup_teardown}")
     name = setup_teardown['name']
     responses = [
         {
@@ -55,16 +50,17 @@ async def test_unregister(setup_teardown, mocker, WebSocketMockFixture):
         },
         {
             # attestation response
-            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None] 
+            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
             # unregister response
-            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None] 
+            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
     ]
 
     mocked_connect = mocker.patch(
-        "websockets.connect",mocker.AsyncMock(return_value=WebSocketMockFixture(responses))
+        "websockets.connect", mocker.AsyncMock(
+            return_value=WebSocketMockFixture(responses))
     )
 
     rb = rembus.node(name)

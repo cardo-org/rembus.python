@@ -1,15 +1,14 @@
-import logging
 import rembus
-import rembus.protocol as rp
-import websockets
+
 
 async def test_connect(mocker, WebSocketMockFixture):
     responses = [
-        
+
     ]
 
     mocked_connect = mocker.patch(
-        "websockets.connect",mocker.AsyncMock(return_value=WebSocketMockFixture(responses))
+        "websockets.connect", mocker.AsyncMock(
+            return_value=WebSocketMockFixture(responses))
     )
 
     rb = await rembus.component()

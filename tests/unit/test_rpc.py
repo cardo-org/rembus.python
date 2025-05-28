@@ -1,13 +1,14 @@
 import logging
 import rembus
 import rembus.protocol as rp
-import websockets
 
 payload = 1
 
+
 async def myservice(data):
-    logging.info(f'[myservice]: {data}')
+    logging.info('[myservice]: %s', data)
     return data*2
+
 
 async def test_rpc(mocker, WebSocketMockFixture):
     responses = [
@@ -16,8 +17,8 @@ async def test_rpc(mocker, WebSocketMockFixture):
             'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
-            # expose 
-            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None] 
+            # expose
+            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
             # rpc
@@ -28,7 +29,8 @@ async def test_rpc(mocker, WebSocketMockFixture):
     ]
 
     mocked_connect = mocker.patch(
-        "websockets.connect",mocker.AsyncMock(return_value=WebSocketMockFixture(responses))
+        "websockets.connect", mocker.AsyncMock(
+            return_value=WebSocketMockFixture(responses))
     )
 
     rb = await rembus.component('bar')
@@ -37,7 +39,5 @@ async def test_rpc(mocker, WebSocketMockFixture):
     await rb.expose(myservice)
 
     response = await rb.rpc(myservice.__name__, payload)
-    logging.info(f'response: {response}')
     assert response == payload*2
-
     await rb.close()

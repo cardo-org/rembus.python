@@ -1,36 +1,32 @@
 import asyncio
-import logging
-import cbor2
 import rembus
 import rembus.protocol as rp
-import websockets
-from unittest.mock import patch
+
 
 async def test_send_text(mocker, WebSocketMockFixture):
-    global mytopic_received
-
     responses = [
         {
-            #identity
+            # identity
             'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
-            #subscribe 
-            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None] 
+            # subscribe
+            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
-            #publish
-        }, 
+            # publish
+        },
         {
-            #ack
-        }, 
+            # ack
+        },
         {
-            #ack2
-        }, 
+            # ack2
+        },
     ]
 
     mocked_connect = mocker.patch(
-        "websockets.connect",mocker.AsyncMock(return_value=WebSocketMockFixture(responses))
+        "websockets.connect", mocker.AsyncMock(
+            return_value=WebSocketMockFixture(responses))
     )
 
     rb = await rembus.component('foo')

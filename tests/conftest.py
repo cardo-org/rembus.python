@@ -9,12 +9,14 @@ import shutil
 import logging
 import websockets
 
+
 def pytest_configure(config):
     logging.getLogger().setLevel(logging.DEBUG)
 
     logging.getLogger('rembus').setLevel(logging.DEBUG)
 
     logging.getLogger('websockets').setLevel(logging.INFO)
+
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_before(request):
@@ -32,7 +34,7 @@ def setup_before(request):
 
     # Setup tenant settings
     fn = os.path.join(broker_dir, rembus.TENANTS_FILE)
-    with open(fn, 'w') as f:
+    with open(fn, 'w', encoding="utf-8") as f:
         f.write(json.dumps({".": "11223344"}))
 
     yield
@@ -52,11 +54,10 @@ class WebSocketMock:
         pass
 
     def build_response(self, msg):
-        logging.debug(f'[mock_build_response]: count [{self.count}]: {msg}')
         if not self.responses:
             # by default return a STS_OK response
             return cbor2.dumps([rp.TYPE_RESPONSE, msg[1], rp.STS_OK, None])
-        
+
         step = self.responses[self.count]
         self.count += 1
         if 'reply' in step:
@@ -66,7 +67,6 @@ class WebSocketMock:
             return cbor2.dumps(msg)
 
     async def send(self, pkt):
-        logging.debug(f'[mock_send]: count [{self.count}]: {pkt}')
         if self.count >= len(self.responses):
             step = {}
         else:
@@ -79,11 +79,11 @@ class WebSocketMock:
                 msg = cbor2.loads(pkt)
             else:
                 msg = pkt
-            logging.debug(f'[mock_send]: {msg}')
+            logging.debug('[mock_send]: %s', msg)
             await self.queue.put(msg)
         else:
             self.count += 1
-        
+
     async def close(self):
         pass
 
@@ -93,15 +93,16 @@ class WebSocketMock:
         if isinstance(pkt, str):
             msg = pkt
         elif pkt[0] in [rp.TYPE_RESPONSE,
-                      rp.TYPE_ACK]:
+                        rp.TYPE_ACK]:
             # the message was already processed by rembus handler
             msg = cbor2.dumps(pkt)
         else:
-            # build the response for identity, setting, expose, subscribe 
+            # build the response for identity, setting, expose, subscribe
             msg = self.build_response(pkt)
-        #logging.debug(f'[wsmock] response: {rembus.tohex(msg)}')
+        # logging.debug(f'[wsmock] response: {rembus.tohex(msg)}')
         self.queue.task_done()
         return msg
+
 
 @pytest.fixture
 def WebSocketMockFixture():

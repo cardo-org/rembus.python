@@ -1,10 +1,8 @@
 import asyncio
 import logging
-import pandas as pd
-import pyarrow as pa
-import rembus
 import sys
-import time
+import pandas as pd
+import rembus
 
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
 
@@ -17,10 +15,10 @@ async def main():
     handle = await rembus.component(client_name)
 
     df = pd.DataFrame({
-                        "a": [1.0, float("inf"), 300],
-                        "label": ["abc", None, "mylabel"]
-                      })
-    
+        "a": [1.0, float("inf"), 300],
+        "label": ["abc", None, "mylabel"]
+    })
+
     for i in range(1, 2):
         await handle.publish("mytopic", df)
 

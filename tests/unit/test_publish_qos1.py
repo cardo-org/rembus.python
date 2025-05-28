@@ -1,53 +1,53 @@
 import asyncio
 import logging
-import cbor2
 import rembus
 import rembus.protocol as rp
-import websockets
-from unittest.mock import patch
 
 payload = 1
 
 mytopic_received = None
 
+
 async def mytopic(data):
     global mytopic_received
-    logging.info(f'[mytopic]: {data}')
+    logging.info('[mytopic]: %s', data)
     mytopic_received = payload
+
 
 async def test_publish(mocker, WebSocketMockFixture):
     global mytopic_received
 
     responses = [
         {
-            #identity
+            # identity
             'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
-            #subscribe 
-            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None] 
+            # subscribe
+            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
-            #publish
-        }, 
+            # publish
+        },
         {
-            #ack
+            # ack
             'discard': True
-        }, 
+        },
         {
-            #ack
+            # ack
             'discard': False
         },
         {
-            #unsubscribe
+            # unsubscribe
         },
         {
-            #publish
+            # publish
         }
     ]
 
     mocked_connect = mocker.patch(
-        "websockets.connect",mocker.AsyncMock(return_value=WebSocketMockFixture(responses))
+        "websockets.connect", mocker.AsyncMock(
+            return_value=WebSocketMockFixture(responses))
     )
 
     rb = await rembus.component('foo')
@@ -66,5 +66,5 @@ async def test_publish(mocker, WebSocketMockFixture):
     await rb.publish(mytopic.__name__, (payload,))
 
     await asyncio.sleep(0.1)
-    assert mytopic_received == None
+    assert mytopic_received is None
     await rb.close()

@@ -1,11 +1,10 @@
-import logging
 import os
-import pytest
-import rembus
 import shutil
 import ssl
-
+import pytest
+import rembus
 import rembus.settings
+
 
 def config_secure():
     data_dir = os.path.join("tests", "data")
@@ -21,13 +20,14 @@ def config_secure():
     shutil.copy(os.path.join(data_dir, "rembus.crt"), keystore_dir)
     shutil.copy(os.path.join(data_dir, "rembus.key"), keystore_dir)
 
+
 def test_wss_fail():
     # missing private key and certificate
     try:
-        server = rembus.node(port=8000, secure=True)
-    except RuntimeError as e:
-        logging.info(f"Expected error: {e}")
+        rembus.node(port=8000, secure=True)
+    except RuntimeError:
         assert True
+
 
 def test_wss_ok():
     config_secure()
@@ -37,6 +37,7 @@ def test_wss_ok():
     rb.close()
 
     server.close()
+
 
 def test_wss_default_ca_notfound():
     fn = rembus.settings.rembus_ca()
@@ -49,6 +50,7 @@ def test_wss_default_ca_notfound():
 
     server.close()
 
+
 def test_wss_ca_notfound():
     config_secure()
     server = rembus.node(port=8000, secure=True)
@@ -56,5 +58,4 @@ def test_wss_ca_notfound():
     with pytest.raises(ssl.SSLCertVerificationError):
         rembus.node("wss://127.0.0.1:8000/mycomponent")
 
-    server.close()    
-
+    server.close()

@@ -1,15 +1,14 @@
 import asyncio
 import logging
-import pandas as pd
-import pyarrow as pa
-import rembus
 import sys
+import rembus
 
 logging.basicConfig(encoding='utf-8', level=logging.INFO)
 
 client_name = "pub_1"
 if len(sys.argv) > 1:
     client_name = sys.argv[1]
+
 
 async def main():
     handle = await rembus.component(client_name)

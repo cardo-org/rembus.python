@@ -1,13 +1,14 @@
 import logging
 import rembus
 import rembus.protocol as rp
-import websockets
 
 payload = 1
+
 
 async def myservice(data):
     logging.info(f'[myservice]: {data}')
     return data*2
+
 
 async def test_unexpose(mocker, WebSocketMockFixture):
     responses = [
@@ -16,25 +17,24 @@ async def test_unexpose(mocker, WebSocketMockFixture):
             'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
-            # expose 
-            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None] 
+            # expose
+            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
             # rpc
         },
         {
-            # unexpose 
-            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None] 
+            # unexpose
+            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
             # rpc
         },
-
-
     ]
 
     mocked_connect = mocker.patch(
-        "websockets.connect",mocker.AsyncMock(return_value=WebSocketMockFixture(responses))
+        "websockets.connect", mocker.AsyncMock(
+            return_value=WebSocketMockFixture(responses))
     )
 
     rb = await rembus.component('bar')
@@ -45,13 +45,12 @@ async def test_unexpose(mocker, WebSocketMockFixture):
     await rb.expose(myservice)
 
     response = await rb.rpc(myservice.__name__, payload)
-    logging.info(f'response: {response}')
     assert response == payload*2
 
     await rb.unexpose(myservice)
     try:
         await rb.rpc(myservice.__name__, payload)
-    except Exception as e:
-        logging.info(f'unexpose: {e}')
+    except rp.RembusError as e:
+        assert e.status == rp.STS_METHOD_NOT_FOUND
 
     await rb.close()

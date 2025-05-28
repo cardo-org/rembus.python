@@ -1,20 +1,22 @@
 import asyncio
+import time
 import logging
 import pytest
 import rembus
 import rembus.protocol as rp
-import time
-
 import rembus.settings
+
 
 async def shutdown(rb):
     await asyncio.sleep(0.1)
     await rb.close()
 
+
 def start_server(port):
     server = rembus.node(port=port)
     time.sleep(1)
     return server
+
 
 async def test_wait():
     server = start_server(port=8001)
@@ -30,8 +32,10 @@ async def test_wait():
     await rb.close()
     server.close()
 
-async def myservice(x,y):
+
+async def myservice(x, y):
     return x+y
+
 
 async def test_rpc():
     x = 2
@@ -48,18 +52,20 @@ async def test_rpc():
     await rb.close()
 
     with pytest.raises(rp.RembusConnectionClosed):
-        await rb.rpc("myservice", x, y) 
+        await rb.rpc("myservice", x, y)
 
     server.close()
 
-async def myservice_ctx(ctx, rb, x,y):
+
+async def myservice_ctx(_, __, x, y):
     return x+y
+
 
 async def test_rpc_ctx():
     x = 2
     y = 3
     server = start_server(port=8003)
-    
+
     ctx = {}
     rb = await rembus.component("ws://:8003")
     server.expose(myservice_ctx)
@@ -72,11 +78,12 @@ async def test_rpc_ctx():
 
     server.close()
 
+
 async def test_direct():
     x = 2
     y = 3
     server = start_server(port=8004)
-    
+
     rb = await rembus.component("ws://:8004")
     server.expose(myservice)
 
@@ -88,36 +95,38 @@ async def test_direct():
     await rb.close()
     server.close()
 
+
 async def test_unreactive():
     server = start_server(port=8005)
-    
+
     rb = await rembus.component("ws://:8005")
-    await rb.unreactive() 
+    await rb.unreactive()
     await rb.close()
     server.close()
 
+
 def mytopic():
-    logging.info(f"mytopic called")
+    logging.info("mytopic called")
+
 
 async def test_publish():
     server = start_server(port=8006)
     server.subscribe(mytopic)
 
     rb = await rembus.component("ws://:8006/cmp.net")
-    assert rb.isrepl() == False
+    assert rb.isrepl() is False
     assert isinstance(rb.router, rembus.core.Router)
     assert server.router.__repr__() == "broker: {'cmp.net': cmp.net}"
     assert rb.uid.__repr__() == "ws://127.0.0.1:8006/cmp.net"
     assert rembus.core.domain(rb.rid) == "net"
-    
+
     await rb.publish("mytopic")
-    
+
     await rb.publish("mytopic", "log_warning")
-    
+
     await rb.close()
 
     with pytest.raises(rp.RembusConnectionClosed):
-        await rb.publish("mytopic") 
+        await rb.publish("mytopic")
 
     server.close()
-
