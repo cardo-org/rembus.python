@@ -37,7 +37,7 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
       run: |
-        pytest --cov=rembus --cov-report=lcov:lcov.info
+        pytest --cov --cov-branch --cov-report=xml
     - name: Upload coverage to Codecov
       if: github.event_name == 'push' # Only upload coverage on push to avoid duplicate uploads from PRs
       uses: codecov/codecov-action@v5
@@ -45,7 +45,6 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         fail_ci_if_error: true
         slug: cardo-org/rembus.python
-        files: ./lcov.info
     - name: Build distribution
       run: |
         pip install build
