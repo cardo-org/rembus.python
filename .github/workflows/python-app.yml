@@ -42,6 +42,7 @@ jobs:
       if: github.event_name == 'push' # Only upload coverage on push to avoid duplicate uploads from PRs
       uses: codecov/codecov-action@v4
       with:
+        token: ${{ secrets.CODECOV_TOKEN }}
         fail_ci_if_error: true
         files: ./lcov.info
     - name: Build distribution
