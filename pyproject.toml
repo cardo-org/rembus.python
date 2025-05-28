@@ -63,3 +63,9 @@ push = true
 "src/rembus/__init__.py" = [
     '__version__ = "{version}"',
 ]
+
+[tool.pytest.ini_options]
+addopts = "--cov=src/rembus --cov-report=xml --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["src/rembus"]
