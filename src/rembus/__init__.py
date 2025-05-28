@@ -22,7 +22,6 @@ __all__ = [
     'register',
 ]
 
-
-# logging.basicConfig(level=logging.WARNING)
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    format="[%(levelname)s][%(name)s] %(message)s\r", level=logging.INFO)
 logger = logging.getLogger("rembus")

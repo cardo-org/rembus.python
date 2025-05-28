@@ -208,6 +208,8 @@ class Router(Supervised):
         self.inbox: asyncio.Queue[Any] = asyncio.Queue()
         self.shared: Any = None
         self.serve_task: Optional[asyncio.Task[None]] = None
+        self.server_instance = None  # To store the server object
+        self._shutdown_event = asyncio.Event()  # For controlled shutdown
         self.config = rs.Config(name)
         self.owners = rs.load_tenants(self)
         self.start_ts = time.time()
@@ -236,12 +238,10 @@ class Router(Supervised):
     async def _shutdown(self):
         """Cleanup logic when shutting down the router."""
         logger.debug("[%s] router shutdown", self)
-        if self.serve_task:
-            self.serve_task.cancel()
-            try:
-                await self.serve_task
-            except asyncio.CancelledError:
-                pass
+        if self.server_instance:
+            self.server_instance.close()
+            self._shutdown_event.set()
+            await self.server_instance.wait_closed()
 
     async def _task_impl(self) -> None:
         logger.debug("[%s] router started", self)
@@ -292,7 +292,7 @@ class Router(Supervised):
         twin = Twin(url, self, False)
         self.id_twin[rid] = twin
         twin.socket = ws
-        await twin._twin_receiver()
+        await twin.twin_receiver()
 
     async def serve_ws(self, port: int, issecure: bool = False):
         """Start a WebSocket server to handle incoming connections."""
@@ -304,8 +304,8 @@ class Router(Supervised):
             ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             if not os.path.isfile(cert_path) or not os.path.isfile(key_path):
                 raise RuntimeError(f"SSL secrets not found in {trust_store}")
-            else:
-                ssl_context.load_cert_chain(cert_path, keyfile=key_path)
+
+            ssl_context.load_cert_chain(cert_path, keyfile=key_path)
 
         async with serve(
                 self._client_receiver,
@@ -313,7 +313,9 @@ class Router(Supervised):
                 port,
                 ssl=ssl_context,
                 ping_interval=self.config.ws_ping_interval,) as server:
-            await server.serve_forever()
+            self.server_instance = server
+            await self._shutdown_event.wait()
+            # await server.serve_forever()
 
     def _needs_auth(self, cid: str):
         """Check if the component needs authentication."""
@@ -368,6 +370,7 @@ class Router(Supervised):
             self._update_twin(twin, identity)
             response = [rp.TYPE_RESPONSE, msg.id, rp.STS_OK]
 
+        # pylint: disable=protected-access
         await twin._send(cbor2.dumps(response))
 
     def _get_token(self, tenant, mid: bytes):
@@ -416,8 +419,6 @@ class Router(Supervised):
 
 class Twin(Supervised):
     """
-
-
 A Twin represents a Rembus component, either as a client or server.
 It handles the connection, message sending and receiving, and provides methods
 for RPC, pub/sub, and other commands interactions.
@@ -531,7 +532,8 @@ for RPC, pub/sub, and other commands interactions.
                     self.reconnect_task = asyncio.create_task(
                         self._reconnect())
 
-    async def _twin_receiver(self):
+    async def twin_receiver(self):
+        """Receive messages from the WebSocket connection."""
         logger.debug("[%s] client is connected", self)
         try:
             while self.socket is not None:
@@ -678,7 +680,7 @@ for RPC, pub/sub, and other commands interactions.
             ssl=ssl_context
         )
         self.handler["phase"] = lambda: "CONNECTING"
-        self.receiver = asyncio.create_task(self._twin_receiver())
+        self.receiver = asyncio.create_task(self.twin_receiver())
 
         if self.uid.hasname:
             try:
