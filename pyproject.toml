@@ -37,7 +37,7 @@ dependencies = [
 # projects.
 [project.optional-dependencies]
 dev = ["check-manifest", "bumpver"]
-test = ["coverage", "mock", "pytest", "pytest-asyncio", "pytest-mock"]
+test = ["coverage", "mock", "pytest", "pytest-asyncio", "pytest-mock", "pytest-cov"]
 
 [project.urls]
 "Homepage" = "https://github.com/cardo-org/rembus.python"

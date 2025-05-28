@@ -37,7 +37,13 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
       run: |
-        pytest
+        pytest --cov=rembus --cov-report=lcov:lcov.info
+    - name: Upload coverage to Codecov (Optional)
+      if: github.event_name == 'push' # Only upload coverage on push to avoid duplicate uploads from PRs
+      uses: codecov/codecov-action@v4
+      with:
+        fail_ci_if_error: true
+        files: ./lcov.info
     - name: Build distribution
       run: |
         pip install build

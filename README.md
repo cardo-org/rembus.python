@@ -1,4 +1,7 @@
-# Rembus API for Python
+# Rembus for Python
+
+[![Build Status](https://github.com/cardo-org/rembus.python/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/cardo-org/rembus.python/actions/workflows/CI.yml?query=branch%3Amain)
+[![Coverage](https://codecov.io/gh/cardo-org/rembus.python/branch/main/graph/badge.svg)](https://codecov.io/gh/cardo-org/rembus.python)
 
 Rembus is a Pub/Sub and RPC middleware.
 
@@ -14,7 +17,7 @@ This API version supports only the WebSocket protocol.
 
 ## Getting Started
 
-Start the [Rembus](https://cardo-org.github.io/Rembus.jl/stable/) broker.
+Start the [Rembus](https://cardo-org.github.io/Rembus.python/stable/) broker.
 
 Install the package:
 
