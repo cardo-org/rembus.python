@@ -66,6 +66,12 @@ push = true
 
 [tool.pytest.ini_options]
 addopts = "--cov=src/rembus --cov-report=xml --cov-report=term-missing"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+log_cli = true  # Equivalent to log_cli = 1
+log_cli_level = "DEBUG"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
 
 [tool.coverage.run]
 source = ["src/rembus"]
