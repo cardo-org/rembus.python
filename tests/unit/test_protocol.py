@@ -1,3 +1,4 @@
+"""Tests for rembus protocol messages and helpers."""
 import logging
 import pytest
 import rembus.protocol as rp
@@ -5,6 +6,7 @@ import rembus.core as rc
 
 
 def test_bytes2id():
+    """Test the bytes2id function for converting byte arrays to IDs."""
     byte_data = bytearray(range(16))  # 0x00 to 0x0F
     result = rp.bytes2id(byte_data)
     assert isinstance(result, int)
@@ -17,6 +19,7 @@ def test_bytes2id():
 
 
 def test_types_str():
+    """Test the string representation of protocol types."""
     assert str(rp.RembusTimeout()) == 'request timeout'
     assert str(rp.RembusConnectionClosed()) == 'connection down'
 
@@ -28,6 +31,7 @@ def test_types_str():
 
 
 async def test_rembus_messages():
+    """Test the string representation of rembus protocol messages."""
     router = rc.Router("router")
     twin = rc.Twin(rc.RbURL("twin"), router)
     for msg in [

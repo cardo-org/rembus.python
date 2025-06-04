@@ -1,3 +1,4 @@
+"""Tests for Dataframes arguments."""
 import pandas as pd
 import rembus
 import rembus.protocol as rp
@@ -7,13 +8,15 @@ df_list = [df, df]
 
 
 async def echo_service(df1, df2=None):
+    """A service that echoes the received DataFrame(s)."""
     if df2 is None:
         return df1
     else:
         return [df1, df2]
 
 
-async def test_rpc(mocker, WebSocketMockFixture):
+async def test_rpc(mocker, ws_mock):
+    """Test the RPC method of the rembus component with DataFrame arguments."""
     responses = [
         {
             # identity
@@ -33,7 +36,7 @@ async def test_rpc(mocker, WebSocketMockFixture):
 
     mocked_connect = mocker.patch(
         "websockets.connect", mocker.AsyncMock(
-            return_value=WebSocketMockFixture(responses))
+            return_value=ws_mock(responses))
     )
 
     rb = await rembus.component('bar')

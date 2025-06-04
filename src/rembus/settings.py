@@ -1,3 +1,4 @@
+"""Settings for Rembus components."""
 import json
 import logging
 import os
@@ -10,14 +11,14 @@ TENANTS_FILE = "tenants.json"
 
 
 class Config:
+    """Configuration values to modify the behavior of Rembus."""
+
     def __init__(self, name: str):
         cfg = {}
         try:
             fn = os.path.join(rembus_dir(), name, "settings.json")
             if os.path.isfile(fn):
                 cfg = json.loads(fn)
-        except FileNotFoundError:
-            pass
         except json.decoder.JSONDecodeError as e:
             raise (RuntimeError(f"{fn}: {e}")) from e
 
@@ -86,6 +87,6 @@ def load_tenants(router):
     fn = os.path.join(broker_dir(router.id), TENANTS_FILE)
     cfg = {}
     if os.path.isfile(fn):
-        with open(fn, "r") as f:
+        with open(fn, "r", encoding="utf-8") as f:
             cfg = json.load(f)
     return cfg

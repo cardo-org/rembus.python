@@ -1,28 +1,49 @@
+"""Test configuration and setup for rembus tests."""
 import asyncio
-import cbor2
 import json
+import logging
 import os
+import time
+import shutil
+import cbor2
 import pytest
+import websockets
 import rembus
 import rembus.protocol as rp
-import shutil
-import logging
-import websockets
 
 
-def pytest_configure(config):
+@pytest.fixture(scope="module")
+def server(port=8000):
+    """
+    Fixture to start and yield a rembus server, then shut it down.
+    The server will be available to tests that request this fixture.
+    """
+    rb = rembus.node(port=port)
+    time.sleep(1)  # Give the server a moment to start
+    print(f"\n--- Rembus server started on port {port} ---")
+    yield rb
+    print(f"--- Stopping Rembus server on port {port} ---")
+    rb.close()
+
+
+def pytest_configure(config):  # pylint: disable=unused-argument
+    """
+    Configure pytest settings before any tests are run.
+    """
     logging.getLogger().setLevel(logging.DEBUG)
-
     logging.getLogger('rembus').setLevel(logging.DEBUG)
-
     logging.getLogger('websockets').setLevel(logging.INFO)
 
 
 @pytest.fixture(scope="session", autouse=True)
-def setup_before(request):
+def setup_before(request):  # pylint: disable=unused-argument
     """
     Fixture to set up resources before the entire test session starts.
     """
+
+    # Return the default rembus directory if REMBUS_DIR is not set
+    rembus.rembus_dir()
+
     os.environ["REMBUS_DIR"] = os.path.join("tmp", "rembus")
 
     rembus_dir = rembus.rembus_dir()
@@ -41,6 +62,8 @@ def setup_before(request):
 
 
 class WebSocketMock:
+    """A mock WebSocket for testing purposes."""
+
     def __init__(self, responses):
         self.count = 0
         self.responses = responses
@@ -53,7 +76,7 @@ class WebSocketMock:
     async def __aexit__(self, exc_type, exc, tb):
         pass
 
-    def build_response(self, msg):
+    def _build_response(self, msg):
         if not self.responses:
             # by default return a STS_OK response
             return cbor2.dumps([rp.TYPE_RESPONSE, msg[1], rp.STS_OK, None])
@@ -67,6 +90,7 @@ class WebSocketMock:
             return cbor2.dumps(msg)
 
     async def send(self, pkt):
+        """Send a message through the mock WebSocket."""
         if self.count >= len(self.responses):
             step = {}
         else:
@@ -85,9 +109,10 @@ class WebSocketMock:
             self.count += 1
 
     async def close(self):
-        pass
+        """Close the mock WebSocket."""
 
     async def recv(self):
+        """Receive a message from the mock WebSocket."""
         pkt = await self.queue.get()
         # logging.debug(f'[wsmock] recv: {pkt}')
         if isinstance(pkt, str):
@@ -98,12 +123,13 @@ class WebSocketMock:
             msg = cbor2.dumps(pkt)
         else:
             # build the response for identity, setting, expose, subscribe
-            msg = self.build_response(pkt)
+            msg = self._build_response(pkt)
         # logging.debug(f'[wsmock] response: {rembus.tohex(msg)}')
         self.queue.task_done()
         return msg
 
 
 @pytest.fixture
-def WebSocketMockFixture():
+def ws_mock():
+    """Fixture to create a WebSocketMock instance for testing."""
     return WebSocketMock

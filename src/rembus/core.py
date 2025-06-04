@@ -54,7 +54,7 @@ class FutureResponse:
     """
 
     def __init__(self, data: Any = None):
-        self.future: asyncio.Future = asyncio.get_running_loop().create_future()
+        self.future = asyncio.get_running_loop().create_future()
         self.data = data
 
 
@@ -75,7 +75,8 @@ class RbURL:
     """
 
     def __init__(self, url: str | None = None) -> None:
-        baseurl = urlparse(os.getenv('REMBUS_BASE_URL', "ws://127.0.0.1:8000"))
+        default_url = os.getenv('REMBUS_BASE_URL', "ws://127.0.0.1:8000")
+        baseurl = urlparse(default_url)
         uri = urlparse(url)
 
         if uri.scheme == "repl":
@@ -231,9 +232,9 @@ class Router(Supervised):
         return f"up for {int(time.time() - self.start_ts)} seconds"
 
     def _builtins(self):
-        self.handler["rid"] = lambda: self.id
-        self.handler["version"] = lambda: __version__
-        self.handler["uptime"] = self.uptime
+        self.handler["rid"] = lambda *_: self.id
+        self.handler["version"] = lambda *_: __version__
+        self.handler["uptime"] = lambda *_: self.uptime()
 
     async def _shutdown(self):
         """Cleanup logic when shutting down the router."""
@@ -544,10 +545,11 @@ for RPC, pub/sub, and other commands interactions.
                 msg: list[Any] = cbor2.loads(result)
                 logger.debug("[%s] %s", self, rp.msg_str('in', msg))
                 await self._parse_input(msg)
-        except websockets.ConnectionClosedOK:
-            logger.debug("connection closed")
-        except websockets.ConnectionClosedError as e:
-            logger.info("connection closed (%s): %s", e, type(e))
+        except (
+            websockets.ConnectionClosedOK,
+            websockets.ConnectionClosedError
+        ) as e:
+            logger.info("connection closed: %s", e)
         finally:
             if self.isclient and self.handler["phase"]() == "CONNECTED":
                 logger.debug("[%s] twin_receiver done", self)
@@ -642,7 +644,10 @@ for RPC, pub/sub, and other commands interactions.
         return
 
     async def _parse_input(self, msg: list[Any]):
-        """Receive the incoming message and dispatch it to the appropriate handler."""
+        """
+        Receive the incoming message and dispatch
+        it to the appropriate handler.
+        """
         type_byte = msg[0]
 
         mtype = type_byte & 0x0F
@@ -699,7 +704,10 @@ for RPC, pub/sub, and other commands interactions.
 
         await self.socket.send(payload)
 
-    async def _send_wait(self, builder: Callable[[bytearray], bytes], data: Any = None) -> Any:
+    async def _send_wait(
+            self,
+            builder: Callable[[bytearray], bytes],
+            data: Any = None) -> Any:
         """Send a message and wait for a response."""
         reqid = rp.msgid()
         req = builder(reqid)
@@ -738,7 +746,7 @@ for RPC, pub/sub, and other commands interactions.
         else:
             logger.debug("[%s]: free mode access", self)
 
-    async def publish(self, topic: str, *args: tuple[Any], **kwargs):
+    async def publish(self, topic: str, *args: Any, **kwargs):
         """Publish a message to the specified topic."""
         data = rp.df2tag(args)
         if self.socket is None:
@@ -782,14 +790,14 @@ for RPC, pub/sub, and other commands interactions.
                 lambda id: rp.encode([rp.TYPE_ADMIN, id, topic, data])
             )
 
-    async def rpc(self, topic: str, *args: tuple[Any]):
+    async def rpc(self, topic: str, *args: Any):
         """Send a RPC request."""
         data = rp.df2tag(args)
         return await self._send_wait(
             lambda id: rp.encode([rp.TYPE_RPC, id, topic, None, data])
         )
 
-    async def direct(self, target: str, topic: str, *args: tuple[Any]):
+    async def direct(self, target: str, topic: str, *args: Any):
         """Send a RPC request to a specific target."""
         data = rp.df2tag(args)
         return await self._send_wait(
@@ -830,7 +838,8 @@ for RPC, pub/sub, and other commands interactions.
 
     async def unreactive(self):
         """
-        Set the component to stop receiving published messages on subscribed topics.
+        Set the component to stop receiving published
+        messages on subscribed topics.
         """
         await self.broker_setting("reactive", {"status": False})
         return self
@@ -884,7 +893,12 @@ for RPC, pub/sub, and other commands interactions.
         if not self.isrepl():
             await self.reactive()
         if self._supervisor_task is not None:
-            return await asyncio.wait([self._supervisor_task], timeout=timeout)
+            try:
+                await asyncio.wait([self._supervisor_task], timeout=timeout)
+            except asyncio.exceptions.CancelledError:
+                pass
+            finally:
+                await self.shutdown()
 
 
 async def component(

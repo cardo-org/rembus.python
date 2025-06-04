@@ -1,9 +1,11 @@
+"""Test the case of receiving text messages instead of binary data."""
 import asyncio
 import rembus
 import rembus.protocol as rp
 
 
-async def test_send_text(mocker, WebSocketMockFixture):
+async def test_send_text(mocker, ws_mock):
+    """Send a text message instead of binary data."""
     responses = [
         {
             # identity
@@ -26,7 +28,7 @@ async def test_send_text(mocker, WebSocketMockFixture):
 
     mocked_connect = mocker.patch(
         "websockets.connect", mocker.AsyncMock(
-            return_value=WebSocketMockFixture(responses))
+            return_value=ws_mock(responses))
     )
 
     rb = await rembus.component('foo')
@@ -34,6 +36,7 @@ async def test_send_text(mocker, WebSocketMockFixture):
     assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000/foo"
     assert rb.uid.id == 'foo'
     # send a response message with an unknown msgid
-    await rb.socket.send("ola mondo")
+    if rb.socket:
+        await rb.socket.send("ola mondo")
     await asyncio.sleep(0.1)
     await rb.close()

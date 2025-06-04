@@ -1,3 +1,4 @@
+"""Synchronous APIs."""
 import asyncio
 import atexit
 import logging
@@ -26,16 +27,20 @@ class AsyncLoopRunner:
         self.loop.run_forever()
 
     def run(self, coro: Coroutine[Any, Any, Any]) -> Any:
+        """Run a coroutine in the event loop and return its result."""
         future = asyncio.run_coroutine_threadsafe(coro, self.loop)
         return future.result()
 
     def shutdown(self):
+        """Shutdown the event loop and wait for the thread to finish."""
         if self.loop.is_running():
             self.loop.call_soon_threadsafe(self.loop.stop)
             self._thread.join()
 
 
-class node:
+class node:  # pylint: disable=invalid-name
+    """The synchronous Rembus twin."""
+
     def __init__(
         self,
         url: str | None = None,
@@ -48,14 +53,17 @@ class node:
 
     @property
     def router(self):
+        """The router object associated with this node."""
         return self._rb.router
 
     @property
     def uid(self):
+        """The RbUrl object for this node."""
         return self._rb.uid
 
     @property
     def rid(self):
+        """The unique Rembus id for this node."""
         return self._rb.rid
 
     def isopen(self) -> bool:
@@ -70,43 +78,71 @@ class node:
         """Initialize the context object."""
         return self._rb.inject(ctx)
 
-    def register(self, cid: str, pin: str, scheme: int = SIG_RSA):
-        return self._runner.run(self._rb.register(cid, pin, scheme))
+    def register(self, rid: str, pin: str, scheme: int = SIG_RSA):
+        """Register a component with the given rid."""
+        return self._runner.run(self._rb.register(rid, pin, scheme))
 
     def unregister(self):
+        """Unregister the component."""
         return self._runner.run(self._rb.unregister())
 
-    def direct(self, target: str, topic: str, *args: tuple[Any]):
+    def direct(self, target: str, topic: str, *args: Any):
+        """Send a direct RPC request to the target component."""
         return self._runner.run(self._rb.direct(target, topic, *args))
 
-    def rpc(self, topic: str, *args: tuple[Any]):
+    def rpc(self, topic: str, *args: Any):
+        """Send a RPC request."""
         return self._runner.run(self._rb.rpc(topic, *args))
 
-    def publish(self, topic: str, *args: tuple[Any], **kwargs):
+    def publish(self, topic: str, *args: Any, **kwargs):
+        """Publish a message to the specified topic."""
         return self._runner.run(self._rb.publish(topic, *args, **kwargs))
 
     def subscribe(self, fn: Callable[..., Any], retroactive: bool = False):
+        """
+        Subscribe the function to the corresponding topic.
+        """
         return self._runner.run(self._rb.subscribe(fn, retroactive))
 
     def unsubscribe(self, fn: Callable[..., Any]):
+        """
+        Unsubscribe the function from the corresponding topic.
+        """
         return self._runner.run(self._rb.unsubscribe(fn))
 
     def expose(self, fn: Callable[..., Any]):
+        """
+        Expose the function as a remote procedure call(RPC) handler.
+        """
         return self._runner.run(self._rb.expose(fn))
 
     def unexpose(self, fn: Callable[..., Any]):
+        """
+        Unexpose the function as a remote procedure call(RPC) handler.
+        """
         return self._runner.run(self._rb.unexpose(fn))
 
     def reactive(self):
+        """
+        Set the component to receive published messages on subscribed topics.
+        """
         return self._runner.run(self._rb.reactive())
 
     def unreactive(self):
+        """
+        Set the component to stop receiving published
+        messages on subscribed topics.
+        """
         return self._runner.run(self._rb.unreactive())
 
     def wait(self, timeout: float | None = None):
+        """
+        Start the twin event loop that wait for rembus messages.
+        """
         return self._runner.run(self._rb.wait(timeout))
 
     def close(self):
+        """Close the connection and clean up resources."""
         self._runner.run(self._rb.close())
 
     def __enter__(self):
@@ -120,12 +156,13 @@ class node:
         self.close()
 
 
-def register(cid: str, pin: str, scheme: int = SIG_RSA):
+def register(rid: str, pin: str, scheme: int = SIG_RSA):
+    """Provisions the component with rid identifier."""
     rb = node("ws:")
     try:
-        rb.register(cid, pin, scheme)
+        rb.register(rid, pin, scheme)
     except Exception as e:
-        logger.error(f"[{cid}] register: {e}")
+        logger.error("[%s] register: %s", rid, e)
         raise
     finally:
         rb.close()

@@ -1,8 +1,10 @@
+"""Test that publishing to an unknown topic does not raise an error."""
 import rembus
 import rembus.protocol as rp
 
 
-async def test_publish_unknow_topic(mocker, WebSocketMockFixture):
+async def test_publish_unknow_topic(mocker, ws_mock):
+    """Send a message to an unknown topic without raising an error."""
     topic = "unknown_topic"
 
     responses = [
@@ -21,7 +23,7 @@ async def test_publish_unknow_topic(mocker, WebSocketMockFixture):
 
     mocked_connect = mocker.patch(
         "websockets.connect", mocker.AsyncMock(
-            return_value=WebSocketMockFixture(responses))
+            return_value=ws_mock(responses))
     )
 
     rb = await rembus.component('foo')

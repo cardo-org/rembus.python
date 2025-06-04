@@ -1,20 +1,22 @@
+"""Test pubsub QOS2 when duplicated messages are sent."""
 import asyncio
 import logging
 import rembus
 import rembus.protocol as rp
 
-payload = 1
-
-mytopic_received = None
+PAYLOAD = 1
+RECEIVED = None
 
 
 async def mytopic(data):
-    global mytopic_received
+    """A simple pubsub handler that logs the received data."""
+    global RECEIVED  # pylint: disable=global-statement
     logging.info('[mytopic]: %s', data)
-    mytopic_received = payload
+    RECEIVED = PAYLOAD
 
 
-async def test_publish(mocker, WebSocketMockFixture):
+async def test_publish(mocker, ws_mock):
+    """Test the publish method with QoS 2."""
     responses = [
         {
             # identity
@@ -37,7 +39,7 @@ async def test_publish(mocker, WebSocketMockFixture):
 
     mocked_connect = mocker.patch(
         "websockets.connect", mocker.AsyncMock(
-            return_value=WebSocketMockFixture(responses))
+            return_value=ws_mock(responses))
     )
 
     rb = await rembus.component('foo')
@@ -54,10 +56,11 @@ async def test_publish(mocker, WebSocketMockFixture):
     for i in range(3):
         rb.outreq[msgid] = rembus.core.FutureResponse(True)
         req = rp.encode(
-            [rp.TYPE_PUB | rembus.QOS2, msgid, topic, payload]
+            [rp.TYPE_PUB | rembus.QOS2, msgid, topic, PAYLOAD]
         )
-        await rb.socket.send(req)
+        if rb.socket:
+            await rb.socket.send(req)
 
     await asyncio.sleep(0.1)
-    assert mytopic_received == payload
+    assert RECEIVED == PAYLOAD
     await rb.close()

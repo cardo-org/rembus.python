@@ -1,16 +1,19 @@
+"""Tests RPC failure for unknown method invocation."""
 import logging
 import rembus
 import rembus.protocol as rp
 
-payload = 1
+PAYLOAD = 1
 
 
 async def myservice(data):
+    """A simple service that expects a single argument."""
     logging.info('[myservice]: %s', data)
     return data*2
 
 
-async def test_rpc_method_unkown(mocker, WebSocketMockFixture):
+async def test_rpc_method_unkown(mocker, ws_mock):
+    """Test a RPC method that returns an unknown method error."""
     responses = [
         {
             # identity
@@ -27,7 +30,7 @@ async def test_rpc_method_unkown(mocker, WebSocketMockFixture):
 
     mocked_connect = mocker.patch(
         "websockets.connect", mocker.AsyncMock(
-            return_value=WebSocketMockFixture(responses))
+            return_value=ws_mock(responses))
     )
     rb = await rembus.component('bar')
 
@@ -38,7 +41,7 @@ async def test_rpc_method_unkown(mocker, WebSocketMockFixture):
 
     invalid_method = 'invalid_method'
     try:
-        await rb.rpc(invalid_method, payload)
+        await rb.rpc(invalid_method, PAYLOAD)
     except rp.RembusError as e:
         assert isinstance(e, rp.RembusError)
         assert e.status == rp.STS_METHOD_NOT_FOUND

@@ -1,22 +1,17 @@
+"""Tests for miscellaneous error conditions."""
 import os
 import stat
-import time
 import pytest
 import rembus
 import rembus.protocol as rp
 import rembus.settings as rs
 
 
-def start_server(port):
-    server = rembus.node(port=port)
-    time.sleep(1)
-    return server
-
-
-async def test_register_error():
+async def test_register_error(server):
+    """Test the error condition that should restart the router task."""
     cid = "myname"
-    server = start_server(port=8000)
-
+    # server = start_server(port=8000)
+    # server = start_server_fixture
     rembus.register(cid, "11223344")
 
     key_dir = rs.keys_dir(server.router.id)
@@ -36,10 +31,11 @@ async def test_register_error():
 
     myname.unregister()
     myname.close()
-    server.close()
+    # server.close()
 
 
 def test_settings_error():
+    """Test the error condition when settings file is not valid JSON."""
     fn = os.path.join(rs.rembus_dir(), rs.DEFAULT_BROKER, "settings.json")
 
     with open(fn, "w", encoding="utf-8") as f:

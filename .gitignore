@@ -1,6 +1,7 @@
 *.old
 *.sav
 lcov.info
+.vscode
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

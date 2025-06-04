@@ -1,3 +1,4 @@
+"""Tests for WebSocket Secure (WSS) connections in rembus."""
 import os
 import shutil
 import ssl
@@ -7,6 +8,11 @@ import rembus.settings
 
 
 def config_secure():
+    """
+    Configure the rembus settings for secure WSS connections.
+    This function sets up the necessary directories and copies
+    the required certificate and key files for secure communication.
+    """
     data_dir = os.path.join("tests", "data")
     ca_dir = os.path.join(rembus.rembus_dir(), "ca")
     keystore_dir = rembus.settings.keystore_dir()
@@ -22,7 +28,12 @@ def config_secure():
 
 
 def test_wss_fail():
-    # missing private key and certificate
+    """
+    Test the failure condition for WSS connections when the
+    necessary private key and certificate are not available.
+    This should raise a RuntimeError indicating that the
+    secure connection cannot be established.
+    """
     try:
         rembus.node(port=8000, secure=True)
     except RuntimeError:
@@ -30,6 +41,13 @@ def test_wss_fail():
 
 
 def test_wss_ok():
+    """
+    Test the successful establishment of a WSS connection.
+    This function configures the rembus settings for secure
+    connections, starts a rembus server, and then attempts
+    to create a WSS node. It should not raise any exceptions
+    and should successfully close the connection.
+    """
     config_secure()
     server = rembus.node(port=8000, secure=True)
 
@@ -40,6 +58,12 @@ def test_wss_ok():
 
 
 def test_wss_default_ca_notfound():
+    """
+    Test the condition where the default CA file is not found.
+    This function removes the default CA file, and then attempts
+    to create a WSS node. It should raise an exception indicating
+    that the CA file is not found.
+    """
     fn = rembus.settings.rembus_ca()
     if os.path.exists(fn):
         os.remove(fn)
@@ -52,6 +76,12 @@ def test_wss_default_ca_notfound():
 
 
 def test_wss_ca_notfound():
+    """
+    Test the condition where a specific CA bundle is not found.
+    This function sets an environment variable for the CA bundle
+    and then attempts to create a WSS node. It should raise an
+    exception indicating that the CA bundle file is not found.
+    """
     config_secure()
     server = rembus.node(port=8000, secure=True)
     os.environ["HTTP_CA_BUNDLE"] = "not_found"

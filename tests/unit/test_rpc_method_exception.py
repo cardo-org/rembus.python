@@ -1,14 +1,17 @@
+"""Tests RPC failure for wrong method invocation."""
 import logging
 import rembus
 import rembus.protocol as rp
 
 
 async def myservice(data):
+    """A simple service that expects a single argument."""
     logging.info('[myservice]: %s', data)
     return data*2
 
 
-async def test_rpc_method_exception(mocker, WebSocketMockFixture):
+async def test_rpc_method_exception(mocker, ws_mock):
+    """Test a RPC method that returns a method exception."""
     responses = [
         [rp.TYPE_RESPONSE, rp.STS_OK, None],  # identity
         [rp.TYPE_RESPONSE, rp.STS_OK, None],  # expose
@@ -31,7 +34,7 @@ async def test_rpc_method_exception(mocker, WebSocketMockFixture):
 
     mocked_connect = mocker.patch(
         "websockets.connect", mocker.AsyncMock(
-            return_value=WebSocketMockFixture(responses))
+            return_value=ws_mock(responses))
     )
     rb = await rembus.component('bar')
 
@@ -46,5 +49,8 @@ async def test_rpc_method_exception(mocker, WebSocketMockFixture):
         logging.info(e)
         assert isinstance(e, rp.RembusError)
         assert e.status == rp.STS_METHOD_EXCEPTION
-        assert e.message == "myservice() missing 1 required positional argument: 'data'"
+        assert (
+            e.message ==
+            "myservice() missing 1 required positional argument: 'data'"
+        )
     await rb.close()

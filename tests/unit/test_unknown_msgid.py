@@ -1,9 +1,11 @@
+"""Test the reception of messages with an unknown msgid."""
 import asyncio
 import rembus
 import rembus.protocol as rp
 
 
-async def test_publish(mocker, WebSocketMockFixture):
+async def test_unknown_message_id(mocker, ws_mock):
+    """Test the reception of messages with an unknown msgid."""
     responses = [
         {
             # identity
@@ -26,7 +28,7 @@ async def test_publish(mocker, WebSocketMockFixture):
 
     mocked_connect = mocker.patch(
         "websockets.connect", mocker.AsyncMock(
-            return_value=WebSocketMockFixture(responses))
+            return_value=ws_mock(responses))
     )
 
     rb = await rembus.component('foo')
@@ -38,6 +40,7 @@ async def test_publish(mocker, WebSocketMockFixture):
     req = rp.encode(
         [rp.TYPE_RESPONSE, msgid, 'topic', 'payload']
     )
-    await rb.socket.send(req)
+    if rb.socket:
+        await rb.socket.send(req)
     await asyncio.sleep(0.1)
     await rb.close()

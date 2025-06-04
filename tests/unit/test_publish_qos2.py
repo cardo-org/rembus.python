@@ -1,20 +1,22 @@
+"""Test pubsub QOS2."""
 import asyncio
 import logging
 import rembus
 import rembus.protocol as rp
 
-payload = 1
-
-mytopic_received = None
+PAYLOAD = 1
+RECEIVED = None
 
 
 async def mytopic(data):
-    global mytopic_received
+    """A simple pubsub handler that logs the received data."""
+    global RECEIVED  # pylint: disable=global-statement
     logging.info('[mytopic]: %s', data)
-    mytopic_received = payload
+    RECEIVED = PAYLOAD
 
 
-async def test_publish(mocker, WebSocketMockFixture):
+async def test_publish(mocker, ws_mock):
+    """Test the publish method of the rembus component with QoS 2."""
     responses = [
         {
             # identity
@@ -37,7 +39,7 @@ async def test_publish(mocker, WebSocketMockFixture):
 
     mocked_connect = mocker.patch(
         "websockets.connect", mocker.AsyncMock(
-            return_value=WebSocketMockFixture(responses))
+            return_value=ws_mock(responses))
     )
 
     rb = await rembus.component('foo')
@@ -49,9 +51,9 @@ async def test_publish(mocker, WebSocketMockFixture):
     await rb.subscribe(mytopic)
 
     topic = mytopic.__name__
-    await rb.publish(topic, payload, qos=rembus.QOS2)
+    await rb.publish(topic, PAYLOAD, qos=rembus.QOS2)
 
     await asyncio.sleep(0.1)
-    assert mytopic_received == payload
+    assert RECEIVED == PAYLOAD
 
     await rb.close()
