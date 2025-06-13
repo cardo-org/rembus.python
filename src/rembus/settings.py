@@ -18,12 +18,14 @@ class Config:
         try:
             fn = os.path.join(rembus_dir(), name, "settings.json")
             if os.path.isfile(fn):
-                cfg = json.loads(fn)
+                with open(fn, 'r', encoding='utf-8') as f:
+                    cfg = json.load(f)
         except json.decoder.JSONDecodeError as e:
             raise (RuntimeError(f"{fn}: {e}")) from e
 
         self.request_timeout = cfg.get("request_timeout", 1)
         self.ws_ping_interval = cfg.get("ws_ping_interval", None)
+        self.start_anyway = cfg.get("start_anyway", False)
 
 
 def rembus_dir():

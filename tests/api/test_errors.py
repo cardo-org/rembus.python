@@ -1,7 +1,9 @@
 """Tests for miscellaneous error conditions."""
 import os
 import stat
+import time
 import pytest
+import cbor2
 import rembus
 import rembus.protocol as rp
 import rembus.settings as rs
@@ -19,8 +21,8 @@ async def test_register_error(server):
     os.chmod(key_dir, curr_mode & ~(
         stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
 
-    myname = rembus.node(cid)
     try:
+        myname = rembus.node(cid)
         myname.unregister()
         assert False
     except rp.RembusError:
@@ -45,3 +47,23 @@ def test_settings_error():
         rs.Config(rs.DEFAULT_BROKER)
 
     os.remove(fn)
+
+
+def test_unknown_message_type():
+    """Test a reception of a Wrong payload"""
+    rb = rembus.node()
+
+    # Server-side throws an exception and close the connection.
+    # The client detect the connection down and reconnect.
+    rb._runner.run(rb._rb._send(cbor2.dumps([999])))
+    rb.close()
+
+
+def test_response_no_data():
+    """Test missing data field"""
+    rb = rembus.node()
+    mid = 1234
+    # This is not an error, data is set by default to None
+    rb._runner.run(rb._rb._send(cbor2.dumps(
+        [rp.TYPE_RESPONSE, mid.to_bytes(16), rp.STS_OK])))
+    rb.close()

@@ -1,4 +1,4 @@
-import rembus.sync as rembus
+import rembus
 
 
 def add(x, y):
@@ -6,7 +6,5 @@ def add(x, y):
 
 
 rb = rembus.node('calculator')
-
 rb.expose(add)
-
 rb.wait()

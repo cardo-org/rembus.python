@@ -3,6 +3,7 @@ The core module of the Rembus library that includes implementations for the
 Router and Twin concepts.
 """
 import asyncio
+import base64
 import logging
 import os
 import time
@@ -38,6 +39,13 @@ def domain(s: str) -> str:
 def randname() -> str:
     """Return a random name for a component."""
     return str(uuid.uuid4())
+
+
+def bytes_to_b64(val: bytes, enc: int):
+    """Base 64 encodeing for JSON-RPC transport"""
+    if enc == rp.JSON:
+        return base64.b64encode(val).decode("utf-8")
+    return val
 
 
 async def get_response(obj: Any) -> Any:
@@ -244,11 +252,60 @@ class Router(Supervised):
             self._shutdown_event.set()
             await self.server_instance.wait_closed()
 
+    async def _pubsub_msg(self, msg: rp.PubSubMsg):
+        if msg.flags > rp.QOSLevel.QOS0 and msg.id:
+            twin = msg.twin
+            if twin.socket:
+                await twin.send(rp.AckMsg(id=msg.id))
+
+            if msg.flags == rp.QOSLevel.QOS2:
+                if msg.id in twin.ackdf:
+                    # Already received, skip the message.
+                    return
+                else:
+                    # Save the message id to guarantee exactly one delivery.
+                    twin.ackdf[msg.id] = int(time.time())
+
+        data = rp.tag2df(msg.data)
+        try:
+            if msg.topic in self.handler:
+                await self.evaluate(self, msg.topic, data)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.warning("[%s] error in method invocation: %s", self, e)
+
+        return
+
+    async def _rpcreq_msg(self, msg: rp.RpcReqMsg):
+        """Handle an RPC request."""
+        data = rp.tag2df(msg.data)
+        if msg.topic not in self.handler:
+            outmsg = rp.ResMsg(
+                id=msg.id, status=rp.STS_METHOD_NOT_FOUND, data=msg.topic
+            )
+        else:
+            status = rp.STS_OK
+            try:
+                output = await self.evaluate(self, msg.topic, data)
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                status = rp.STS_METHOD_EXCEPTION
+                output = f"{e}"
+                logger.debug("exception: %s", e)
+            outmsg = rp.ResMsg(
+                id=msg.id, status=status, data=rp.df2tag(output)
+            )
+        await msg.twin.send(outmsg)
+
+        return
+
     async def _task_impl(self) -> None:
         logger.debug("[%s] router started", self)
         while True:
             msg = await self.inbox.get()
-            if isinstance(msg, rp.IdentityMsg):
+            if isinstance(msg, rp.PubSubMsg):
+                await self._pubsub_msg(msg)
+            elif isinstance(msg, rp.RpcReqMsg):
+                await self._rpcreq_msg(msg)
+            elif isinstance(msg, rp.IdentityMsg):
                 twin_id = msg.cid
                 sts = rp.STS_OK
                 if self.isconnected(twin_id):
@@ -339,12 +396,17 @@ class Router(Supervised):
         challenge = fn(twin)
         plain = cbor2.dumps([challenge, msg.cid])
         try:
+            if isinstance(msg.signature, str):
+                signature = base64.b64decode(msg.signature)
+            else:
+                signature = msg.signature
+
             pubkey = rp.load_public_key(self, cid)
             if isinstance(pubkey, rsa.RSAPublicKey):
-                pubkey.verify(msg.signature, plain,
+                pubkey.verify(signature, plain,
                               padding.PKCS1v15(), hashes.SHA256())
             elif isinstance(pubkey, ec.EllipticCurvePublicKey):
-                pubkey.verify(msg.signature, plain, ec.ECDSA(hashes.SHA256()))
+                pubkey.verify(signature, plain, ec.ECDSA(hashes.SHA256()))
 
             self._update_twin(twin, msg.cid)
             return rp.STS_OK
@@ -357,7 +419,11 @@ class Router(Supervised):
         twin = msg.twin
         challenge_val = os.urandom(4)
         twin.handler["challenge"] = lambda twin: challenge_val
-        return [rp.TYPE_RESPONSE, msg.id, rp.STS_CHALLENGE, challenge_val]
+        return rp.ResMsg(
+            id=msg.id,
+            status=rp.STS_CHALLENGE,
+            data=bytes_to_b64(challenge_val, twin.enc)
+        )
 
     async def _auth_identity(self, msg: rp.IdentityMsg):
         """Authenticate the identity of the component."""
@@ -369,28 +435,25 @@ class Router(Supervised):
             response = self._challenge(msg)
         else:
             self._update_twin(twin, identity)
-            response = [rp.TYPE_RESPONSE, msg.id, rp.STS_OK]
+            response = rp.ResMsg(id=msg.id, status=rp.STS_OK)
 
-        # pylint: disable=protected-access
-        await twin._send(cbor2.dumps(response))
+        await twin.send(response)
 
-    def _get_token(self, tenant, mid: bytes):
+    def _get_token(self, tenant, secret: str):
         """Get the token embedded into the message id."""
-        vals = mid[3::-1]
-        token = vals.hex()
         pin = self.owners.get(tenant)
-        if token != pin:
-            logger.info("tenant %s: invalid token %s", tenant, token)
+        if secret != pin:
+            logger.info("tenant %s: invalid token %s", tenant, secret)
             return None
         else:
             logger.debug("tenant %s: token is valid", tenant)
-            return token
+            return secret
 
     async def _register_node(self, msg: rp.RegisterMsg):
         """Provision a new node."""
         sts = rp.STS_ERROR
         reason = None
-        token = self._get_token(domain(msg.cid), msg.id)
+        token = self._get_token(domain(msg.cid), msg.pin)
         try:
             if token is None:
                 reason = "wrong tenant/pin"
@@ -425,26 +488,25 @@ It handles the connection, message sending and receiving, and provides methods
 for RPC, pub/sub, and other commands interactions.
     """
 
-    def __init__(self, uid: RbURL, router: Router, isclient: bool = True):
+    def __init__(
+            self,
+            uid: RbURL,
+            router: Router,
+            isclient: bool = True,
+            enc: int = rp.CBOR):
         super().__init__()
         self.isclient = isclient
+        self.enc = enc
         self._router = router
         self.socket: websockets.ClientConnection | None = None
         self.receiver = None
         self.uid = uid
         self.inbox: asyncio.Queue[str] = asyncio.Queue()
         self.handler: dict[str, Callable[..., Any]] = {}
-        self.outreq: dict[bytes, FutureResponse] = {}
+        self.outreq: dict[int, FutureResponse] = {}
         self.reconnect_task: Optional[asyncio.Task[None]] = None
         self.ackdf: dict[int, int] = {}  # msgid => ts
         self.handler["phase"] = lambda: "CLOSED"
-        self.msg_class = {
-            rp.TYPE_UNREGISTER: rp.UnregisterMsg,
-            rp.TYPE_REGISTER: rp.RegisterMsg,
-            rp.TYPE_IDENTITY: rp.IdentityMsg,
-            rp.TYPE_ATTESTATION: rp.AttestationMsg,
-            rp.TYPE_ADMIN: rp.AdminMsg,
-        }
         self.start()
 
     def __str__(self):
@@ -478,8 +540,8 @@ for RPC, pub/sub, and other commands interactions.
 
     async def response(self, status: int, msg: Any, data: Any = None):
         """Send a response to the client."""
-        outmsg: Any = [rp.TYPE_RESPONSE, msg.id, status, data]
-        await self._send(cbor2.dumps(outmsg))
+        outmsg: Any = rp.ResMsg(id=msg.id, status=status, data=data)
+        await self.send(outmsg)
 
     def inject(self, data: Any):
         """Initialize the context object."""
@@ -494,7 +556,7 @@ for RPC, pub/sub, and other commands interactions.
                 self.reconnect_task = None
                 break
             except Exception as e:  # pylint: disable=broad-exception-caught
-                logger.info("[%s] reconnect: %s", self, type(e))
+                logger.info("[%s] reconnect: %s", self, e)
                 await asyncio.sleep(2)
 
     async def _shutdown(self):
@@ -540,16 +602,22 @@ for RPC, pub/sub, and other commands interactions.
             while self.socket is not None:
                 result: str | bytes = await self.socket.recv()
                 if isinstance(result, str):
-                    raise rp.RembusError(
-                        rp.STS_ERROR, "unexpected text message")
-                msg: list[Any] = cbor2.loads(result)
-                logger.debug("[%s] %s", self, rp.msg_str('in', msg))
-                await self._parse_input(msg)
+                    self.enc = rp.JSON
+                    msg = rp.jsonrpc_parse(result)
+                else:
+                    self.enc = rp.CBOR
+                    pkt: list[Any] = cbor2.loads(result)
+                    msg = rp.cbor_parse(pkt)
+
+                msg.twin = self
+                await self._eval_input(msg)
         except (
             websockets.ConnectionClosedOK,
             websockets.ConnectionClosedError
         ) as e:
-            logger.info("connection closed: %s", e)
+            logger.debug("connection closed: %s", e)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.warning("[%s] error: %s", self, e)
         finally:
             if self.isclient and self.handler["phase"]() == "CONNECTED":
                 logger.debug("[%s] twin_receiver done", self)
@@ -558,113 +626,55 @@ for RPC, pub/sub, and other commands interactions.
                 self.router.id_twin.pop(self.rid, None)
                 await self.shutdown()
 
-    async def future_request(self, msgid: bytes):
+    async def future_request(self, msgid: int):
         """Return the future associated with the message id `msgid`."""
         fut = self.outreq.pop(msgid, None)
         if fut is None:
             logger.warning("[%s] recv unknown msg id %s",
-                           self, rp.tohex(msgid))
+                           self, rp.tohex(rp.to_bytes(msgid)))
         return fut
 
-    async def _pubsub_msg(self, msg: list[Any], flags):
-        if flags > rp.QOS0:
-            mid = msg[1]
-            topic: str = msg[2]
-            data = msg[3]
-            if self.socket:
-                await self.socket.send(cbor2.dumps([rp.TYPE_ACK, mid]))
-            if flags == rp.QOS2:
-                id128 = rp.bytes2id(mid)
-                if id128 in self.ackdf:
-                    # Already received, skip the message.
-                    return
-                else:
-                    # Save the message id to guarantee exactly one delivery.
-                    self.ackdf[id128] = int(time.time())
-        else:
-            topic: str = msg[1]
-            data = rp.tag2df(msg[2])
-        try:
-            if topic in self.router.handler:
-                await self.router.evaluate(self, topic, data)
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.warning("[%s] error in method invocation: %s", self, e)
-
-        return
-
-    async def _rpcreq_msg(self, msg: list[Any]):
-        """Handle an RPC request."""
-        mid = msg[1]
-        topic = msg[2]
-        data = rp.tag2df(msg[4])
-        if topic not in self.router.handler:
-            outmsg = [rp.TYPE_RESPONSE, mid, rp.STS_METHOD_NOT_FOUND, topic]
-        else:
-            status = rp.STS_OK
-            try:
-                output = await self.router.evaluate(self, topic, data)
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                status = rp.STS_METHOD_EXCEPTION
-                output = f"{e}"
-                logger.debug("exception: %s", e)
-            outmsg: Any = [rp.TYPE_RESPONSE, mid, status, rp.df2tag(output)]
-            logger.debug("[%s] %s", self, rp.msg_str('out', outmsg))
-        await self._send(cbor2.dumps(outmsg))
-
-        return
-
-    async def _response_msg(self, msg: list[Any]):
-        mid = msg[1]
-        fut = await self.future_request(mid)
+    async def _response_msg(self, msg: rp.ResMsg):
+        fut = await self.future_request(msg.id)
         if fut:
-            sts = msg[2]
-            payload = (msg[3:] + [None])[0]
+            sts = msg.status
             if sts == rp.STS_OK:
-                fut.future.set_result(rp.tag2df(payload))
+                fut.future.set_result(rp.tag2df(msg.data))
             elif sts == rp.STS_CHALLENGE:
-                fut.future.set_result(payload)
+                fut.future.set_result(msg.data)
             else:
-                fut.future.set_exception(rp.RembusError(sts, payload))
+                fut.future.set_exception(rp.RembusError(sts, msg.data))
 
-    async def _ack_msg(self, msg: list[Any]):
-        mid = msg[1]
+    async def _ack_msg(self, msg: rp.AckMsg):
         logger.debug("pubsub ack data")
-        fut = await self.future_request(mid)
+        fut = await self.future_request(msg.id)
         if fut:
             if fut.data:
-                # fut.data is true if the message is a QOS2
-                await self._send(rp.encode([rp.TYPE_ACK2, mid]))
+                await self.send(rp.Ack2Msg(id=msg.id))
+
             fut.future.set_result(True)
 
-    async def _ack2_msg(self, msg: list[Any]):
-        mid = rp.bytes2id(msg[1])
+    async def _ack2_msg(self, msg: rp.Ack2Msg):
+        mid = msg.id
         if mid in self.ackdf:
             logger.debug("deleting pubsub ack: %s", mid)
             del self.ackdf[mid]
         return
 
-    async def _parse_input(self, msg: list[Any]):
+    async def _eval_input(self, msg: rp.RembusMsg):
         """
         Receive the incoming message and dispatch
         it to the appropriate handler.
         """
-        type_byte = msg[0]
 
-        mtype = type_byte & 0x0F
-        flags = type_byte & 0xF0
-        if mtype == rp.TYPE_PUB:
-            await self._pubsub_msg(msg, flags)
-        elif mtype == rp.TYPE_RPC:
-            await self._rpcreq_msg(msg)
-        elif mtype == rp.TYPE_RESPONSE:
+        if isinstance(msg, rp.ResMsg):
             await self._response_msg(msg)
-        elif mtype == rp.TYPE_ACK:
+        elif isinstance(msg, rp.AckMsg):
             await self._ack_msg(msg)
-        elif mtype == rp.TYPE_ACK2:
+        elif isinstance(msg, rp.Ack2Msg):
             await self._ack2_msg(msg)
-        elif mtype in self.msg_class:
-            msg_class = self.msg_class[mtype]
-            self.router.inbox.put_nowait(msg_class(self, msg))
+        else:
+            self.router.inbox.put_nowait(msg)
 
     async def connect(self):
         """Connect to the broker."""
@@ -698,7 +708,12 @@ for RPC, pub/sub, and other commands interactions.
         self.handler["phase"] = lambda: "CONNECTED"
         return self
 
-    async def _send(self, payload: bytes) -> Any:
+    async def send(self, msg: rp.RembusMsg):
+        """Send a rembus message"""
+        pkt = msg.to_payload(self.enc)
+        await self._send(pkt)
+
+    async def _send(self, payload: bytes | str) -> Any:
         if self.socket is None:
             raise rp.RembusConnectionClosed()
 
@@ -706,15 +721,14 @@ for RPC, pub/sub, and other commands interactions.
 
     async def _send_wait(
             self,
-            builder: Callable[[bytearray], bytes],
+            builder: Callable,
             data: Any = None) -> Any:
         """Send a message and wait for a response."""
         reqid = rp.msgid()
         req = builder(reqid)
-        kid = bytes(reqid)
-        await self._send(req)
+        await self.send(req)
         futreq = FutureResponse(data)
-        self.outreq[kid] = futreq
+        self.outreq[reqid] = futreq
         try:
             async with async_timeout.timeout(
                 self.router.config.request_timeout
@@ -726,9 +740,12 @@ for RPC, pub/sub, and other commands interactions.
     async def _login(self):
         """Connect in free mode or authenticate the provisioned component."""
         challenge = await self._send_wait(
-            lambda id: rp.encode([rp.TYPE_IDENTITY, id, self.uid.id])
+            lambda id: rp.IdentityMsg(id=id, cid=self.uid.id)
         )
-        if challenge and isinstance(challenge, bytes):
+        if challenge:
+            if isinstance(challenge, str):
+                challenge = base64.b64decode(challenge)
+
             plain = [bytes(challenge), self.uid.id]
             message = cbor2.dumps(plain)
             privatekey = rp.load_private_key(self.uid.id)
@@ -740,9 +757,11 @@ for RPC, pub/sub, and other commands interactions.
                     message, ec.ECDSA(hashes.SHA256()))
 
             await self._send_wait(
-                lambda id: rp.encode(
-                    [rp.TYPE_ATTESTATION, id, self.uid.id, signature])
-            )
+                lambda id: rp.AttestationMsg(
+                    id=id,
+                    cid=self.uid.id,
+                    signature=bytes_to_b64(signature, self.enc)
+                ))
         else:
             logger.debug("[%s]: free mode access", self)
 
@@ -751,29 +770,37 @@ for RPC, pub/sub, and other commands interactions.
         data = rp.df2tag(args)
         if self.socket is None:
             raise rp.RembusConnectionClosed()
-        qos = kwargs.get("qos", rp.QOS0)
+        qos = kwargs.get("qos", rp.QOSLevel.QOS0)
 
-        if qos == rp.QOS0:
-            await self.socket.send(rp.encode([rp.TYPE_PUB | qos, topic, data]))
+        if qos == rp.QOSLevel.QOS0:
+            await self.send(rp.PubSubMsg(topic=topic, data=data))
         else:
-            done = False
-            while not done:
-                try:
-                    done = await self._send_wait(
-                        lambda id: rp.encode(
-                            [rp.TYPE_PUB | qos, id, topic, data]),
-                        qos == rp.QOS2
-                    )
-                except rp.RembusTimeout:
-                    pass
+            await self._qos_publish(topic, data, qos)
 
         return None
+
+    async def _qos_publish(
+            self,
+            topic: str,
+            data: tuple,
+            qos: rp.QOSLevel
+    ):
+        done = False
+        while not done:
+            try:
+                done = await self._send_wait(
+                    lambda id: rp.PubSubMsg(
+                        id=id, topic=topic, data=data, flags=qos),
+                    qos == rp.QOSLevel.QOS2
+                )
+            except rp.RembusTimeout:
+                pass
 
     async def broker_setting(self, command: str, args: dict[str, Any]):
         """Send a broker configuration command."""
         data = {rp.COMMAND: command} | args
         return await self._send_wait(
-            lambda id: rp.encode([rp.TYPE_ADMIN, id, rp.BROKER_CONFIG, data])
+            lambda id: rp.AdminMsg(id=id, topic=rp.BROKER_CONFIG, data=data)
         )
 
     async def setting(
@@ -787,21 +814,22 @@ for RPC, pub/sub, and other commands interactions.
                 data = {rp.COMMAND: command}
 
             return await self._send_wait(
-                lambda id: rp.encode([rp.TYPE_ADMIN, id, topic, data])
+                lambda id: rp.AdminMsg(id=id, topic=topic, data=data)
             )
 
     async def rpc(self, topic: str, *args: Any):
         """Send a RPC request."""
         data = rp.df2tag(args)
         return await self._send_wait(
-            lambda id: rp.encode([rp.TYPE_RPC, id, topic, None, data])
+            lambda id: rp.RpcReqMsg(id=id, topic=topic, data=data)
         )
 
     async def direct(self, target: str, topic: str, *args: Any):
         """Send a RPC request to a specific target."""
         data = rp.df2tag(args)
         return await self._send_wait(
-            lambda id: rp.encode([rp.TYPE_RPC, id, topic, target, data])
+            lambda id: rp.RpcReqMsg(
+                id=id, topic=topic, target=target, data=data)
         )
 
     async def register(self, rid: str, pin: str, scheme: int = rp.SIG_RSA):
@@ -812,10 +840,13 @@ for RPC, pub/sub, and other commands interactions.
             privkey = rp.ecdsa_private_key()
 
         pubkey = rp.pem_public_key(privkey)
+        if self.enc == rp.JSON:
+            pubkey = base64.b64encode(pubkey).decode("utf-8")
+
         response = await self._send_wait(
-            lambda id: rp.encode(
-                [rp.TYPE_REGISTER, rp.regid(id, pin), rid, pubkey, scheme]
-            ))
+            lambda id: rp.RegisterMsg(
+                id=id, cid=rid, pin=pin, pubkey=pubkey, type=scheme)
+        )
 
         logger.debug("cid %s registered", rid)
         rp.save_private_key(rid, privkey)
@@ -824,7 +855,7 @@ for RPC, pub/sub, and other commands interactions.
     async def unregister(self):
         """Unprovisions the component."""
         await self._send_wait(
-            lambda id: rp.encode([rp.TYPE_UNREGISTER, id, self.uid.id])
+            lambda id: rp.UnregisterMsg(id=id)
         )
         os.remove(os.path.join(rs.rembus_dir(), self.uid.id, ".secret"))
         return self
@@ -905,7 +936,8 @@ async def component(
     url: str | None = None,
     name: str | None = None,
     port: int | None = None,
-    secure: bool = False
+    secure: bool = False,
+    enc: int = rp.CBOR
 ) -> Twin:
     """Return a Rembus component."""
     isserver = (port is not None) and (url is None)
@@ -913,7 +945,12 @@ async def component(
         uid = RbURL(url)
     else:
         uid = RbURL("repl://") if isserver else RbURL()
-    router_name = name if name else rs.DEFAULT_BROKER
+
+    default_name = rs.DEFAULT_BROKER
+    if uid.hasname:
+        default_name = uid.id
+
+    router_name = name if name else default_name
     router = Router(router_name)
     logger.debug("component %s created, port: %s", uid.id, port)
     # start a websocket server
@@ -926,14 +963,18 @@ async def component(
             except Exception as e:
                 router.serve_task = None
                 logger.error("[%s] start failed: %s", router, e)
+                await router.shutdown()
                 raise
     else:
         router.serve_task = None
 
-    cmp = Twin(uid, router, not isserver)
+    cmp = Twin(uid, router, not isserver, enc)
     try:
         if not isserver:
-            await cmp.connect()
+            if cmp.router.config.start_anyway:
+                await cmp.inbox.put("reconnect")
+            else:
+                await cmp.connect()
     except Exception:
         await cmp.close()
         raise

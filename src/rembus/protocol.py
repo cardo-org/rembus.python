@@ -2,9 +2,12 @@
 Utility functions, messages and protocol constants related
 to the Rembus protocol.
 """
+import base64
 import os
 import logging
+from enum import IntEnum
 from typing import Any, List
+import json
 import cbor2
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, ec
@@ -12,6 +15,7 @@ from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
 from cryptography.hazmat.backends import default_backend
 import pandas as pd
 import pyarrow as pa
+from pydantic import BaseModel, PrivateAttr
 import rembus.settings as rs
 
 logger = logging.getLogger(__name__)
@@ -21,9 +25,16 @@ WS_FRAME_MAXSIZE = 60 * 1024 * 1024
 SIG_RSA = 0x1
 SIG_ECDSA = 0x2
 
-QOS0 = 0x00
-QOS1 = 0x10
-QOS2 = 0x30
+CBOR = 0
+JSON = 1
+
+
+class QOSLevel(IntEnum):
+    """The Pub/Sub message QOS level."""
+    QOS0 = 0x00
+    QOS1 = 0x10
+    QOS2 = 0x30
+
 
 TYPE_IDENTITY = 0
 TYPE_PUB = 1
@@ -77,7 +88,7 @@ REMOVE_IMPL = 'unexpose'
 
 def msgid():
     """Return an array of 16 random bytes."""
-    return bytearray(os.urandom(16))
+    return int.from_bytes(os.urandom(16))
 
 
 def bytes2id(byte_data: bytearray) -> int:
@@ -129,79 +140,301 @@ class RembusError(RembusException):
             return f'{retcode[self.status]}'
 
 
-class AdminMsg:
-    """AdminMsg packet."""
+def to_bytes(val: int) -> bytes:
+    """Convert an int to 16 bytes"""
+    return val.to_bytes(16)
 
-    def __init__(self, twin, payload: list):
-        self.id = payload[1]
-        self.topic = payload[2]
-        self.data = payload[3]
-        self.twin = twin
+
+class RembusMsg(BaseModel):
+    """Rembus message"""
+    _twin: Any = PrivateAttr()
+
+    @property
+    def twin(self):
+        """Return the Twin that owns the message"""
+        return self._twin
+
+    @twin.setter
+    def twin(self, rb):
+        self._twin = rb
+
+    def to_payload(self, enc: int) -> bytes | str:
+        """Return the message list of values to encode"""
+        raise RuntimeError("abstract rembus message")
+
+
+class RpcReqMsg(RembusMsg):
+    """RPC request packet."""
+    id: int
+    topic: str
+    data: Any = None
+    target: str | None = None
+
+    def to_payload(self, enc: int) -> bytes | str:
+        """Return the RpcReqMsg list of values to encode"""
+        if enc == CBOR:
+            return cbor2.dumps(
+                [TYPE_RPC, to_bytes(self.id), self.topic,
+                 self.target, self.data]
+            )
+
+        return json.dumps({
+            "jsonrpc": "2.0",
+            "id": self.id,
+            "method": self.topic,
+            "params": self.data
+        })
+
+
+class ResMsg(RembusMsg):
+    """Response packet."""
+    id: int
+    status: int
+    data: Any = None
+    _reqdata: Any = PrivateAttr()
+
+    def to_payload(self, enc: int) -> bytes | str:
+        """Return the ResMsg list of values to encode"""
+        if enc == CBOR:
+            return cbor2.dumps(
+                [TYPE_RESPONSE, to_bytes(self.id), self.status, self.data]
+            )
+
+        if self.status == STS_OK or self.status == STS_CHALLENGE:
+            restype = "result"
+        else:
+            restype = "error"
+
+        return json.dumps({
+            "jsonrpc": "2.0",
+            "id": self.id,
+            restype: {
+                "type": TYPE_RESPONSE,
+                "sts": self.status,
+                "data": self.data
+            }
+        })
+
+
+class PubSubMsg(RembusMsg):
+    """Pub/Sub message packet."""
+    id: int | None = None
+    topic: str
+    data: Any = None
+    flags: QOSLevel = QOSLevel.QOS0
+
+    def to_payload(self, enc: int) -> bytes | str:
+        """Return the PubSubMsg list of values to encode"""
+        if self.flags == QOSLevel.QOS0 or self.id is None:
+            if enc == CBOR:
+                return cbor2.dumps([TYPE_PUB, self.topic, self.data])
+
+            return json.dumps({
+                "jsonrpc": "2.0",
+                "method": self.topic,
+                "params": self.data
+            })
+        else:
+            if enc == CBOR:
+                return cbor2.dumps([
+                    TYPE_PUB | self.flags,
+                    to_bytes(self.id),
+                    self.topic,
+                    self.data
+                ])
+
+            return json.dumps({
+                "jsonrpc": "2.0",
+                "id": self.id,
+                "method": self.topic,
+                "params": {
+                    "type": self.flags,
+                    "data": self.data
+                }
+            })
+
+
+class AckMsg(RembusMsg):
+    """Pub/Sub Ack message for QOS1 and QOS2"""
+    id: int
+
+    def to_payload(self, enc: int) -> bytes | str:
+        """Return the AckMsg list of values to encode"""
+        if enc == CBOR:
+            return cbor2.dumps([TYPE_ACK, to_bytes(self.id)])
+
+        return json.dumps({
+            "jsonrpc": "2.0",
+            "id": self.id,
+            "result": {
+                "type": TYPE_ACK
+            }
+        })
+
+
+class Ack2Msg(RembusMsg):
+    """Pub/Sub Ack2 message for QOS2"""
+    id: int
+
+    def to_payload(self, enc: int) -> bytes | str:
+        """Return the Ack2Msg list of values to encode"""
+        if enc == CBOR:
+            return cbor2.dumps([TYPE_ACK2, to_bytes(self.id)])
+
+        return json.dumps({
+            "jsonrpc": "2.0",
+            "id": self.id,
+            "result": {
+                "type": TYPE_ACK2
+            }
+        })
+
+
+class AdminMsg(RembusMsg):
+    """AdminMsg packet."""
+    id: int
+    topic: str
+    data: Any = None
 
     def __str__(self):
         return f'AdminMsg:{self.topic}: {self.data}'
 
+    def to_payload(self, enc: int) -> bytes | str:
+        """Return the AdminMsg list of values to encode"""
+        if enc == CBOR:
+            return cbor2.dumps(
+                [TYPE_ADMIN, to_bytes(self.id), self.topic, self.data]
+            )
 
-class IdentityMsg:
+        return json.dumps({
+            "jsonrpc": "2.0",
+            "id": self.id,
+            "method": self.topic,
+            "params": {
+                "type": TYPE_ADMIN,
+                "data": self.data
+            }
+        })
+
+
+class IdentityMsg(RembusMsg):
     """IdentityMsg packet.
     This message is sent by the component to identify itself
     to the remote peer.
     """
-
-    def __init__(self, twin, payload: list):
-        self.id = payload[1]
-        self.cid = payload[2]
-        self.twin = twin
+    id: int
+    cid: str
 
     def __str__(self):
         return f'IdentityMsg:{self.cid}'
 
+    def to_payload(self, enc: int) -> bytes | str:
+        """Return the IdentityMsg payload"""
+        if enc == CBOR:
+            return cbor2.dumps([TYPE_IDENTITY, to_bytes(self.id), self.cid])
 
-class AttestationMsg:
+        return json.dumps({
+            "jsonrpc": "2.0",
+            "id": self.id,
+            "method": "__identity__",
+            "params": {
+                "type": TYPE_IDENTITY,
+                "cid": self.cid
+            }
+        })
+
+
+class AttestationMsg(RembusMsg):
     """AttestationMsg packet.
     This message is sent by the component to authenticate
     its identity to the remote peer.
     """
-
-    def __init__(self, twin, payload: list):
-        self.id = payload[1]
-        self.cid = payload[2]
-        self.signature = payload[3]
-        self.twin = twin
+    id: int
+    cid: str
+    signature: bytes | str
 
     def __str__(self):
         return f'AttestationMsg:{self.cid}'
 
+    def to_payload(self, enc: int) -> bytes | str:
+        """Return the AttestationMsg list of values to encode"""
+        if enc == CBOR:
+            return cbor2.dumps(
+                [TYPE_ATTESTATION, to_bytes(self.id), self.cid, self.signature]
+            )
 
-class RegisterMsg:
+        return json.dumps({
+            "jsonrpc": "2.0",
+            "id": self.id,
+            "method": self.cid,
+            "params": {
+                "type": TYPE_ATTESTATION,
+                "signature": self.signature
+            }
+        })
+
+
+class RegisterMsg(RembusMsg):
     """RegisterMsg packet.
     This message is sent by the component to register
     its public key to the remote peer.
     """
-
-    def __init__(self, twin, payload: list):
-        self.id = payload[1]
-        self.cid = payload[2]
-        self.pubkey = payload[3]
-        self.type = payload[4]
-        self.twin = twin
+    id: int
+    cid: str
+    pin: str
+    pubkey: bytes | str
+    type: int
 
     def __str__(self):
         return f'RegisterMsg:{self.cid}'
 
+    def to_payload(self, enc: int) -> bytes | str:
+        """Return the RegisterMsg list of values to encode"""
+        if enc == CBOR:
+            return cbor2.dumps([
+                TYPE_REGISTER,
+                to_bytes(self.id),
+                self.cid,
+                self.pin,
+                self.pubkey,
+                self.type
+            ])
 
-class UnregisterMsg:
+        return json.dumps({
+            "jsonrpc": "2.0",
+            "id": self.id,
+            "method": self.cid,
+            "params": {
+                "type": TYPE_REGISTER,
+                "pin": self.pin,
+                "key_val": self.pubkey,
+                "key_type": self.type
+            }
+        })
+
+
+class UnregisterMsg(RembusMsg):
     """UnregisterMsg packet.
     This message is sent by the component to unregister
     its public key from the remote peer.
     """
-
-    def __init__(self, twin, payload: list):
-        self.id = payload[1]
-        self.twin = twin
+    id: int
 
     def __str__(self):
-        return f'UnregisterMsg:{self.twin}'
+        return f'UnregisterMsg:{self._twin}'
+
+    def to_payload(self, enc: int) -> bytes | str:
+        """Return the UnregisterMsg list of values to encode"""
+        if enc == CBOR:
+            return cbor2.dumps([TYPE_UNREGISTER, to_bytes(self.id)])
+
+        return json.dumps({
+            "jsonrpc": "2.0",
+            "id": self.id,
+            "params": {
+                "type": TYPE_UNREGISTER
+            }
+        })
 
 
 def isregistered(router_id, rid: str):
@@ -218,20 +451,147 @@ def tohex(bs: bytes):
     return ' '.join(f'0x{x:02x}' for x in bs)
 
 
-def field_repr(bstr: bytes | str):
-    """String repr of the second field of a rembus message.
+def jsonprc_request(pkt, msg_id, params) -> RembusMsg:
+    """Parse a JSON_RPC request"""
+    if isinstance(params, list):
+        # Default to RPC request
+        return RpcReqMsg(id=msg_id, topic=pkt["method"], data=params)
+    else:
+        msg_type = params.get("type")
+        if msg_type in [QOSLevel.QOS1, QOSLevel.QOS2]:
+            return PubSubMsg(
+                id=msg_id,
+                topic=pkt["method"],
+                data=pkt.get("data"),
+                flags=msg_type
+            )
+        elif msg_type == TYPE_IDENTITY:
+            return IdentityMsg(id=msg_id, cid=params["cid"])
+        elif msg_type == TYPE_ADMIN:
+            return AdminMsg(
+                id=msg_id,
+                topic=pkt["method"],
+                data=pkt.get("data")
+            )
+        elif msg_type == TYPE_ATTESTATION:
+            sig = params.get("signature")
+            return AttestationMsg(id=msg_id, cid=pkt["method"], signature=sig)
+        elif msg_type == TYPE_REGISTER:
+            pubkey = params.get("key_val")
+            if isinstance(pubkey, str):
+                pubkey = base64.b64decode(pubkey)
 
-    The second field may be a 16-bytes message unique id or a topic string
-    value.
-    """
-    return tohex(bstr) if not isinstance(bstr, str) else bstr
+            return RegisterMsg(
+                id=msg_id,
+                cid=pkt["method"],
+                pin=params.get("pin"),
+                pubkey=pubkey,
+                type=params.get("key_type")
+            )
+        elif msg_type == TYPE_UNREGISTER:
+            return UnregisterMsg(
+                id=msg_id
+            )
+
+        raise ValueError(f"{pkt}:invalid JSON-RPC request")
 
 
-def msg_str(direction: str, msg: list[Any]):
-    """Return a printable dump of rembus message `msg`."""
-    payload = ", ".join(str(el) for el in msg[2:])
-    s = f'{direction}: [{msg[0]}, {field_repr(msg[1])}, {payload}]'
-    return s
+def jsonprc_response(pkt, msg_id, result) -> RembusMsg:
+    """Parse a JSON_RPC success response"""
+
+    msg_type = result.get("type")
+    if msg_type == TYPE_RESPONSE or msg_type is None:
+        status = result.get("sts", STS_OK)
+        return ResMsg(id=msg_id, status=status, data=result.get("data"))
+    elif msg_type == TYPE_ACK:
+        return AckMsg(id=msg_id)
+    elif msg_type == TYPE_ACK2:
+        return Ack2Msg(id=msg_id)
+
+    raise ValueError(f"{pkt}:invalid JSON-RPC response")
+
+
+def jsonrpc_parse(payload) -> RembusMsg:
+    """Get a Rembus message from a JSON-RPC string payload."""
+    pkt = json.loads(payload)
+    msg_id = pkt.get("id")
+    if msg_id:
+        # request-response message
+        params = pkt.get("params")
+        if params is not None:
+            return jsonprc_request(pkt, msg_id, params)
+
+        result = pkt.get("result")
+        if result:
+            return jsonprc_response(pkt, msg_id, result)
+
+        err = pkt.get("error")
+        if err:
+            return jsonprc_response(pkt, msg_id, err)
+
+    else:
+        return PubSubMsg(topic=pkt["method"], data=pkt.get("data"))
+
+    raise ValueError(f"{pkt}:JSON-RPC invalid payload")
+
+
+def cbor_parse(pkt) -> RembusMsg:
+    """Get a Rembus message from a CBOR packet."""
+    type_byte = pkt[0]
+    mtype = type_byte & 0x0F
+    flags = type_byte & 0xF0
+    if mtype == TYPE_PUB:
+        if flags == QOSLevel.QOS0:
+            return PubSubMsg(topic=pkt[1], data=pkt[2])
+        else:
+            return PubSubMsg(
+                id=int.from_bytes(pkt[1]),
+                topic=pkt[2],
+                data=pkt[3],
+                flags=flags
+            )
+    elif mtype == TYPE_RPC:
+        return RpcReqMsg(
+            id=int.from_bytes(pkt[1]),
+            topic=pkt[2],
+            target=pkt[3],
+            data=pkt[4]
+        )
+    elif mtype == TYPE_RESPONSE:
+        if len(pkt) > 3:
+            data = pkt[3]
+        else:
+            data = None
+
+        return ResMsg(
+            id=int.from_bytes(pkt[1]), status=pkt[2], data=data
+        )
+    elif mtype == TYPE_ACK:
+        return AckMsg(id=int.from_bytes(pkt[1]))
+    elif mtype == TYPE_ACK2:
+        return Ack2Msg(id=int.from_bytes(pkt[1]))
+    elif mtype == TYPE_ADMIN:
+        return AdminMsg(
+            id=int.from_bytes(pkt[1]), topic=pkt[2], data=pkt[3]
+        )
+    elif mtype == TYPE_IDENTITY:
+        return IdentityMsg(id=int.from_bytes(pkt[1]), cid=pkt[2])
+    elif mtype == TYPE_ATTESTATION:
+        return AttestationMsg(
+            id=int.from_bytes(pkt[1]), cid=pkt[2], signature=pkt[3]
+        )
+    elif mtype == TYPE_REGISTER:
+        return RegisterMsg(
+            id=int.from_bytes(pkt[1]),
+            cid=pkt[2],
+            pin=pkt[3],
+            pubkey=pkt[4],
+            type=pkt[5]
+        )
+    elif mtype == TYPE_UNREGISTER:
+        return UnregisterMsg(id=int.from_bytes(pkt[1]))
+
+    raise ValueError('unknown message type')
 
 
 def decode_dataframe(data: bytes) -> pd.DataFrame:
@@ -257,7 +617,6 @@ def encode_dataframe(df: pd.DataFrame) -> cbor2.CBORTag:
 
 def encode(msg: list[Any]) -> bytes:
     """Encode message `msg`."""
-    logger.debug(msg_str('out', msg))
     return cbor2.dumps(msg)
 
 
@@ -290,13 +649,6 @@ def df2tag(data: Any) -> Any:
     elif isinstance(data, pd.DataFrame):
         data = encode_dataframe(data)
     return data
-
-
-def regid(mid: bytearray, pin: str) -> bytearray:
-    """Return a message id embedding the `pin` into `mid`."""
-    bpin = bytes.fromhex(pin[::-1])
-    mid[:4] = bpin[:4]
-    return mid
 
 
 def rsa_private_key():

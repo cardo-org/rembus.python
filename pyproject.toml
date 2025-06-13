@@ -27,7 +27,8 @@ dependencies = [
   "pyarrow",
   "websockets",
   "cbor2",
-  "cryptography"
+  "cryptography",
+  "pydantic"
 ]
 
 #

@@ -7,7 +7,8 @@ from types import TracebackType
 from typing import Any, Callable, Coroutine, Optional, Type
 from rembus import (
     component,
-    SIG_RSA
+    CBOR,
+    SIG_RSA,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,10 +47,11 @@ class node:  # pylint: disable=invalid-name
         url: str | None = None,
         name: str | None = None,
         port: int | None = None,
-        secure: bool = False
+        secure: bool = False,
+        enc: int = CBOR
     ):
         self._runner = AsyncLoopRunner()
-        self._rb = self._runner.run(component(url, name, port, secure))
+        self._rb = self._runner.run(component(url, name, port, secure, enc))
 
     @property
     def router(self):
@@ -156,9 +158,9 @@ class node:  # pylint: disable=invalid-name
         self.close()
 
 
-def register(rid: str, pin: str, scheme: int = SIG_RSA):
+def register(rid: str, pin: str, scheme: int = SIG_RSA, enc: int = CBOR):
     """Provisions the component with rid identifier."""
-    rb = node("ws:")
+    rb = node("ws:", enc=enc)
     try:
         rb.register(rid, pin, scheme)
     except Exception as e:

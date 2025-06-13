@@ -8,9 +8,9 @@ from .settings import (  # noqa: F401
     TENANTS_FILE
 )
 from .protocol import (  # noqa: F401
-    QOS0,
-    QOS1,
-    QOS2,
+    QOSLevel,
+    CBOR,
+    JSON,
     SIG_ECDSA,
     SIG_RSA
 )
@@ -23,5 +23,5 @@ __all__ = [
 ]
 
 logging.basicConfig(
-    format="[%(levelname)s][%(name)s] %(message)s\r", level=logging.INFO)
+    format="[%(levelname)s][%(name)s] %(message)s\r", level=logging.DEBUG)
 logger = logging.getLogger("rembus")

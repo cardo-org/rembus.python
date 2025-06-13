@@ -38,7 +38,7 @@ async def test_unknown_message_id(mocker, ws_mock):
     # send a response message with an unknown msgid
     msgid = bytes([i for i in range(16)])
     req = rp.encode(
-        [rp.TYPE_RESPONSE, msgid, 'topic', 'payload']
+        [rp.TYPE_RESPONSE, msgid, rp.STS_OK, 'payload']
     )
     if rb.socket:
         await rb.socket.send(req)

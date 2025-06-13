@@ -5,6 +5,18 @@ import rembus.protocol as rp
 import rembus.core as rc
 
 
+class WrongMsg(rp.RembusMsg):
+    """Class wiyh missing to_payload impl"""
+    id: int
+
+
+def test_no_impl():
+    """Test missing to_payload"""
+    msg = WrongMsg(id=1)
+    with pytest.raises(RuntimeError):
+        msg.to_payload(enc=rp.CBOR)
+
+
 def test_bytes2id():
     """Test the bytes2id function for converting byte arrays to IDs."""
     byte_data = bytearray(range(16))  # 0x00 to 0x0F
@@ -35,9 +47,8 @@ async def test_rembus_messages():
     router = rc.Router("router")
     twin = rc.Twin(rc.RbURL("twin"), router)
     for msg in [
-        rp.AttestationMsg(
-            twin, payload=[rp.TYPE_ATTESTATION, 1, "cid", "signature"]),
-        rp.IdentityMsg(twin, payload=[rp.TYPE_IDENTITY, 1, "cid"]),
+        rp.AttestationMsg(id=1, cid="cid", signature=b"signature"),
+        rp.IdentityMsg(id=2, cid="cid"),
     ]:
         logging.info(str(msg))
 

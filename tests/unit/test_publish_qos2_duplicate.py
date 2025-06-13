@@ -31,9 +31,13 @@ async def test_publish(mocker, ws_mock):
         },
         {
             # ack
+            'discard': True
         },
         {
-            # ack2
+            # publish
+        },
+        {
+            # ack
         },
     ]
 
@@ -54,9 +58,9 @@ async def test_publish(mocker, ws_mock):
     msgid = bytes([i for i in range(16)])
     topic = mytopic.__name__
     for i in range(3):
-        rb.outreq[msgid] = rembus.core.FutureResponse(True)
+        rb.outreq[int.from_bytes(msgid)] = rembus.core.FutureResponse(True)
         req = rp.encode(
-            [rp.TYPE_PUB | rembus.QOS2, msgid, topic, PAYLOAD]
+            [rp.TYPE_PUB | rembus.QOSLevel.QOS2, msgid, topic, PAYLOAD]
         )
         if rb.socket:
             await rb.socket.send(req)

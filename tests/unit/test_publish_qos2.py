@@ -51,7 +51,7 @@ async def test_publish(mocker, ws_mock):
     await rb.subscribe(mytopic)
 
     topic = mytopic.__name__
-    await rb.publish(topic, PAYLOAD, qos=rembus.QOS2)
+    await rb.publish(topic, PAYLOAD, qos=rembus.QOSLevel.QOS2)
 
     await asyncio.sleep(0.1)
     assert RECEIVED == PAYLOAD

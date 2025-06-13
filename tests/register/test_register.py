@@ -78,6 +78,17 @@ def test_connect_authenticated():
     server.close()
 
 
+def test_jsonrpc_connect_authenticated():
+    """Test connecting to a registered rembus node with JSON-RPC."""
+    server = rembus.node(port=8000)
+    rb = rembus.node("test_register", enc=rembus.JSON)
+    rid = rb.rpc("rid")
+    assert rid == rembus.settings.DEFAULT_BROKER
+
+    rb.close()
+    server.close()
+
+
 def test_verify_error():
     """Test the error condition when the secret file is wrong."""
     fn = rembus.settings.key_file(rembus.settings.DEFAULT_BROKER, NAME)
@@ -105,6 +116,26 @@ def test_unregister():
     rembus.register(NAME, PIN)
 
     rb = rembus.node(NAME)
+    rb.unregister()
+    rb.close()
+    server.close()
+
+
+def test_json_register():
+    """Test the registration of a rembus node using JSON-RPC."""
+    # cleanup the secrets
+    try:
+        fn = rembus.settings.key_file(rembus.settings.DEFAULT_BROKER, NAME)
+        logger.info("broker key file: %s", fn)
+        os.remove(fn)
+    except FileNotFoundError:
+        pass
+
+    server = rembus.node(port=8000)
+    rembus.register(NAME, PIN, enc=rembus.JSON)
+    assert rp.isregistered(rembus.settings.DEFAULT_BROKER, NAME)
+
+    rb = rembus.node(NAME, enc=rembus.JSON)
     rb.unregister()
     rb.close()
     server.close()
