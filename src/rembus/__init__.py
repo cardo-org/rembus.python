@@ -1,6 +1,6 @@
 __version__ = "0.1.7"
 
-import logging
+# import logging
 from .core import component, RbURL  # noqa: F401
 from .settings import (  # noqa: F401
     rembus_dir,
@@ -21,7 +21,3 @@ __all__ = [
     'node',
     'register',
 ]
-
-logging.basicConfig(
-    format="[%(levelname)s][%(name)s] %(message)s\r", level=logging.DEBUG)
-logger = logging.getLogger("rembus")

@@ -23,7 +23,7 @@ class Config:
         except json.decoder.JSONDecodeError as e:
             raise (RuntimeError(f"{fn}: {e}")) from e
 
-        self.request_timeout = cfg.get("request_timeout", 1)
+        self.request_timeout = cfg.get("request_timeout", 5)
         self.ws_ping_interval = cfg.get("ws_ping_interval", None)
         self.start_anyway = cfg.get("start_anyway", False)
 
