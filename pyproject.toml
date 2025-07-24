@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "rembus"
 version = "0.2.0"
-license = { file = "LICENSE" }
+license = "AGPL-3.0-only"
 authors = [
   { name="Attilio Donà", email="attilio.dona@gmail.com" },
 ]
@@ -15,7 +15,6 @@ keywords = ["rembus", "rpc", "publish", "subscribe", "websocket", "cbor"]
 requires-python = ">=3.7"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: GNU Affero General Public License v3",
     "Operating System :: OS Independent",
     "Development Status :: 3 - Alpha",
 ]
@@ -37,7 +36,7 @@ dependencies = [
 # Similar to `dependencies` above, these must be valid existing
 # projects.
 [project.optional-dependencies]
-dev = ["check-manifest", "bumpver"]
+dev = ["check-manifest", "bumpver", "twine"]
 test = ["coverage", "mock", "pytest", "pytest-asyncio", "pytest-mock", "pytest-cov"]
 
 [project.urls]

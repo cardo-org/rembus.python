@@ -29,6 +29,7 @@ def test_jsonrpc_error(server):
     rb = rembus.node("mynode", enc=rembus.JSON)
     with pytest.raises(rembus.protocol.RembusError):
         rb.rpc("unknown_service")
+    rb.close()
 
 
 def test_jsonrpc_invalid_request():

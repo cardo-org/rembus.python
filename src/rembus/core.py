@@ -742,7 +742,7 @@ for RPC, pub/sub, and other commands interactions.
         challenge = await self._send_wait(
             lambda id: rp.IdentityMsg(id=id, cid=self.uid.id)
         )
-        if challenge:
+        if isinstance(challenge, bytes | str):
             if isinstance(challenge, str):
                 challenge = base64.b64decode(challenge)
 
