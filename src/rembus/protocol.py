@@ -431,6 +431,7 @@ class UnregisterMsg(RembusMsg):
         return json.dumps({
             "jsonrpc": "2.0",
             "id": self.id,
+            "method": "__unregister__",
             "params": {
                 "type": TYPE_UNREGISTER
             }
