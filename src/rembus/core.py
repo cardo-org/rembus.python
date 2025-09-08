@@ -7,7 +7,7 @@ import base64
 import logging
 import os
 import time
-from typing import Callable, Any, Optional
+from typing import Callable, Any, Optional, List
 import ssl
 from urllib.parse import urlparse
 import uuid
@@ -135,6 +135,16 @@ class RbURL:
         else:
             return f"{self.protocol}://{self.hostname}:{self.port}"
 
+    @property
+    def netlink(self):
+        """Return the remote connection endpoint"""
+        return f"{self.protocol}://{self.hostname}:{self.port}"
+
+    @property
+    def twkey(self):
+        """Return the twin key"""
+        return f"{self.id}@{self.netlink}"
+
 
 class Supervised:
     """
@@ -203,6 +213,28 @@ class Supervised:
         logger.debug("[%s] shutdown complete", self)
 
 
+async def init_router(router_name, uid, port, secure):
+    """Start the router"""
+    router = Router(router_name)
+    logger.debug("component %s created, port: %s", uid.id, port)
+    # start a websocket server
+    if port:
+        router.serve_task = asyncio.create_task(router.serve_ws(port, secure))
+        done, _ = await asyncio.wait([router.serve_task], timeout=0.1)
+        if router.serve_task in done:
+            try:
+                await router.serve_task
+            except Exception as e:
+                router.serve_task = None
+                logger.error("[%s] start failed: %s", router, e)
+                await router.shutdown()
+                raise
+    else:
+        router.serve_task = None
+
+    return router
+
+
 class Router(Supervised):
     """
     A Router is a central component that manages connections and interactions
@@ -233,7 +265,10 @@ class Router(Supervised):
 
     def isconnected(self, rid: str) -> bool:
         """Check if a component with the given rid is connected."""
-        return rid in self.id_twin
+        for tk in self.id_twin:
+            if tk.startswith(rid+'@'):
+                return True
+        return False
 
     def uptime(self) -> str:
         """Return the uptime of the router."""
@@ -244,6 +279,24 @@ class Router(Supervised):
         self.handler["version"] = lambda *_: __version__
         self.handler["uptime"] = lambda *_: self.uptime()
 
+    async def init_twin(self, uid: RbURL, enc: int, isserver: bool):
+        """Create and start a Twin"""
+        cmp = Twin(uid, self, not isserver, enc)
+        if not uid.isrepl():
+            self.id_twin[uid.twkey] = cmp
+
+        try:
+            # if not isserver:
+            if not cmp.isrepl():
+                if self.config.start_anyway:
+                    await cmp.inbox.put("reconnect")
+                else:
+                    await cmp.connect()
+        except Exception:
+            await cmp.close()
+            raise
+        return cmp
+
     async def _shutdown(self):
         """Cleanup logic when shutting down the router."""
         logger.debug("[%s] router shutdown", self)
@@ -253,8 +306,8 @@ class Router(Supervised):
             await self.server_instance.wait_closed()
 
     async def _pubsub_msg(self, msg: rp.PubSubMsg):
+        twin = msg.twin
         if msg.flags > rp.QOSLevel.QOS0 and msg.id:
-            twin = msg.twin
             if twin.socket:
                 await twin.send(rp.AckMsg(id=msg.id))
 
@@ -270,6 +323,12 @@ class Router(Supervised):
         try:
             if msg.topic in self.handler:
                 await self.evaluate(self, msg.topic, data)
+
+            for t in self.id_twin.values():
+                if t != twin:
+                    # Do not send back to publisher.
+                    await t.send(msg)
+
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.warning("[%s] error in method invocation: %s", self, e)
 
@@ -278,11 +337,27 @@ class Router(Supervised):
     async def _rpcreq_msg(self, msg: rp.RpcReqMsg):
         """Handle an RPC request."""
         data = rp.tag2df(msg.data)
-        if msg.topic not in self.handler:
-            outmsg = rp.ResMsg(
-                id=msg.id, status=rp.STS_METHOD_NOT_FOUND, data=msg.topic
-            )
-        else:
+
+        if msg.twin.isrepl():
+            for t in self.id_twin.values():
+                if t.isopen():
+                    try:
+                        sts = rp.STS_OK
+                        data = await t.msg_send_wait(msg)
+                    except Exception as e:  # pylint: disable=broad-exception-caught
+                        sts = rp.STS_ERROR
+                        data = f"{e}"
+
+                    fut = await msg.twin.future_request(msg.id)
+                    if fut:
+                        if sts == rp.STS_OK:
+                            fut.future.set_result(rp.tag2df(data))
+                        else:
+                            fut.future.set_exception(
+                                rp.RembusError(rp.STS_ERROR, data))
+
+                    break
+        elif msg.topic in self.handler:
             status = rp.STS_OK
             try:
                 output = await self.evaluate(self, msg.topic, data)
@@ -293,8 +368,12 @@ class Router(Supervised):
             outmsg = rp.ResMsg(
                 id=msg.id, status=status, data=rp.df2tag(output)
             )
-        await msg.twin.send(outmsg)
-
+            await msg.twin.send(outmsg)
+        else:
+            outmsg = rp.ResMsg(
+                id=msg.id, status=rp.STS_METHOD_NOT_FOUND, data=msg.topic
+            )
+            await msg.twin.send(outmsg)
         return
 
     async def _task_impl(self) -> None:
@@ -346,9 +425,8 @@ class Router(Supervised):
     async def _client_receiver(self, ws):
         """Receive messages from the client component."""
         url = RbURL()
-        rid = url.rid()
         twin = Twin(url, self, False)
-        self.id_twin[rid] = twin
+        self.id_twin[url.twkey] = twin
         twin.socket = ws
         await twin.twin_receiver()
 
@@ -385,8 +463,9 @@ class Router(Supervised):
 
     def _update_twin(self, twin, identity):
         logger.debug("[%s] setting name: [%s]", twin, identity)
-        self.id_twin[identity] = self.id_twin.pop(twin.rid, twin)
+        self.id_twin.pop(twin.twkey, twin)
         twin.rid = identity
+        self.id_twin[twin.twkey] = twin
 
     def _verify_signature(self, msg: rp.AttestationMsg):
         """Verify the signature of the attestation message."""
@@ -525,6 +604,11 @@ for RPC, pub/sub, and other commands interactions.
         self.uid.id = rid
 
     @property
+    def twkey(self):
+        """Return the twin key"""
+        return f"{self.uid.twkey}"
+
+    @property
     def router(self):
         """Return the router associated with this twin."""
         return self._router
@@ -623,7 +707,7 @@ for RPC, pub/sub, and other commands interactions.
                 logger.debug("[%s] twin_receiver done", self)
                 await self.inbox.put("reconnect")
             else:
-                self.router.id_twin.pop(self.rid, None)
+                self.router.id_twin.pop(self.twkey, None)
                 await self.shutdown()
 
     async def future_request(self, msgid: int):
@@ -711,13 +795,16 @@ for RPC, pub/sub, and other commands interactions.
     async def send(self, msg: rp.RembusMsg):
         """Send a rembus message"""
         pkt = msg.to_payload(self.enc)
-        await self._send(pkt)
+        if self.isrepl():
+            await self.router.inbox.put(msg)
+        elif self.socket is None:
+            raise rp.RembusConnectionClosed()
+        else:
+            await self._send(pkt)
 
     async def _send(self, payload: bytes | str) -> Any:
-        if self.socket is None:
-            raise rp.RembusConnectionClosed()
-
-        await self.socket.send(payload)
+        if self.socket is not None:
+            await self.socket.send(payload)
 
     async def _send_wait(
             self,
@@ -726,9 +813,25 @@ for RPC, pub/sub, and other commands interactions.
         """Send a message and wait for a response."""
         reqid = rp.msgid()
         req = builder(reqid)
+        req.twin = self
         await self.send(req)
         futreq = FutureResponse(data)
         self.outreq[reqid] = futreq
+        try:
+            async with async_timeout.timeout(
+                self.router.config.request_timeout
+            ):
+                return await futreq.future
+        except TimeoutError as e:
+            raise rp.RembusTimeout() from e
+
+    async def msg_send_wait(
+            self,
+            msg: rp.RpcReqMsg) -> Any:
+        """Send a message and wait for a response."""
+        await self.send(msg)
+        futreq = FutureResponse(msg.data)
+        self.outreq[msg.id] = futreq
         try:
             async with async_timeout.timeout(
                 self.router.config.request_timeout
@@ -768,12 +871,16 @@ for RPC, pub/sub, and other commands interactions.
     async def publish(self, topic: str, *args: Any, **kwargs):
         """Publish a message to the specified topic."""
         data = rp.df2tag(args)
-        if self.socket is None:
-            raise rp.RembusConnectionClosed()
         qos = kwargs.get("qos", rp.QOSLevel.QOS0)
-
         if qos == rp.QOSLevel.QOS0:
-            await self.send(rp.PubSubMsg(topic=topic, data=data))
+            msg = rp.PubSubMsg(topic=topic, data=data)
+            msg.twin = self
+            if self.isrepl():
+                await self.router.inbox.put(msg)
+            elif self.socket is None:
+                raise rp.RembusConnectionClosed()
+            else:
+                await self.send(msg)
         else:
             await self._qos_publish(topic, data, qos)
 
@@ -786,15 +893,21 @@ for RPC, pub/sub, and other commands interactions.
             qos: rp.QOSLevel
     ):
         done = False
-        while not done:
+        max_retries = self.router.config.send_retries
+        retries = 0
+        while True:
+            retries += 1
             try:
                 done = await self._send_wait(
                     lambda id: rp.PubSubMsg(
                         id=id, topic=topic, data=data, flags=qos),
                     qos == rp.QOSLevel.QOS2
                 )
+                if done:
+                    break
             except rp.RembusTimeout:
-                pass
+                if retries > max_retries:
+                    raise rp.RembusTimeout() from None
 
     async def broker_setting(self, command: str, args: dict[str, Any]):
         """Send a broker configuration command."""
@@ -933,7 +1046,7 @@ for RPC, pub/sub, and other commands interactions.
 
 
 async def component(
-    url: str | None = None,
+    url: str | List[str] | None = None,
     name: str | None = None,
     port: int | None = None,
     secure: bool = False,
@@ -941,41 +1054,21 @@ async def component(
 ) -> Twin:
     """Return a Rembus component."""
     isserver = (port is not None) and (url is None)
-    if url:
+    if isinstance(url, str):
         uid = RbURL(url)
     else:
-        uid = RbURL("repl://") if isserver else RbURL()
+        uid = RbURL("repl://")
 
     default_name = rs.DEFAULT_BROKER
     if uid.hasname:
         default_name = uid.id
 
     router_name = name if name else default_name
-    router = Router(router_name)
-    logger.debug("component %s created, port: %s", uid.id, port)
-    # start a websocket server
-    if port:
-        router.serve_task = asyncio.create_task(router.serve_ws(port, secure))
-        done, _ = await asyncio.wait([router.serve_task], timeout=0.1)
-        if router.serve_task in done:
-            try:
-                await router.serve_task
-            except Exception as e:
-                router.serve_task = None
-                logger.error("[%s] start failed: %s", router, e)
-                await router.shutdown()
-                raise
-    else:
-        router.serve_task = None
+    router = await init_router(router_name, uid, port, secure)
 
-    cmp = Twin(uid, router, not isserver, enc)
-    try:
-        if not isserver:
-            if cmp.router.config.start_anyway:
-                await cmp.inbox.put("reconnect")
-            else:
-                await cmp.connect()
-    except Exception:
-        await cmp.close()
-        raise
-    return cmp
+    handle = await router.init_twin(uid, enc, isserver)
+    if isinstance(url, list):
+        for netlink in url:
+            await router.init_twin(RbURL(netlink), enc, isserver)
+
+    return handle

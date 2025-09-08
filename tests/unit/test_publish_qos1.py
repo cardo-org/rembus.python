@@ -21,29 +21,29 @@ async def test_publish(mocker, ws_mock):
 
     responses = [
         {
-            # identity
+            # step 0: identity
             'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
-            # subscribe
+            # step 1: subscribe
             'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
-            # publish
+            # step 2: publish
         },
         {
-            # ack
+            # step 3: ack
             'discard': True
         },
         {
-            # ack
+            # step 4: ack
             'discard': False
         },
         {
-            # unsubscribe
+            # step 5: unsubscribe
         },
         {
-            # publish
+            # spet 6: publish
         }
     ]
 

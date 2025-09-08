@@ -26,6 +26,7 @@ class Config:
         self.request_timeout = cfg.get("request_timeout", 5)
         self.ws_ping_interval = cfg.get("ws_ping_interval", None)
         self.start_anyway = cfg.get("start_anyway", False)
+        self.send_retries = cfg.get("send_retries", 3)
 
 
 def rembus_dir():

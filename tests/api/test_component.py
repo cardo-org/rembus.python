@@ -120,7 +120,8 @@ async def test_publish():
     rb = await rembus.component("ws://:8006/cmp.net")
     assert rb.isrepl() is False
     assert isinstance(rb.router, rembus.core.Router)
-    assert repr(server.router) == "broker: {'cmp.net': cmp.net}"
+    assert repr(
+        server.router) == "broker: {'cmp.net@ws://127.0.0.1:8000': cmp.net}"
     assert repr(rb.uid) == "ws://127.0.0.1:8006/cmp.net"
     assert rembus.core.domain(rb.rid) == "net"
     await rb.publish("mytopic")

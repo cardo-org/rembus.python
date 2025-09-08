@@ -22,7 +22,7 @@ def test_rpc(server):
     """Test the RPC related methods."""
     x = 2
     y = 3
-    rb = rembus.node()
+    rb = rembus.node("client")
     server.expose(myservice)
 
     result = rb.rpc("myservice", x, y)
@@ -40,7 +40,7 @@ async def test_direct(server):
     """Test the direct method."""
     x = 2
     y = 3
-    rb = rembus.node()
+    rb = rembus.node("client")
     server.expose(myservice)
 
     result = rb.direct(rembus.settings.DEFAULT_BROKER, "myservice", x, y)

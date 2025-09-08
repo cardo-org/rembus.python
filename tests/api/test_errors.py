@@ -51,7 +51,7 @@ def test_settings_error():
 
 def test_unknown_message_type():
     """Test a reception of a Wrong payload"""
-    rb = rembus.node()
+    rb = rembus.node("client")
 
     # Server-side throws an exception and close the connection.
     # The client detect the connection down and reconnect.
@@ -61,7 +61,7 @@ def test_unknown_message_type():
 
 def test_response_no_data():
     """Test missing data field"""
-    rb = rembus.node()
+    rb = rembus.node("client")
     mid = 1234
     # This is not an error, data is set by default to None
     rb._runner.run(rb._rb._send(cbor2.dumps(

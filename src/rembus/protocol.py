@@ -147,7 +147,7 @@ def to_bytes(val: int) -> bytes:
 
 class RembusMsg(BaseModel):
     """Rembus message"""
-    _twin: Any = PrivateAttr()
+    _twin: Any = PrivateAttr(default=None)
 
     @property
     def twin(self):

@@ -33,7 +33,7 @@ def test_jsonrpc_error(server):
 
 
 def test_jsonrpc_invalid_request():
-    rb = rembus.node(enc=rembus.JSON)
+    rb = rembus.node("mynode", enc=rembus.JSON)
     pkt = {
         "jsorpc": "2.0",
         "id": 1234,
@@ -47,7 +47,7 @@ def test_jsonrpc_invalid_request():
 
 
 def test_jsonrpc_invalid_response():
-    rb = rembus.node(enc=rembus.JSON)
+    rb = rembus.node("mynode", enc=rembus.JSON)
     pkt = {
         "jsorpc": "2.0",
         "id": 1234,
@@ -61,7 +61,7 @@ def test_jsonrpc_invalid_response():
 
 
 def test_jsonrpc_invalid_payload():
-    rb = rembus.node(enc=rembus.JSON)
+    rb = rembus.node("mynode", enc=rembus.JSON)
     pkt = {
         "jsorpc": "2.0",
         "id": 1234,
