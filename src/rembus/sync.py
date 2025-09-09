@@ -4,7 +4,7 @@ import atexit
 import logging
 import threading
 from types import TracebackType
-from typing import Any, Callable, Coroutine, Optional, Type
+from typing import Any, Callable, Coroutine, Optional, Type, List
 from rembus import (
     component,
     CBOR,
@@ -34,9 +34,19 @@ class AsyncLoopRunner:
 
     def shutdown(self):
         """Shutdown the event loop and wait for the thread to finish."""
-        if self.loop.is_running():
-            self.loop.call_soon_threadsafe(self.loop.stop)
-            self._thread.join()
+        if not self.loop.is_closed():
+            try:
+                self.loop.call_soon_threadsafe(self.loop.stop)
+            except RuntimeError:
+                return
+
+            # Wait briefly for the thread to exit
+            self._thread.join(timeout=1.0)
+
+            # Clean up the loop
+            if not self.loop.is_closed():
+                self.loop.run_until_complete(self.loop.shutdown_asyncgens())
+                self.loop.close()
 
 
 class node:  # pylint: disable=invalid-name
@@ -44,7 +54,7 @@ class node:  # pylint: disable=invalid-name
 
     def __init__(
         self,
-        url: str | None = None,
+        url: str | List[str] | None = None,
         name: str | None = None,
         port: int | None = None,
         secure: bool = False,
@@ -100,11 +110,20 @@ class node:  # pylint: disable=invalid-name
         """Publish a message to the specified topic."""
         return self._runner.run(self._rb.publish(topic, *args, **kwargs))
 
-    def subscribe(self, fn: Callable[..., Any], retroactive: bool = False):
+    def put(self, topic: str, *args: Any, **kwargs):
+        """Publish a message to the specified topic."""
+        return self._runner.run(
+            self._rb.publish(self.rid + '/' + topic, *args, **kwargs)
+        )
+
+    def subscribe(self,
+                  fn: Callable[..., Any],
+                  retroactive: bool = False,
+                  topic: Optional[str] = None):
         """
         Subscribe the function to the corresponding topic.
         """
-        return self._runner.run(self._rb.subscribe(fn, retroactive))
+        return self._runner.run(self._rb.subscribe(fn, retroactive, topic))
 
     def unsubscribe(self, fn: Callable[..., Any]):
         """

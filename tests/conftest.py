@@ -24,6 +24,7 @@ def server(port=8000):
     yield rb
     print(f"--- Stopping Rembus server on port {port} ---")
     rb.close()
+    rb._runner.shutdown()
 
 
 def pytest_configure(config):  # pylint: disable=unused-argument

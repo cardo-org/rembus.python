@@ -113,10 +113,17 @@ def mytopic():
     logging.info("mytopic called")
 
 
+def puttopic():
+    """A simple pubsub method that logs a message."""
+    logging.info("puttopic called")
+
+
 async def test_publish():
     """Test the publish method of the rembus component."""
     server = start_server(port=8006)
+    server.subscribe(puttopic, topic="cmp.net/mytopic")
     server.subscribe(mytopic)
+
     rb = await rembus.component("ws://:8006/cmp.net")
     assert rb.isrepl() is False
     assert isinstance(rb.router, rembus.core.Router)
@@ -126,6 +133,9 @@ async def test_publish():
     assert rembus.core.domain(rb.rid) == "net"
     await rb.publish("mytopic")
     await rb.publish("mytopic", "log_warning")
+
+    await rb.put("mytopic")
+
     await rb.close()
     with pytest.raises(rp.RembusConnectionClosed):
         await rb.publish("mytopic")

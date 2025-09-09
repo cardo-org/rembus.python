@@ -120,10 +120,6 @@ class RbURL:
     def __repr__(self):
         return f"{self.protocol}://{self.hostname}:{self.port}/{self.id}"
 
-    def rid(self):
-        """Return the unique id of the component."""
-        return self.id
-
     def isrepl(self):
         """Check if the URL is a REPL."""
         return self.protocol == "repl"
@@ -334,29 +330,31 @@ class Router(Supervised):
 
         return
 
+    async def send_message(self, msg):
+        """Send message to remote node using a twin from the pool of twins"""
+        for t in self.id_twin.values():
+            if t.isopen():
+                try:
+                    sts = rp.STS_OK
+                    data = await t.msg_send_wait(msg)
+                except Exception as e:  # pylint:disable=broad-exception-caught
+                    sts = rp.STS_ERROR
+                    data = f"{e}"
+                fut = await msg.twin.future_request(msg.id)
+                if fut:
+                    if sts == rp.STS_OK:
+                        fut.future.set_result(rp.tag2df(data))
+                    else:
+                        fut.future.set_exception(
+                            rp.RembusError(rp.STS_ERROR, data))
+                break
+
     async def _rpcreq_msg(self, msg: rp.RpcReqMsg):
         """Handle an RPC request."""
         data = rp.tag2df(msg.data)
 
         if msg.twin.isrepl():
-            for t in self.id_twin.values():
-                if t.isopen():
-                    try:
-                        sts = rp.STS_OK
-                        data = await t.msg_send_wait(msg)
-                    except Exception as e:  # pylint: disable=broad-exception-caught
-                        sts = rp.STS_ERROR
-                        data = f"{e}"
-
-                    fut = await msg.twin.future_request(msg.id)
-                    if fut:
-                        if sts == rp.STS_OK:
-                            fut.future.set_result(rp.tag2df(data))
-                        else:
-                            fut.future.set_exception(
-                                rp.RembusError(rp.STS_ERROR, data))
-
-                    break
+            await self.send_message(msg)
         elif msg.topic in self.handler:
             status = rp.STS_OK
             try:
@@ -403,7 +401,10 @@ class Router(Supervised):
                 await msg.twin.response(sts, msg)
             elif isinstance(msg, rp.AdminMsg):
                 logger.debug("[%s] admin: %s", self, msg)
-                await msg.twin.response(rp.STS_OK, msg)
+                if msg.twin.isrepl():
+                    await self.send_message(msg)
+                else:
+                    await msg.twin.response(rp.STS_OK, msg)
             elif isinstance(msg, rp.RegisterMsg):
                 logger.debug("[%s] register: %s", self, msg)
                 await self._register_node(msg)
@@ -619,8 +620,11 @@ for RPC, pub/sub, and other commands interactions.
 
     def isopen(self) -> bool:
         """Check if the connection is open."""
-        return (self.socket is not None and
-                self.socket.state == websockets.State.OPEN)
+        if self.isrepl():
+            return any([t.isopen() for t in self.router.id_twin.values()])
+        else:
+            return (self.socket is not None and
+                    self.socket.state == websockets.State.OPEN)
 
     async def response(self, status: int, msg: Any, data: Any = None):
         """Send a response to the client."""
@@ -665,6 +669,13 @@ for RPC, pub/sub, and other commands interactions.
             except asyncio.CancelledError:
                 pass
             self.reconnect_task = None
+
+        if self.uid.isrepl():
+            # close the twins (or the component of the pool)
+            for (_, t) in list(self.router.id_twin.items()):
+                t.handler["phase"] = lambda: "CLOSED"
+                if t.socket is not None:
+                    await t.socket.close()
 
         if self.isclient or self.uid.isrepl():
             await self.router.shutdown()
@@ -716,6 +727,9 @@ for RPC, pub/sub, and other commands interactions.
         if fut is None:
             logger.warning("[%s] recv unknown msg id %s",
                            self, rp.tohex(rp.to_bytes(msgid)))
+        elif fut.future.done():
+            return None
+
         return fut
 
     async def _response_msg(self, msg: rp.ResMsg):
@@ -795,7 +809,7 @@ for RPC, pub/sub, and other commands interactions.
     async def send(self, msg: rp.RembusMsg):
         """Send a rembus message"""
         pkt = msg.to_payload(self.enc)
-        if self.isrepl():
+        if self.isrepl() and self.isopen():
             await self.router.inbox.put(msg)
         elif self.socket is None:
             raise rp.RembusConnectionClosed()
@@ -875,7 +889,7 @@ for RPC, pub/sub, and other commands interactions.
         if qos == rp.QOSLevel.QOS0:
             msg = rp.PubSubMsg(topic=topic, data=data)
             msg.twin = self
-            if self.isrepl():
+            if self.isrepl() and self.isopen():
                 await self.router.inbox.put(msg)
             elif self.socket is None:
                 raise rp.RembusConnectionClosed()
@@ -885,6 +899,10 @@ for RPC, pub/sub, and other commands interactions.
             await self._qos_publish(topic, data, qos)
 
         return None
+
+    async def put(self, topic: str, *args: Any, **kwargs):
+        """Publish a message to the topic prefixed with component name."""
+        await self.publish(self.rid + '/' + topic, *args, **kwargs)
 
     async def _qos_publish(
             self,
@@ -989,12 +1007,17 @@ for RPC, pub/sub, and other commands interactions.
         return self
 
     async def subscribe(
-            self, fn: Callable[..., Any], retroactive: bool = False
+            self,
+            fn: Callable[..., Any],
+            retroactive: bool = False,
+            topic: Optional[str] = None
     ):
         """
         Subscribe the function to the corresponding topic.
         """
-        topic = fn.__name__
+        if topic is None:
+            topic = fn.__name__
+
         await self.setting(
             topic, rp.ADD_INTEREST, {"retroactive": retroactive}
         )

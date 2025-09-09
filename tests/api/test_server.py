@@ -12,9 +12,13 @@ def test_reconnect():
     rid = rb.rpc("rid")
     assert rid == "broker"
     server.close()
-    time.sleep(3)
+    time.sleep(1)
     server = rembus.node(port=8000)
-    time.sleep(3)
+    while True:
+        time.sleep(1)
+        if rb.isopen():
+            break
+
     rid = rb.rpc("rid")
     assert rid == "broker"
     rb.close()
