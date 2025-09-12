@@ -240,7 +240,7 @@ class PubSubMsg(RembusMsg):
         """Return the PubSubMsg list of values to encode"""
         if self.flags == QOSLevel.QOS0 or self.id is None:
             if enc == CBOR:
-                return cbor2.dumps([TYPE_PUB, self.topic, self.data])
+                return cbor2.dumps([TYPE_PUB, self.topic, df2tag(self.data)])
 
             return json.dumps({
                 "jsonrpc": "2.0",
@@ -253,7 +253,7 @@ class PubSubMsg(RembusMsg):
                     TYPE_PUB | self.flags,
                     to_bytes(self.id),
                     self.topic,
-                    self.data
+                    df2tag(self.data)
                 ])
 
             return json.dumps({

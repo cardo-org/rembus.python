@@ -814,6 +814,7 @@ for RPC, pub/sub, and other commands interactions.
         elif self.socket is None:
             raise rp.RembusConnectionClosed()
         else:
+            pkt = msg.to_payload(self.enc)
             await self._send(pkt)
 
     async def _send(self, payload: bytes | str) -> Any:
@@ -882,9 +883,8 @@ for RPC, pub/sub, and other commands interactions.
         else:
             logger.debug("[%s]: free mode access", self)
 
-    async def publish(self, topic: str, *args: Any, **kwargs):
+    async def publish(self, topic: str, *data: Any, **kwargs):
         """Publish a message to the specified topic."""
-        data = rp.df2tag(args)
         qos = kwargs.get("qos", rp.QOSLevel.QOS0)
         if qos == rp.QOSLevel.QOS0:
             msg = rp.PubSubMsg(topic=topic, data=data)
@@ -995,7 +995,8 @@ for RPC, pub/sub, and other commands interactions.
         """
         Set the component to receive published messages on subscribed topics.
         """
-        await self.broker_setting("reactive", {"status": True})
+        if self.isclient:
+            await self.broker_setting("reactive", {"status": True})
         return self
 
     async def unreactive(self):
