@@ -1,4 +1,5 @@
 """Tests for Dataframes arguments."""
+import narwhals as nw
 import pandas as pd
 import rembus
 import rembus.protocol as rp
@@ -46,12 +47,15 @@ async def test_rpc(mocker, ws_mock):
 
     # for payload in [df, df_list]:
     response = await rb.rpc(echo_service.__name__, df)
-    assert response.equals(df)
+    res_df = nw.from_native(response)
+    src_df = nw.from_native(df)
+    assert src_df.to_pandas().equals(res_df.to_pandas())
 
     response = await rb.rpc(echo_service.__name__, *df_list)
     assert len(response) == len(df_list)
-    # for i in range(len(df_list)):
     for i, _ in enumerate(df_list):
-        assert response[i].equals(df_list[i])
+        res_df = nw.from_native(response[i])
+        src_df = nw.from_native(df_list[i])
+        assert src_df.to_pandas().equals(res_df.to_pandas())
 
     await rb.close()

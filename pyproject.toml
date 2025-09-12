@@ -27,6 +27,8 @@ dependencies = [
   "websockets",
   "cbor2",
   "cryptography",
+  "narwhals",
+  "polars",
   "pydantic"
 ]
 

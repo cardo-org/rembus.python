@@ -13,7 +13,17 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, ec
 from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
 from cryptography.hazmat.backends import default_backend
-import pandas as pd
+from narwhals.typing import IntoFrame
+try:
+    import polars as pl
+    _HAS_POLARS = True
+except ImportError:
+    _HAS_POLARS = False
+try:
+    import pandas as pd
+    _HAS_PANDAS = True
+except ImportError:
+    _HAS_PANDAS = False
 import pyarrow as pa
 from pydantic import BaseModel, PrivateAttr
 import rembus.settings as rs
@@ -196,9 +206,12 @@ class ResMsg(RembusMsg):
     def to_payload(self, enc: int) -> bytes | str:
         """Return the ResMsg list of values to encode"""
         if enc == CBOR:
-            return cbor2.dumps(
-                [TYPE_RESPONSE, to_bytes(self.id), self.status, self.data]
-            )
+            return cbor2.dumps([
+                TYPE_RESPONSE,
+                to_bytes(self.id),
+                self.status,
+                df2tag(self.data)
+            ])
 
         if self.status == STS_OK or self.status == STS_CHALLENGE:
             restype = "result"
@@ -595,19 +608,33 @@ def cbor_parse(pkt) -> RembusMsg:
     raise ValueError('unknown message type')
 
 
-def decode_dataframe(data: bytes) -> pd.DataFrame:
+def decode_dataframe(data: bytes) -> IntoFrame:
     """Decode a CBOR tagged value `data` to a pandas dataframe."""
     writer = pa.BufferOutputStream()
     writer.write(data)
     buf: pa.Buffer = writer.getvalue()
-    reader = pa.ipc.open_stream(buf)
     with pa.ipc.open_stream(buf) as reader:
-        return reader.read_pandas()
+        table = reader.read_all()
+
+    if _HAS_POLARS:
+        return pl.from_arrow(table)
+    elif _HAS_PANDAS:
+        return table.to_pandas()
+    else:
+        raise ImportError("neither polars nor pandas is installed")
 
 
-def encode_dataframe(df: pd.DataFrame) -> cbor2.CBORTag:
+def encode_dataframe(df: IntoFrame) -> cbor2.CBORTag:
     """Encode a pandas dataframe `df` to a CBOR tag value."""
-    table = pa.Table.from_pandas(df)
+    if _HAS_POLARS and isinstance(df, pl.DataFrame):
+        table = df.to_arrow()
+    elif _HAS_PANDAS and isinstance(df, pd.DataFrame):
+        table = pa.Table.from_pandas(df)
+    else:
+        raise TypeError(
+            "unsupported dataframe type. Expected pandas or polars DataFrame"
+        )
+
     sink = pa.BufferOutputStream()
     with pa.ipc.new_stream(sink, table.schema) as writer:
         writer.write(table)
@@ -637,17 +664,17 @@ def df2tag(data: Any) -> Any:
     if isinstance(data, tuple):
         lst: List[Any] = []
         for idx, val in enumerate(data):
-            if isinstance(val, pd.DataFrame):
+            if isinstance(val, pl.DataFrame) or isinstance(val, pd.DataFrame):
                 lst.append(encode_dataframe(val))
             else:
                 lst.append(val)
         return lst
     elif isinstance(data, list):
         for idx, val in enumerate(data):
-            if isinstance(val, pd.DataFrame):
+            if isinstance(val, pl.DataFrame) or isinstance(val, pd.DataFrame):
                 data[idx] = encode_dataframe(val)
 
-    elif isinstance(data, pd.DataFrame):
+    elif isinstance(data, pl.DataFrame) or isinstance(data, pd.DataFrame):
         data = encode_dataframe(data)
     return data
 
