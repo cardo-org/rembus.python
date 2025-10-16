@@ -55,7 +55,7 @@ async def test_publish(mocker, ws_mock):
     await rb.subscribe(mytopic)
 
     # send two pubsub messages with the same msgid
-    msgid = bytes([i for i in range(16)])
+    msgid = bytes([i for i in range(rp.MSGID_LEN)])
     topic = mytopic.__name__
     for i in range(3):
         rb.outreq[int.from_bytes(msgid)] = rembus.core.FutureResponse(True)

@@ -11,6 +11,7 @@ from .protocol import (  # noqa: F401
     QOSLevel,
     CBOR,
     JSON,
+    MSGID_LEN,
     SIG_ECDSA,
     SIG_RSA
 )

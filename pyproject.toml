@@ -12,7 +12,7 @@ authors = [
 description = "Rembus for python"
 readme = "README.md"
 keywords = ["rembus", "rpc", "publish", "subscribe", "websocket", "cbor"]
-requires-python = ">=3.7"
+requires-python = ">=3.12"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",

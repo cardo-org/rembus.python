@@ -38,6 +38,7 @@ SIG_ECDSA = 0x2
 CBOR = 0
 JSON = 1
 
+MSGID_LEN = 8
 
 class QOSLevel(IntEnum):
     """The Pub/Sub message QOS level."""
@@ -97,25 +98,9 @@ REMOVE_IMPL = 'unexpose'
 
 
 def msgid():
-    """Return an array of 16 random bytes."""
-    return int.from_bytes(os.urandom(16))
+    """Return an array of MSGID_LEN random bytes."""
+    return int.from_bytes(os.urandom(MSGID_LEN))
 
-
-def bytes2id(byte_data: bytearray) -> int:
-    """
-    Converts a 16-byte bytearray to a UInt128 integer.
-
-    Args:
-        byte_data: A bytearray of 16 bytes.
-
-    Returns:
-        A Python integer representing the UInt128 value.
-    """
-    if len(byte_data) != 16:
-        raise ValueError("bytearray must be exactly 16 bytes long")
-
-    # Convert bytes to integer (assuming little-endian, adjust if big-endian)
-    return int.from_bytes(byte_data, byteorder='little', signed=False)
 
 
 class RembusException(Exception):
@@ -151,8 +136,8 @@ class RembusError(RembusException):
 
 
 def to_bytes(val: int) -> bytes:
-    """Convert an int to 16 bytes"""
-    return val.to_bytes(16)
+    """Convert an int to MSGID_LEN bytes"""
+    return val.to_bytes(MSGID_LEN)
 
 
 class RembusMsg(BaseModel):

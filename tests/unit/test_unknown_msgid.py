@@ -36,7 +36,7 @@ async def test_unknown_message_id(mocker, ws_mock):
     assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000/foo"
     assert rb.uid.id == 'foo'
     # send a response message with an unknown msgid
-    msgid = bytes([i for i in range(16)])
+    msgid = bytes([i for i in range(rp.MSGID_LEN)])
     req = rp.encode(
         [rp.TYPE_RESPONSE, msgid, rp.STS_OK, 'payload']
     )

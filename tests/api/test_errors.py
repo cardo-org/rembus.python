@@ -65,5 +65,5 @@ def test_response_no_data():
     mid = 1234
     # This is not an error, data is set by default to None
     rb._runner.run(rb._rb._send(cbor2.dumps(
-        [rp.TYPE_RESPONSE, mid.to_bytes(16), rp.STS_OK])))
+        [rp.TYPE_RESPONSE, mid.to_bytes(rp.MSGID_LEN), rp.STS_OK])))
     rb.close()

@@ -17,18 +17,6 @@ def test_no_impl():
         msg.to_payload(enc=rp.CBOR)
 
 
-def test_bytes2id():
-    """Test the bytes2id function for converting byte arrays to IDs."""
-    byte_data = bytearray(range(16))  # 0x00 to 0x0F
-    result = rp.bytes2id(byte_data)
-    assert isinstance(result, int)
-
-    with pytest.raises(ValueError):
-        rp.bytes2id(bytearray(range(15)))
-
-    with pytest.raises(ValueError):
-        rp.bytes2id(bytearray(range(17)))
-
 
 def test_types_str():
     """Test the string representation of protocol types."""
