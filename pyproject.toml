@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rembus"
-version = "0.4.1"
+version = "0.5.0"
 license = "AGPL-3.0-only"
 authors = [
   { name="Attilio Donà", email="attilio.dona@gmail.com" },
@@ -12,7 +12,7 @@ authors = [
 description = "Rembus for python"
 readme = "README.md"
 keywords = ["rembus", "rpc", "publish", "subscribe", "websocket", "cbor"]
-requires-python = ">=3.7"
+requires-python = ">=3.12"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
@@ -46,7 +46,7 @@ test = ["coverage", "mock", "pytest", "pytest-asyncio", "pytest-mock", "pytest-c
 "Bug Tracker" = "https://github.com/cardo-org/rembus.python/issues"
 
 [tool.bumpver]
-current_version = "0.4.1"
+current_version = "0.5.0"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "bump version {old_version} -> {new_version}"
 tag_message = "{new_version}"
