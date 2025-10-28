@@ -19,7 +19,7 @@ def test_no_impl():
 
 def test_bytes2id():
     """Test the bytes2id function for converting byte arrays to IDs."""
-    byte_data = bytearray(range(16))  # 0x00 to 0x0F
+    byte_data = bytearray(range(rp.MSGID_SZ))  # 0x00 to 0x0F
     result = rp.bytes2id(byte_data)
     assert isinstance(result, int)
 

@@ -5,6 +5,7 @@ import ssl
 import pytest
 import rembus
 import rembus.settings
+import time
 
 
 def config_secure():
@@ -35,7 +36,7 @@ def test_wss_fail():
     secure connection cannot be established.
     """
     try:
-        rembus.node(port=8000, secure=True)
+        rembus.node(port=8900, secure=True)
     except RuntimeError:
         assert True
 
@@ -49,9 +50,9 @@ def test_wss_ok():
     and should successfully close the connection.
     """
     config_secure()
-    server = rembus.node(port=8000, secure=True)
+    server = rembus.node(port=8900, secure=True)
 
-    rb = rembus.node("wss://127.0.0.1:8000/mycomponent")
+    rb = rembus.node("wss://127.0.0.1:8900/mycomponent")
     rb.close()
 
     server.close()
@@ -68,9 +69,9 @@ def test_wss_default_ca_notfound():
     if os.path.exists(fn):
         os.remove(fn)
 
-    server = rembus.node(port=8000, secure=True)
+    server = rembus.node(port=8900, secure=True)
     with pytest.raises(Exception):
-        rembus.node("wss://127.0.0.1:8000/mycomponent")
+        rembus.node("wss://127.0.0.1:8900/mycomponent")
 
     server.close()
 
@@ -83,9 +84,10 @@ def test_wss_ca_notfound():
     exception indicating that the CA bundle file is not found.
     """
     config_secure()
-    server = rembus.node(port=8000, secure=True)
+    server = rembus.node(port=8900, secure=True)
     os.environ["HTTP_CA_BUNDLE"] = "not_found"
     with pytest.raises(ssl.SSLCertVerificationError):
-        rembus.node("wss://127.0.0.1:8000/mycomponent")
+        rembus.node("wss://127.0.0.1:8900/mycomponent")
 
     server.close()
+    time.sleep(2)

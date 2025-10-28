@@ -142,6 +142,26 @@ async def test_publish():
     server.close()
 
 
+async def test_publish_slot():
+    """Test the slot option of the publish api."""
+    server = start_server(port=8007)
+    server.subscribe(puttopic, topic="cmp.net/mytopic")
+    server.subscribe(mytopic)
+
+    rb = await rembus.component("ws://:8007/cmp.net")
+    assert rb.isrepl() is False
+    assert isinstance(rb.router, rembus.core.Router)
+    assert repr(
+        server.router) == "broker: {'cmp.net@ws://127.0.0.1:8000': cmp.net}"
+    assert repr(rb.uid) == "ws://127.0.0.1:8007/cmp.net"
+    assert rembus.core.domain(rb.rid) == "net"
+    await rb.publish("mytopic", slot=1234, qos=rp.QOS2)
+    await rb.publish("mytopic", "log_warning", slot=1234, qos=rp.QOS1)
+
+    await rb.close()
+    server.close()
+
+
 async def test_cancel_supervisor_task():
     """Test shutdown in case of task cancellation"""
     server = await rembus.component(port=8000)

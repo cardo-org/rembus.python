@@ -7,13 +7,13 @@ import rembus.settings
 
 def test_reconnect():
     """Test reconnecting to a rembus broker."""
-    server = rembus.node(port=8000)
-    rb = rembus.node("ws:")
+    server = rembus.node(port=8800)
+    rb = rembus.node("ws://:8800")
     rid = rb.rpc("rid")
     assert rid == "broker"
     server.close()
     time.sleep(1)
-    server = rembus.node(port=8000)
+    server = rembus.node(port=8800)
     while True:
         time.sleep(1)
         if rb.isopen():
@@ -36,6 +36,6 @@ def test_builtins():
     assert version == rembus.__version__
     uptime = rb1.rpc("uptime")
     assert isinstance(uptime, str)
-    server.close()
     rb1.close()
     rb2.close()
+    server.close()

@@ -29,7 +29,7 @@ def test_rpc(server):
         rb.rpc("myservice", x, y)
 
 
-async def test_direct(server):
+def test_direct(server):
     """Test the direct method."""
     x = 2
     y = 3
@@ -89,4 +89,4 @@ def test_publish(server):
         rb.publish("mytopic")
 
     server.unsubscribe(mytopic)
-    server.wait(0.1)
+    # server.wait(0.1)

@@ -65,7 +65,7 @@ async def test_publish(mocker, ws_mock):
     await rb.subscribe(mytopic)
 
     with pytest.raises(rp.RembusTimeout):
-        await rb.publish(mytopic.__name__, PAYLOAD, qos=rembus.QOSLevel.QOS1)
+        await rb.publish(mytopic.__name__, PAYLOAD, qos=rembus.QOS1)
 
     await asyncio.sleep(0.1)
     assert RECEIVED == PAYLOAD

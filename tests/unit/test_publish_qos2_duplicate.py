@@ -55,12 +55,12 @@ async def test_publish(mocker, ws_mock):
     await rb.subscribe(mytopic)
 
     # send two pubsub messages with the same msgid
-    msgid = bytes([i for i in range(16)])
+    msgid = bytes([i for i in range(rp.MSGID_SZ)])
     topic = mytopic.__name__
     for i in range(3):
-        rb.outreq[int.from_bytes(msgid)] = rembus.core.FutureResponse(True)
+        rb.outreq[rp.from_bytes(msgid)] = rembus.core.FutureResponse(True)
         req = rp.encode(
-            [rp.TYPE_PUB | rembus.QOSLevel.QOS2, msgid, topic, PAYLOAD]
+            [rp.TYPE_PUB | rembus.QOS2, msgid, topic, PAYLOAD]
         )
         if rb.socket:
             await rb.socket.send(req)

@@ -19,8 +19,8 @@ def test_jsonrpc_rpc(server):
 def test_jsonrpc_publish(server):
     rb = rembus.node("mynode", enc=rembus.JSON)
     rb.publish("my_topic")
-    rb.publish("my_topic", qos=rembus.protocol.QOSLevel.QOS1)
-    rb.publish("my_topic", qos=rembus.protocol.QOSLevel.QOS2)
+    rb.publish("my_topic", qos=rembus.protocol.QOS1)
+    rb.publish("my_topic", qos=rembus.protocol.QOS2)
     time.sleep(1)
     rb.close()
 

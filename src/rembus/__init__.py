@@ -8,9 +8,11 @@ from .settings import (  # noqa: F401
     TENANTS_FILE
 )
 from .protocol import (  # noqa: F401
-    QOSLevel,
     CBOR,
     JSON,
+    QOS0,
+    QOS1,
+    QOS2,
     SIG_ECDSA,
     SIG_RSA
 )

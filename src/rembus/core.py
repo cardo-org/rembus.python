@@ -142,6 +142,12 @@ class RbURL:
         return f"{self.id}@{self.netlink}"
 
 
+async def shutdown_message(obj) -> None:
+    """Log a shutdown message for the given object."""
+    logger.debug("[%s] sending shutdown message", obj)
+    await obj.inbox.put("shutdown")
+
+
 class Supervised:
     """
     A superclass that provides task supervision and auto-restarting for
@@ -187,26 +193,28 @@ class Supervised:
 
     async def shutdown(self) -> None:
         """Gracefully stops the supervised worker and its supervisor."""
-        logger.debug("[%s] shutting down", self)
-        self._should_run = False
+        logger.debug("[%s] shutting down (should_run: %s)",
+                     self, self._should_run)
+        if self._should_run:
+            self._should_run = False
 
-        await self._shutdown()
+            await self._shutdown()
 
-        if self._task and not self._task.done():
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                logger.debug("[%s] supervised task cancelled", self)
+            if self._task and not self._task.done():
+                await shutdown_message(self)
+                try:
+                    await self._task
+                except asyncio.CancelledError:
+                    logger.debug("[%s] supervised task cancelled", self)
 
-        if self._supervisor_task and not self._supervisor_task.done():
-            self._supervisor_task.cancel()
-            try:
-                await self._supervisor_task
-                logger.debug("[%s] supervisor task cancelled", self)
-            except asyncio.CancelledError:
-                pass
-        logger.debug("[%s] shutdown complete", self)
+            if self._supervisor_task and not self._supervisor_task.done():
+                self._supervisor_task.cancel()
+                try:
+                    await self._supervisor_task
+                    logger.debug("[%s] supervisor task cancelled", self)
+                except asyncio.CancelledError:
+                    pass
+            logger.debug("[%s] shutdown complete", self)
 
 
 async def init_router(router_name, uid, port, secure):
@@ -303,11 +311,12 @@ class Router(Supervised):
 
     async def _pubsub_msg(self, msg: rp.PubSubMsg):
         twin = msg.twin
-        if msg.flags > rp.QOSLevel.QOS0 and msg.id:
+        qos = msg.flags & rp.QOS2
+        if qos > rp.QOS0 and msg.id:
             if twin.socket:
                 await twin.send(rp.AckMsg(id=msg.id))
 
-            if msg.flags == rp.QOSLevel.QOS2:
+            if qos == rp.QOS2:
                 if msg.id in twin.ackdf:
                     # Already received, skip the message.
                     return
@@ -411,6 +420,9 @@ class Router(Supervised):
             elif isinstance(msg, rp.UnregisterMsg):
                 logger.debug("[%s] unregister: %s", self, msg)
                 await self._unregister_node(msg)
+            elif msg == "shutdown":
+                logger.debug("[%s] router shutting down", self)
+                break
 
     async def evaluate(self, twin, topic: str, data: Any) -> Any:
         """Invoke the handler associate with the message topic."""
@@ -654,6 +666,22 @@ for RPC, pub/sub, and other commands interactions.
             await self.socket.close()
             self.socket = None
 
+        # Sleep for avoiding the exception when teardown the event loop:
+        # PytestUnraisableExceptionWarning: Exception ignored in: <function _SelectorTransport.__del__ at 0x7ea82c191bc0>
+        #
+        # Traceback (most recent call last):
+        # File "python/3.13.3/lib/python3.13/asyncio/selector_events.py", line 874, in __del__
+        #   self._server._detach(self)
+        #   ~~~~~~~~~~~~~~~~~~~~^^^^^^
+        # File "python/3.13.3/lib/python3.13/asyncio/base_events.py", line 303, in _detach
+        #   self._wakeup()
+        #   ~~~~~~~~~~~~^^
+        # File "/home/adona/.asdf/installs/python/3.13.3/lib/python3.13/asyncio/base_events.py", line 308, in _wakeup
+        #   for waiter in waiters:
+        #                 ^^^^^^^
+        # TypeError: 'NoneType' object is not iterable
+        await asyncio.sleep(0.1)
+
         if self.receiver:
             self.receiver.cancel()
             try:
@@ -680,6 +708,8 @@ for RPC, pub/sub, and other commands interactions.
         if self.isclient or self.uid.isrepl():
             await self.router.shutdown()
 
+        await self.shutdown()
+
     async def _task_impl(self):
         logger.debug("[%s] task started", self)
         while True:
@@ -689,6 +719,8 @@ for RPC, pub/sub, and other commands interactions.
                 if not self.reconnect_task:
                     self.reconnect_task = asyncio.create_task(
                         self._reconnect())
+            elif msg == "shutdown":
+                break
 
     async def twin_receiver(self):
         """Receive messages from the WebSocket connection."""
@@ -721,6 +753,8 @@ for RPC, pub/sub, and other commands interactions.
                 self.router.id_twin.pop(self.twkey, None)
                 await self.shutdown()
 
+            self.receiver = None
+
     async def future_request(self, msgid: int):
         """Return the future associated with the message id `msgid`."""
         fut = self.outreq.pop(msgid, None)
@@ -744,7 +778,7 @@ for RPC, pub/sub, and other commands interactions.
                 fut.future.set_exception(rp.RembusError(sts, msg.data))
 
     async def _ack_msg(self, msg: rp.AckMsg):
-        logger.debug("pubsub ack data")
+        logger.debug("[%s] pubsub ack: %s", self, msg.id)
         fut = await self.future_request(msg.id)
         if fut:
             if fut.data:
@@ -755,7 +789,7 @@ for RPC, pub/sub, and other commands interactions.
     async def _ack2_msg(self, msg: rp.Ack2Msg):
         mid = msg.id
         if mid in self.ackdf:
-            logger.debug("deleting pubsub ack: %s", mid)
+            logger.debug("[%s] ack2: deleting pubsub ack %s", self, mid)
             del self.ackdf[mid]
         return
 
@@ -800,7 +834,6 @@ for RPC, pub/sub, and other commands interactions.
                 await self._login()
             except Exception as e:
                 await self.close()
-                self.handler["phase"] = lambda: "CLOSED"
                 raise rp.RembusError(rp.STS_ERROR, "_login failed") from e
 
         self.handler["phase"] = lambda: "CONNECTED"
@@ -820,6 +853,22 @@ for RPC, pub/sub, and other commands interactions.
     async def _send(self, payload: bytes | str) -> Any:
         if self.socket is not None:
             await self.socket.send(payload)
+
+    async def _qos_send_wait(
+            self,
+            msgid: int,
+            msg: rp.PubSubMsg) -> Any:
+        """Send a pubsub message and wait for the ack."""
+        await self.send(msg)
+        futreq = FutureResponse(msg.flags & rp.QOS2 == rp.QOS2)
+        self.outreq[msgid] = futreq
+        try:
+            async with async_timeout.timeout(
+                self.router.config.request_timeout
+            ):
+                return await futreq.future
+        except TimeoutError as e:
+            raise rp.RembusTimeout() from e
 
     async def _send_wait(
             self,
@@ -885,9 +934,11 @@ for RPC, pub/sub, and other commands interactions.
 
     async def publish(self, topic: str, *data: Any, **kwargs):
         """Publish a message to the specified topic."""
-        qos = kwargs.get("qos", rp.QOSLevel.QOS0)
-        if qos == rp.QOSLevel.QOS0:
-            msg = rp.PubSubMsg(topic=topic, data=data)
+
+        slot = kwargs.get("slot", None)
+        qos = kwargs.get("qos", rp.QOS0)
+        if qos == rp.QOS0:
+            msg = rp.PubSubMsg(topic=topic, data=data, slot=slot)
             msg.twin = self
             if self.isrepl() and self.isopen():
                 await self.router.inbox.put(msg)
@@ -896,7 +947,7 @@ for RPC, pub/sub, and other commands interactions.
             else:
                 await self.send(msg)
         else:
-            await self._qos_publish(topic, data, qos)
+            await self._qos_publish(topic, data, qos, slot)
 
         return None
 
@@ -908,19 +959,27 @@ for RPC, pub/sub, and other commands interactions.
             self,
             topic: str,
             data: tuple,
-            qos: rp.QOSLevel
+            qos: rp.UInt8,  # type: ignore[valid-type]
+            slot: int | None
     ):
         done = False
         max_retries = self.router.config.send_retries
         retries = 0
+        if slot is None:
+            reqid = rp.msgid()
+        else:
+            reqid = rp.msgid_slot(slot)
+
         while True:
             retries += 1
             try:
-                done = await self._send_wait(
-                    lambda id: rp.PubSubMsg(
-                        id=id, topic=topic, data=data, flags=qos),
-                    qos == rp.QOSLevel.QOS2
+                done = await self._qos_send_wait(
+                    reqid,
+                    rp.PubSubMsg(
+                        id=reqid, topic=topic, data=data, flags=qos, slot=slot
+                    )
                 )
+
                 if done:
                     break
             except rp.RembusTimeout:
@@ -1052,7 +1111,9 @@ for RPC, pub/sub, and other commands interactions.
 
     async def close(self):
         """Close the connection and clean up resources."""
+        self.handler["phase"] = lambda: "CLOSED"
         await self.shutdown()
+        await asyncio.sleep(0)  # let loop drain tasks
 
     async def wait(self, timeout: float | None = None):
         """

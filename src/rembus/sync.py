@@ -7,9 +7,12 @@ from types import TracebackType
 from typing import Any, Callable, Coroutine, Optional, Type, List
 from rembus import (
     component,
+    RbURL,
     CBOR,
     SIG_RSA,
 )
+
+from rembus.protocol import RembusConnectionClosed
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +24,6 @@ class AsyncLoopRunner:
         self.loop = asyncio.new_event_loop()
         self._thread = threading.Thread(target=self._start_loop, daemon=True)
         self._thread.start()
-        atexit.register(self.shutdown)
 
     def _start_loop(self):
         asyncio.set_event_loop(self.loop)
@@ -43,10 +45,13 @@ class AsyncLoopRunner:
             # Wait briefly for the thread to exit
             self._thread.join(timeout=1.0)
 
-            # Clean up the loop
-            if not self.loop.is_closed():
-                self.loop.run_until_complete(self.loop.shutdown_asyncgens())
-                self.loop.close()
+            # Cancel any pending tasks to avoid dangling transports
+            pending = asyncio.all_tasks(self.loop)
+            for task in pending:
+                task.cancel()
+            if pending:
+                self.loop.run_until_complete(
+                    asyncio.gather(*pending, return_exceptions=True))
 
 
 class node:  # pylint: disable=invalid-name
@@ -90,30 +95,38 @@ class node:  # pylint: disable=invalid-name
         """Initialize the context object."""
         return self._rb.inject(ctx)
 
+    def exec(self, fn, *args, **kwargs):
+        """Execute a method in the event loop and return its result."""
+        if self._runner is not None:
+            coro = fn(*args, **kwargs)
+            return self._runner.run(coro)
+
+        raise RembusConnectionClosed()
+
     def register(self, rid: str, pin: str, scheme: int = SIG_RSA):
         """Register a component with the given rid."""
-        return self._runner.run(self._rb.register(rid, pin, scheme))
+        return self.exec(self._rb.register, rid, pin, scheme)
 
     def unregister(self):
         """Unregister the component."""
-        return self._runner.run(self._rb.unregister())
+        return self.exec(self._rb.unregister)
 
     def direct(self, target: str, topic: str, *args: Any):
         """Send a direct RPC request to the target component."""
-        return self._runner.run(self._rb.direct(target, topic, *args))
+        return self.exec(self._rb.direct, target, topic, *args)
 
     def rpc(self, topic: str, *args: Any):
         """Send a RPC request."""
-        return self._runner.run(self._rb.rpc(topic, *args))
+        return self.exec(self._rb.rpc, topic, *args)
 
     def publish(self, topic: str, *args: Any, **kwargs):
         """Publish a message to the specified topic."""
-        return self._runner.run(self._rb.publish(topic, *args, **kwargs))
+        return self.exec(self._rb.publish, topic, *args, **kwargs)
 
     def put(self, topic: str, *args: Any, **kwargs):
         """Publish a message to the specified topic."""
-        return self._runner.run(
-            self._rb.publish(self.rid + '/' + topic, *args, **kwargs)
+        return self.exec(
+            self._rb.publish, self.rid + '/' + topic, *args, **kwargs
         )
 
     def subscribe(self,
@@ -123,48 +136,50 @@ class node:  # pylint: disable=invalid-name
         """
         Subscribe the function to the corresponding topic.
         """
-        return self._runner.run(self._rb.subscribe(fn, retroactive, topic))
+        return self.exec(self._rb.subscribe, fn, retroactive, topic)
 
     def unsubscribe(self, fn: Callable[..., Any]):
         """
         Unsubscribe the function from the corresponding topic.
         """
-        return self._runner.run(self._rb.unsubscribe(fn))
+        return self.exec(self._rb.unsubscribe, fn)
 
     def expose(self, fn: Callable[..., Any]):
         """
         Expose the function as a remote procedure call(RPC) handler.
         """
-        return self._runner.run(self._rb.expose(fn))
+        return self.exec(self._rb.expose, fn)
 
     def unexpose(self, fn: Callable[..., Any]):
         """
         Unexpose the function as a remote procedure call(RPC) handler.
         """
-        return self._runner.run(self._rb.unexpose(fn))
+        return self.exec(self._rb.unexpose, fn)
 
     def reactive(self):
         """
         Set the component to receive published messages on subscribed topics.
         """
-        return self._runner.run(self._rb.reactive())
+        return self.exec(self._rb.reactive)
 
     def unreactive(self):
         """
         Set the component to stop receiving published
         messages on subscribed topics.
         """
-        return self._runner.run(self._rb.unreactive())
+        return self.exec(self._rb.unreactive)
 
     def wait(self, timeout: float | None = None):
         """
         Start the twin event loop that wait for rembus messages.
         """
-        return self._runner.run(self._rb.wait(timeout))
+        return self.exec(self._rb.wait, timeout)
 
     def close(self):
         """Close the connection and clean up resources."""
-        self._runner.run(self._rb.close())
+        self.exec(self._rb.close)
+        self._runner.shutdown()
+        self._runner = None
 
     def __enter__(self):
         return self
@@ -179,9 +194,10 @@ class node:  # pylint: disable=invalid-name
 
 def register(rid: str, pin: str, scheme: int = SIG_RSA, enc: int = CBOR):
     """Provisions the component with rid identifier."""
-    rb = node("ws:", enc=enc)
+    rburl = RbURL(rid)
+    rb = node(rid, enc=enc)
     try:
-        rb.register(rid, pin, scheme)
+        rb.register(rburl.id, pin, scheme)
     except Exception as e:
         logger.error("[%s] register: %s", rid, e)
         raise

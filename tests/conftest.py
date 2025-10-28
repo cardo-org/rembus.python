@@ -20,11 +20,10 @@ def server(port=8000):
     """
     rb = rembus.node(port=port)
     time.sleep(1)  # Give the server a moment to start
-    print(f"\n--- Rembus server started on port {port} ---")
+    logging.info("starting test rembus server")
     yield rb
-    print(f"--- Stopping Rembus server on port {port} ---")
+    logging.info("shutting down test rembus server")
     rb.close()
-    rb._runner.shutdown()
 
 
 def pytest_configure(config):  # pylint: disable=unused-argument

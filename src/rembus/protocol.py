@@ -5,7 +5,6 @@ to the Rembus protocol.
 import base64
 import os
 import logging
-from enum import IntEnum
 from typing import Any, List
 import json
 import cbor2
@@ -25,7 +24,7 @@ try:
 except ImportError:
     _HAS_PANDAS = False
 import pyarrow as pa
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, PrivateAttr, conint
 import rembus.settings as rs
 
 logger = logging.getLogger(__name__)
@@ -38,13 +37,14 @@ SIG_ECDSA = 0x2
 CBOR = 0
 JSON = 1
 
+UInt8 = conint(ge=0, le=255)
 
-class QOSLevel(IntEnum):
-    """The Pub/Sub message QOS level."""
-    QOS0 = 0x00
-    QOS1 = 0x10
-    QOS2 = 0x30
+QOS0 = UInt8(0x00)
+QOS1 = UInt8(0x10)
+QOS2 = UInt8(0x30)
+SLOT_FLAG = UInt8(0x40)
 
+MSGID_SZ = 8
 
 TYPE_IDENTITY = 0
 TYPE_PUB = 1
@@ -97,25 +97,31 @@ REMOVE_IMPL = 'unexpose'
 
 
 def msgid():
-    """Return an array of 16 random bytes."""
-    return int.from_bytes(os.urandom(16))
+    """Return an array of MSGID_SZ random bytes."""
+    return int.from_bytes(os.urandom(MSGID_SZ))
+
+
+def msgid_slot(slot: int):
+    """Return MSGID_SZ-4 random bytes and a 4 bytes slot embedded value."""
+    mid = int.from_bytes(os.urandom(MSGID_SZ))
+    return mid & 0xFFFFFFFF00000000 | (slot & 0xFFFFFFFF)
 
 
 def bytes2id(byte_data: bytearray) -> int:
     """
-    Converts a 16-byte bytearray to a UInt128 integer.
+    Converts a MSGID_SZ-byte bytearray to a UInt128 integer.
 
     Args:
-        byte_data: A bytearray of 16 bytes.
+        byte_data: A bytearray of MSGID_SZ bytes.
 
     Returns:
         A Python integer representing the UInt128 value.
     """
-    if len(byte_data) != 16:
-        raise ValueError("bytearray must be exactly 16 bytes long")
+    if len(byte_data) != MSGID_SZ:
+        raise ValueError(f"bytearray must be exactly {MSGID_SZ} bytes long")
 
     # Convert bytes to integer (assuming little-endian, adjust if big-endian)
-    return int.from_bytes(byte_data, byteorder='little', signed=False)
+    return from_bytes(byte_data)
 
 
 class RembusException(Exception):
@@ -151,8 +157,13 @@ class RembusError(RembusException):
 
 
 def to_bytes(val: int) -> bytes:
-    """Convert an int to 16 bytes"""
-    return val.to_bytes(16)
+    """Convert an int to MSGID_SZ bytes"""
+    return val.to_bytes(MSGID_SZ, 'little')
+
+
+def from_bytes(bval: bytes | bytearray) -> int:
+    """Convert MSGID_SZ bytes to an int"""
+    return int.from_bytes(bval, 'little')
 
 
 class RembusMsg(BaseModel):
@@ -234,20 +245,13 @@ class PubSubMsg(RembusMsg):
     id: int | None = None
     topic: str
     data: Any = None
-    flags: QOSLevel = QOSLevel.QOS0
+    flags: UInt8 = QOS0  # type: ignore[valid-type]
+    slot: int | None = None
 
     def to_payload(self, enc: int) -> bytes | str:
         """Return the PubSubMsg list of values to encode"""
-        if self.flags == QOSLevel.QOS0 or self.id is None:
-            if enc == CBOR:
-                return cbor2.dumps([TYPE_PUB, self.topic, df2tag(self.data)])
 
-            return json.dumps({
-                "jsonrpc": "2.0",
-                "method": self.topic,
-                "params": self.data
-            })
-        else:
+        if self.id is not None:
             if enc == CBOR:
                 return cbor2.dumps([
                     TYPE_PUB | self.flags,
@@ -265,6 +269,35 @@ class PubSubMsg(RembusMsg):
                     "data": self.data
                 }
             })
+        else:
+            if self.slot is None:
+                if enc == CBOR:
+                    return cbor2.dumps(
+                        [TYPE_PUB, self.topic, df2tag(self.data)]
+                    )
+
+                return json.dumps({
+                    "jsonrpc": "2.0",
+                    "method": self.topic,
+                    "params": self.data
+                })
+            else:
+                self.flags |= SLOT_FLAG
+                mid = to_bytes(self.slot)
+                if enc == CBOR:
+                    return cbor2.dumps([
+                        TYPE_PUB | self.flags,
+                        mid,
+                        self.topic,
+                        df2tag(self.data)
+                    ])
+
+                return json.dumps({
+                    "jsonrpc": "2.0",
+                    "id": mid,
+                    "method": self.topic,
+                    "params": self.data
+                })
 
 
 class AckMsg(RembusMsg):
@@ -472,7 +505,7 @@ def jsonprc_request(pkt, msg_id, params) -> RembusMsg:
         return RpcReqMsg(id=msg_id, topic=pkt["method"], data=params)
     else:
         msg_type = params.get("type")
-        if msg_type in [QOSLevel.QOS1, QOSLevel.QOS2]:
+        if msg_type in [QOS1, QOS2]:
             return PubSubMsg(
                 id=msg_id,
                 topic=pkt["method"],
@@ -555,18 +588,18 @@ def cbor_parse(pkt) -> RembusMsg:
     mtype = type_byte & 0x0F
     flags = type_byte & 0xF0
     if mtype == TYPE_PUB:
-        if flags == QOSLevel.QOS0:
+        if flags == QOS0:
             return PubSubMsg(topic=pkt[1], data=pkt[2])
         else:
             return PubSubMsg(
-                id=int.from_bytes(pkt[1]),
+                id=from_bytes(pkt[1]),
                 topic=pkt[2],
                 data=pkt[3],
                 flags=flags
             )
     elif mtype == TYPE_RPC:
         return RpcReqMsg(
-            id=int.from_bytes(pkt[1]),
+            id=from_bytes(pkt[1]),
             topic=pkt[2],
             target=pkt[3],
             data=pkt[4]
@@ -578,32 +611,32 @@ def cbor_parse(pkt) -> RembusMsg:
             data = None
 
         return ResMsg(
-            id=int.from_bytes(pkt[1]), status=pkt[2], data=data
+            id=from_bytes(pkt[1]), status=pkt[2], data=data
         )
     elif mtype == TYPE_ACK:
-        return AckMsg(id=int.from_bytes(pkt[1]))
+        return AckMsg(id=from_bytes(pkt[1]))
     elif mtype == TYPE_ACK2:
-        return Ack2Msg(id=int.from_bytes(pkt[1]))
+        return Ack2Msg(id=from_bytes(pkt[1]))
     elif mtype == TYPE_ADMIN:
         return AdminMsg(
-            id=int.from_bytes(pkt[1]), topic=pkt[2], data=pkt[3]
+            id=from_bytes(pkt[1]), topic=pkt[2], data=pkt[3]
         )
     elif mtype == TYPE_IDENTITY:
-        return IdentityMsg(id=int.from_bytes(pkt[1]), cid=pkt[2])
+        return IdentityMsg(id=from_bytes(pkt[1]), cid=pkt[2])
     elif mtype == TYPE_ATTESTATION:
         return AttestationMsg(
-            id=int.from_bytes(pkt[1]), cid=pkt[2], signature=pkt[3]
+            id=from_bytes(pkt[1]), cid=pkt[2], signature=pkt[3]
         )
     elif mtype == TYPE_REGISTER:
         return RegisterMsg(
-            id=int.from_bytes(pkt[1]),
+            id=from_bytes(pkt[1]),
             cid=pkt[2],
             pin=pkt[3],
             pubkey=pkt[4],
             type=pkt[5]
         )
     elif mtype == TYPE_UNREGISTER:
-        return UnregisterMsg(id=int.from_bytes(pkt[1]))
+        return UnregisterMsg(id=from_bytes(pkt[1]))
 
     raise ValueError('unknown message type')
 
