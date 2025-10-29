@@ -383,46 +383,51 @@ class Router(Supervised):
             await msg.twin.send(outmsg)
         return
 
+    async def _handle_identity(self, msg: rp.IdentityMsg) -> None:
+        twin_id = msg.cid
+        if self.isconnected(twin_id):
+            logger.warning("[%s] node with id [%s] is already connected", self, twin_id)
+            await msg.twin.close()
+        else:
+            logger.debug("[%s] identity: %s", self, msg.cid)
+            await self._auth_identity(msg)
+
+    async def _handle_attestation(self, msg: rp.AttestationMsg) -> None:
+        sts = self._verify_signature(msg)
+        await msg.twin.response(sts, msg)
+
+    async def _handle_admin(self, msg: rp.AdminMsg) -> None:
+        logger.debug("[%s] admin: %s", self, msg)
+        if msg.twin.isrepl():
+            await self.send_message(msg)
+        else:
+            await msg.twin.response(rp.STS_OK, msg)
+
     async def _task_impl(self) -> None:
         logger.debug("[%s] router started", self)
         while True:
             msg = await self.inbox.get()
-            if isinstance(msg, rp.PubSubMsg):
-                await self._pubsub_msg(msg)
-            elif isinstance(msg, rp.RpcReqMsg):
-                await self._rpcreq_msg(msg)
-            elif isinstance(msg, rp.IdentityMsg):
-                twin_id = msg.cid
-                sts = rp.STS_OK
-                if self.isconnected(twin_id):
-                    sts = rp.STS_ERROR
-                    logger.warning(
-                        "[%s] node with id [%s] is already connected",
-                        self,
-                        twin_id
-                    )
-                    await msg.twin.close()
-                else:
-                    logger.debug("[%s] identity: %s", self, msg.cid)
-                    await self._auth_identity(msg)
-            elif isinstance(msg, rp.AttestationMsg):
-                sts = self._verify_signature(msg)
-                await msg.twin.response(sts, msg)
-            elif isinstance(msg, rp.AdminMsg):
-                logger.debug("[%s] admin: %s", self, msg)
-                if msg.twin.isrepl():
-                    await self.send_message(msg)
-                else:
-                    await msg.twin.response(rp.STS_OK, msg)
-            elif isinstance(msg, rp.RegisterMsg):
-                logger.debug("[%s] register: %s", self, msg)
-                await self._register_node(msg)
-            elif isinstance(msg, rp.UnregisterMsg):
-                logger.debug("[%s] unregister: %s", self, msg)
-                await self._unregister_node(msg)
-            elif msg == "shutdown":
-                logger.debug("[%s] router shutting down", self)
-                break
+            match msg:
+                case "shutdown":
+                    logger.debug("[%s] router shutting down", self)
+                    break
+                case rp.PubSubMsg():
+                    await self._pubsub_msg(msg)
+                case rp.RpcReqMsg():
+                    await self._rpcreq_msg(msg)
+                case rp.IdentityMsg():
+                    await self._handle_identity(msg)
+                case rp.AttestationMsg():
+                    await self._handle_attestation(msg)
+                case rp.AdminMsg():
+                    await self._handle_admin(msg)
+                case rp.RegisterMsg():
+                    await self._register_node(msg)
+                case rp.UnregisterMsg():
+                    await self._unregister_node(msg)
+                case _:
+                    logger.warning("[%s] unknown message type: %s", self, type(msg).__name__)
+
 
     async def evaluate(self, twin, topic: str, data: Any) -> Any:
         """Invoke the handler associate with the message topic."""
@@ -664,34 +669,45 @@ for RPC, pub/sub, and other commands interactions.
         logger.debug("[%s] twin shutdown", self)
 
         if self.isclient or self.uid.isrepl():
+            await self._shutdown_router()
+
+        await self._close_socket()
+        await self._cancel_task("receiver")
+        await self._cancel_task("reconnect_task")
+
+        if self.uid.isrepl():
+            await self._shutdown_twins()
+
+
+    async def _shutdown_router(self):
+        if self.router:
             await self.router.shutdown()
 
+
+    async def _close_socket(self):
         if self.socket:
             await self.socket.close()
             self.socket = None
 
-        if self.receiver:
-            self.receiver.cancel()
+
+    async def _cancel_task(self, name: str):
+        task = getattr(self, name, None)
+        if task:
+            task.cancel()
             try:
-                await self.receiver
+                await task
             except asyncio.CancelledError:
                 pass
-            self.receiver = None
+            setattr(self, name, None)
 
-        if self.reconnect_task:
-            self.reconnect_task.cancel()
-            try:
-                await self.reconnect_task
-            except asyncio.CancelledError:
-                pass
-            self.reconnect_task = None
 
-        if self.uid.isrepl():
-            # close the twins (or the component of the pool)
-            for (_, t) in list(self.router.id_twin.items()):
-                t.handler["phase"] = lambda: "CLOSED"
-                if t.socket is not None:
-                    await t.shutdown()
+    async def _shutdown_twins(self):
+        # Close the twins (or the components of the pool)
+        for t in list(self.router.id_twin.values()):
+            t.handler["phase"] = lambda: "CLOSED"
+            if t.socket is not None:
+                await t.shutdown()
+
 
     async def _task_impl(self):
         logger.debug("[%s] task started", self)

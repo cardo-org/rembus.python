@@ -586,62 +586,50 @@ def jsonrpc_parse(payload) -> RembusMsg:
 
 
 def cbor_parse(pkt) -> RembusMsg:
-    """Get a Rembus message from a CBOR packet."""
+    """Parse a CBOR packet into a Rembus message."""
     type_byte = pkt[0]
     mtype = type_byte & 0x0F
     flags = type_byte & 0xF0
+
+    def f(idx):  # shortcut for from_bytes
+        return from_bytes(pkt[idx])
+
+    # Special cases first (because of flag-dependent structure)
     if mtype == TYPE_PUB:
         if flags == QOS0:
             return PubSubMsg(topic=pkt[1], data=pkt[2])
-        else:
-            return PubSubMsg(
-                id=from_bytes(pkt[1]),
-                topic=pkt[2],
-                data=pkt[3],
-                flags=flags
-            )
-    elif mtype == TYPE_RPC:
-        return RpcReqMsg(
-            id=from_bytes(pkt[1]),
-            topic=pkt[2],
-            target=pkt[3],
-            data=pkt[4]
-        )
-    elif mtype == TYPE_RESPONSE:
-        if len(pkt) > 3:
-            data = pkt[3]
-        else:
-            data = None
+        return PubSubMsg(id=f(1), topic=pkt[2], data=pkt[3], flags=flags)
 
+    if mtype == TYPE_RESPONSE:
         return ResMsg(
-            id=from_bytes(pkt[1]), status=pkt[2], data=data
+            id=f(1), status=pkt[2], data=pkt[3] if len(pkt) > 3 else None
         )
-    elif mtype == TYPE_ACK:
-        return AckMsg(id=from_bytes(pkt[1]))
-    elif mtype == TYPE_ACK2:
-        return Ack2Msg(id=from_bytes(pkt[1]))
-    elif mtype == TYPE_ADMIN:
-        return AdminMsg(
-            id=from_bytes(pkt[1]), topic=pkt[2], data=pkt[3]
-        )
-    elif mtype == TYPE_IDENTITY:
-        return IdentityMsg(id=from_bytes(pkt[1]), cid=pkt[2])
-    elif mtype == TYPE_ATTESTATION:
-        return AttestationMsg(
-            id=from_bytes(pkt[1]), cid=pkt[2], signature=pkt[3]
-        )
-    elif mtype == TYPE_REGISTER:
-        return RegisterMsg(
-            id=from_bytes(pkt[1]),
-            cid=pkt[2],
-            pin=pkt[3],
-            pubkey=pkt[4],
-            type=pkt[5]
-        )
-    elif mtype == TYPE_UNREGISTER:
-        return UnregisterMsg(id=from_bytes(pkt[1]))
 
-    raise ValueError('unknown message type')
+    # Dispatch table for the rest
+    table = {
+        TYPE_RPC:      lambda: RpcReqMsg(id=f(1),
+                                         topic=pkt[2],
+                                         target=pkt[3],
+                                         data=pkt[4]),
+        TYPE_ACK:      lambda: AckMsg(id=f(1)),
+        TYPE_ACK2:     lambda: Ack2Msg(id=f(1)),
+        TYPE_ADMIN:    lambda: AdminMsg(id=f(1), topic=pkt[2], data=pkt[3]),
+        TYPE_IDENTITY: lambda: IdentityMsg(id=f(1), cid=pkt[2]),
+        TYPE_ATTESTATION: lambda: AttestationMsg(id=f(1),
+                                                 cid=pkt[2],
+                                                 signature=pkt[3]),
+        TYPE_REGISTER: lambda: RegisterMsg(id=f(1),
+                                           cid=pkt[2],
+                                           pin=pkt[3],
+                                           pubkey=pkt[4],
+                                           type=pkt[5]),
+        TYPE_UNREGISTER: lambda: UnregisterMsg(id=f(1)),
+    }
+
+    try:
+        return table[mtype]()
+    except KeyError as e:
+        raise ValueError(f"unknown message type: {mtype}") from e
 
 
 def decode_dataframe(data: bytes) -> IntoFrame:
