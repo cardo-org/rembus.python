@@ -1,9 +1,7 @@
 """Test cases for the rembus API methods."""
 import asyncio
-import os
 import time
 import logging
-import signal
 import pytest
 import rembus
 import rembus.protocol as rp

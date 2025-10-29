@@ -662,25 +662,13 @@ for RPC, pub/sub, and other commands interactions.
     async def _shutdown(self):
         """Cleanup logic when shutting down the twin."""
         logger.debug("[%s] twin shutdown", self)
+
+        if self.isclient or self.uid.isrepl():
+            await self.router.shutdown()
+
         if self.socket:
             await self.socket.close()
             self.socket = None
-
-        # Sleep for avoiding the exception when teardown the event loop:
-        # PytestUnraisableExceptionWarning: Exception ignored in: <function _SelectorTransport.__del__ at 0x7ea82c191bc0>
-        #
-        # Traceback (most recent call last):
-        # File "python/3.13.3/lib/python3.13/asyncio/selector_events.py", line 874, in __del__
-        #   self._server._detach(self)
-        #   ~~~~~~~~~~~~~~~~~~~~^^^^^^
-        # File "python/3.13.3/lib/python3.13/asyncio/base_events.py", line 303, in _detach
-        #   self._wakeup()
-        #   ~~~~~~~~~~~~^^
-        # File "/home/adona/.asdf/installs/python/3.13.3/lib/python3.13/asyncio/base_events.py", line 308, in _wakeup
-        #   for waiter in waiters:
-        #                 ^^^^^^^
-        # TypeError: 'NoneType' object is not iterable
-        await asyncio.sleep(0.1)
 
         if self.receiver:
             self.receiver.cancel()
@@ -703,12 +691,7 @@ for RPC, pub/sub, and other commands interactions.
             for (_, t) in list(self.router.id_twin.items()):
                 t.handler["phase"] = lambda: "CLOSED"
                 if t.socket is not None:
-                    await t.socket.close()
-
-        if self.isclient or self.uid.isrepl():
-            await self.router.shutdown()
-
-        await self.shutdown()
+                    await t.shutdown()
 
     async def _task_impl(self):
         logger.debug("[%s] task started", self)

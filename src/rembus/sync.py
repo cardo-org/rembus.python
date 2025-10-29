@@ -1,6 +1,5 @@
 """Synchronous APIs."""
 import asyncio
-import atexit
 import logging
 import threading
 from types import TracebackType

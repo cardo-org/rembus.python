@@ -89,4 +89,4 @@ def test_publish(server):
         rb.publish("mytopic")
 
     server.unsubscribe(mytopic)
-    # server.wait(0.1)
+    server.wait(0.1)

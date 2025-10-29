@@ -1,7 +1,6 @@
 """Tests for miscellaneous error conditions."""
 import os
 import stat
-import time
 import pytest
 import cbor2
 import rembus

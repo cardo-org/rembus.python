@@ -252,6 +252,9 @@ class PubSubMsg(RembusMsg):
         """Return the PubSubMsg list of values to encode"""
 
         if self.id is not None:
+            if self.slot is not None:
+                self.flags |= SLOT_FLAG
+
             if enc == CBOR:
                 return cbor2.dumps([
                     TYPE_PUB | self.flags,
