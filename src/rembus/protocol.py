@@ -13,16 +13,8 @@ from cryptography.hazmat.primitives.asymmetric import rsa, ec
 from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
 from cryptography.hazmat.backends import default_backend
 from narwhals.typing import IntoFrame
-try:
-    import polars as pl
-    _HAS_POLARS = True
-except ImportError:
-    _HAS_POLARS = False
-try:
-    import pandas as pd
-    _HAS_PANDAS = True
-except ImportError:
-    _HAS_PANDAS = False
+import polars as pl
+import pandas as pd
 import pyarrow as pa
 from pydantic import BaseModel, PrivateAttr, conint
 import rembus.settings as rs
@@ -634,24 +626,15 @@ def decode_dataframe(data: bytes) -> IntoFrame:
     with pa.ipc.open_stream(buf) as reader:
         table = reader.read_all()
 
-    if _HAS_POLARS:
-        return pl.from_arrow(table)
-    elif _HAS_PANDAS:
-        return table.to_pandas()
-    else:
-        raise ImportError("neither polars nor pandas is installed")
+    return pl.from_arrow(table)
 
 
 def encode_dataframe(df: IntoFrame) -> cbor2.CBORTag:
     """Encode a pandas dataframe `df` to a CBOR tag value."""
-    if _HAS_POLARS and isinstance(df, pl.DataFrame):
+    if isinstance(df, pl.DataFrame):
         table = df.to_arrow()
-    elif _HAS_PANDAS and isinstance(df, pd.DataFrame):
-        table = pa.Table.from_pandas(df)
     else:
-        raise TypeError(
-            "unsupported dataframe type. Expected pandas or polars DataFrame"
-        )
+        table = pa.Table.from_pandas(df)
 
     sink = pa.BufferOutputStream()
     with pa.ipc.new_stream(sink, table.schema) as writer:

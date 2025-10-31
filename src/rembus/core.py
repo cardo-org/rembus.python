@@ -202,16 +202,12 @@ class Supervised:
 
             if self._task and not self._task.done():
                 await shutdown_message(self)
-                try:
-                    await self._task
-                except asyncio.CancelledError:
-                    logger.debug("[%s] supervised task cancelled", self)
+                await self._task
 
             if self._supervisor_task and not self._supervisor_task.done():
                 self._supervisor_task.cancel()
                 try:
                     await self._supervisor_task
-                    logger.debug("[%s] supervisor task cancelled", self)
                 except asyncio.CancelledError:
                     pass
             logger.debug("[%s] shutdown complete", self)
