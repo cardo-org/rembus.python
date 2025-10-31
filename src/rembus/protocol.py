@@ -297,7 +297,7 @@ class PubSubMsg(RembusMsg):
 
                 return json.dumps({
                     "jsonrpc": "2.0",
-                    "id": mid,
+                    "id": self.slot,
                     "method": self.topic,
                     "params": self.data
                 })
@@ -434,9 +434,6 @@ class RegisterMsg(RembusMsg):
     pubkey: bytes | str
     type: int
 
-    def __str__(self):
-        return f'RegisterMsg:{self.cid}'
-
     def to_payload(self, enc: int) -> bytes | str:
         """Return the RegisterMsg list of values to encode"""
         if enc == CBOR:
@@ -468,9 +465,6 @@ class UnregisterMsg(RembusMsg):
     its public key from the remote peer.
     """
     id: int
-
-    def __str__(self):
-        return f'UnregisterMsg:{self._twin}'
 
     def to_payload(self, enc: int) -> bytes | str:
         """Return the UnregisterMsg list of values to encode"""

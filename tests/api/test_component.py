@@ -153,6 +153,7 @@ async def test_publish_slot():
         server.router) == "broker: {'cmp.net@ws://127.0.0.1:8000': cmp.net}"
     assert repr(rb.uid) == "ws://127.0.0.1:8007/cmp.net"
     assert rembus.core.domain(rb.rid) == "net"
+    await rb.publish("mytopic", slot=1234)
     await rb.publish("mytopic", slot=1234, qos=rp.QOS2)
     await rb.publish("mytopic", "log_warning", slot=1234, qos=rp.QOS1)
 
@@ -160,12 +161,9 @@ async def test_publish_slot():
     server.close()
 
 
-async def test_cancel_supervisor_task():
+async def test_cancel_server_task():
     """Test shutdown in case of task cancellation"""
     server = await rembus.component(port=8000)
 
-    server_wait_task = asyncio.create_task(
-        server.wait(), name="server_wait_task")
-    await asyncio.sleep(1)
-    server_wait_task.cancel()
-    await server_wait_task
+    await asyncio.sleep(0)
+    server._task.cancel()

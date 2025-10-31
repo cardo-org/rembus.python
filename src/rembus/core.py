@@ -168,7 +168,7 @@ class Supervised:
 
     async def _supervisor(self) -> None:
         """
-        Supervises the _task_impl, restarting it if it exits
+        Supervises the _task_impl, restarting if it exits
         unexpectedly or due to an exception.
         """
         while self._should_run:
@@ -425,8 +425,6 @@ class Router(Supervised):
                     await self._register_node(msg)
                 case rp.UnregisterMsg():
                     await self._unregister_node(msg)
-                case _:
-                    logger.warning("[%s] unknown message type: %s", self, type(msg).__name__)
 
 
     async def evaluate(self, twin, topic: str, data: Any) -> Any:
@@ -840,7 +838,6 @@ for RPC, pub/sub, and other commands interactions.
 
     async def send(self, msg: rp.RembusMsg):
         """Send a rembus message"""
-        pkt = msg.to_payload(self.enc)
         if self.isrepl() and self.isopen():
             await self.router.inbox.put(msg)
         elif self.socket is None:
@@ -1123,8 +1120,6 @@ for RPC, pub/sub, and other commands interactions.
         if self._supervisor_task is not None:
             try:
                 await asyncio.wait([self._supervisor_task], timeout=timeout)
-            except asyncio.exceptions.CancelledError:
-                pass
             finally:
                 await self.shutdown()
 

@@ -36,10 +36,7 @@ class AsyncLoopRunner:
     def shutdown(self):
         """Shutdown the event loop and wait for the thread to finish."""
         if not self.loop.is_closed():
-            try:
-                self.loop.call_soon_threadsafe(self.loop.stop)
-            except RuntimeError:
-                return
+            self.loop.call_soon_threadsafe(self.loop.stop)
 
             # Wait briefly for the thread to exit
             self._thread.join(timeout=1.0)
