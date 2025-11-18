@@ -507,7 +507,7 @@ def jsonprc_request(pkt, msg_id, params) -> RembusMsg:
             return AdminMsg(
                 id=msg_id,
                 topic=pkt["method"],
-                data=pkt.get("data")
+                data=params.get("data")
             )
         elif msg_type == TYPE_ATTESTATION:
             sig = params.get("signature")

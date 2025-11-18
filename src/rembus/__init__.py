@@ -1,9 +1,6 @@
 from importlib.metadata import version, PackageNotFoundError
 
-try:
-    __version__ = version("rembus")
-except PackageNotFoundError:
-    __version__ = "0.0.0"
+__version__ = version("rembus")
 
 # import logging
 from .core import component, RbURL  # noqa: F401
