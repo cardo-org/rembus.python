@@ -1,17 +1,27 @@
-
 import logging
 import rembus.protocol as rp
 
 logger = logging.getLogger(__name__)
 
-async def admin_command(msg:rp.AdminMsg):
+
+def upsert_twin(lst, twin):
+    """Insert a new twin or update the list with the reconnected twin."""
+    if twin in lst:
+        idx = lst.index(twin)
+        lst.pop(idx)
+        lst.insert(idx, twin)
+    else:
+        lst.append(twin)
+
+async def admin_command(msg: rp.AdminMsg):
     """Handle admin commands"""
     twin = msg.twin
     topic = msg.topic
     if not isinstance(msg.data, dict) or rp.COMMAND not in msg.data:
-        logger.warning("admin error: %s", msg.data)
+        logger.warning("admin error: expected cmd property (got: %s)", msg.data)
         await twin.response(rp.STS_ERROR, msg)
-    
+        return
+
     router = twin.router
     cmd = msg.data[rp.COMMAND]
     if cmd == rp.ADD_IMPL:
@@ -20,9 +30,8 @@ async def admin_command(msg:rp.AdminMsg):
         )
         if topic not in router.exposers:
             router.exposers[topic] = []
-        
-        if twin not in router.exposers[topic]:
-            router.exposers[topic].append(twin)
+
+        upsert_twin(router.exposers[topic], twin)
 
     elif cmd == rp.REMOVE_IMPL:
         if topic in router.exposers:
@@ -35,9 +44,8 @@ async def admin_command(msg:rp.AdminMsg):
         )
         if topic not in router.subscribers:
             router.subscribers[topic] = []
-        
-        if twin not in router.subscribers[topic]:
-            router.subscribers[topic].append(twin)
+
+        upsert_twin(router.subscribers[topic], twin)
 
     elif cmd == rp.REMOVE_INTEREST:
         if topic in router.subscribers:

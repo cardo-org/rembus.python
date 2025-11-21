@@ -2,13 +2,16 @@
 The core module of the Rembus library that includes implementations for the
 Router and Twin concepts.
 """
+
+from __future__ import annotations
 import asyncio
 from contextlib import suppress
 import base64
 import logging
 import os
 import time
-from typing import Callable, Any, Optional, List
+import traceback
+from typing import Callable, Any, Optional, List, cast
 import ssl
 from urllib.parse import urlparse
 import uuid
@@ -25,14 +28,15 @@ from .admin import admin_command
 
 logger = logging.getLogger(__name__)
 
+
 def domain(s: str) -> str:
     """Return the domain part from the string.
 
     If no domain is found, return the root domain ".".
     """
-    dot_index = s.find('.')
+    dot_index = s.find(".")
     if dot_index != -1:
-        return s[dot_index + 1:]
+        return s[dot_index + 1 :]
     else:
         return "."
 
@@ -56,12 +60,13 @@ async def get_response(obj: Any) -> Any:
     else:
         return obj
 
+
 class FutureResponse:
     """
     Encapsulate a future response for a request.
     """
 
-    def __init__(self, task:asyncio.Task|None, data: Any = None):
+    def __init__(self, task: asyncio.Task | None, data: Any = None):
         self.future = asyncio.get_running_loop().create_future()
         self.task = task
         self.data = data
@@ -84,21 +89,20 @@ class RbURL:
     """
 
     def __init__(self, url: str | None = None) -> None:
-        default_url = os.getenv('REMBUS_BASE_URL', "ws://127.0.0.1:8000")
+        default_url = os.getenv("REMBUS_BASE_URL", "ws://127.0.0.1:8000")
         baseurl = urlparse(default_url)
         uri = urlparse(url)
 
         if uri.scheme == "repl":
             self.protocol = uri.scheme
-            self.hostname = ''
+            self.hostname = ""
             self.port = 0
             self.hasname = False
-            self.id = 'repl'
+            self.id = "repl"
         else:
             if isinstance(uri.path, str) and uri.path:
                 self.hasname = True
-                self.id = uri.path[1:] if uri.path.startswith(
-                    "/") else uri.path
+                self.id = uri.path[1:] if uri.path.startswith("/") else uri.path
             else:
                 self.hasname = False
                 self.id = randname()
@@ -156,9 +160,15 @@ class Supervised:
     Subclasses must implement the '_task_impl' coroutine.
     """
 
+    downstream: Supervised | None
+    upstream: Supervised | None
+
     def __init__(self):
+        self.upstream = None
+        self.downstream = None
         self._task: Optional[asyncio.Task[None]] = None
         self._supervisor_task: Optional[asyncio.Task[None]] = None
+        self.inbox: asyncio.Queue[Any] = asyncio.Queue()
         self._should_run = True  # Flag to control supervisor loop
 
     async def _shutdown(self) -> None:
@@ -194,8 +204,9 @@ class Supervised:
 
     async def shutdown(self) -> None:
         """Gracefully stops the supervised worker and its supervisor."""
-        logger.debug("[%s] shutting down (should_run: %s)",
-                     self, self._should_run)
+        logger.debug(
+            "[%s] shutting down (should_run: %s)", self, self._should_run
+        )
         if self._should_run:
             self._should_run = False
 
@@ -249,7 +260,6 @@ class Router(Supervised):
         self.handler: dict[str, Callable[..., Any]] = {}
         self.exposers: dict[str, list[Twin]] = {}
         self.subscribers: dict[str, list[Twin]] = {}
-        self.inbox: asyncio.Queue[Any] = asyncio.Queue()
         self.shared: Any = None
         self.serve_task: Optional[asyncio.Task[None]] = None
         self.server_instance = None  # To store the server object
@@ -270,7 +280,7 @@ class Router(Supervised):
     def isconnected(self, rid: str) -> bool:
         """Check if a component with the given rid is connected."""
         for tk in self.id_twin:
-            if tk.startswith(rid+'@'):
+            if tk.startswith(rid + "@"):
                 return True
         return False
 
@@ -285,7 +295,7 @@ class Router(Supervised):
 
     async def init_twin(self, uid: RbURL, enc: int, isserver: bool):
         """Create and start a Twin"""
-        cmp = Twin(uid, self, not isserver, enc)
+        cmp = Twin(uid, bottom_router(self), not isserver, enc)
         if not uid.isrepl():
             self.id_twin[uid.twkey] = cmp
 
@@ -327,16 +337,17 @@ class Router(Supervised):
         data = rp.tag2df(msg.data)
         try:
             if msg.topic in self.handler:
-                await self.evaluate(self, msg.topic, data)
+                await self.evaluate(msg.twin, msg.topic, data)
 
-            for t in self.id_twin.values():
+            subs = self.subscribers.get(msg.topic, [])
+            for t in subs:
                 if t != twin:
                     # Do not send back to publisher.
                     await t.send(msg)
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.warning("[%s] error in method invocation: %s", self, e)
-
+            traceback.print_exc()
         return
 
     async def send_message(self, msg):
@@ -353,36 +364,34 @@ class Router(Supervised):
                     fut.future.set_result(data)
                 break
 
-    def select_twin(self, topic):
+    def _select_twin(self, topic):
         twins = self.exposers[topic]
         if self.policy == "first_up":
             return next((t for t in twins if t.isopen()), None)
 
-
     async def _rpcreq_msg(self, msg: rp.RpcReqMsg):
         """Handle an RPC request."""
         data = rp.tag2df(msg.data)
+        logger.debug("[%s] rpc: %s", self, msg)
         if msg.twin.isrepl():
             await self.send_message(msg)
         elif msg.topic in self.handler:
             status = rp.STS_OK
             try:
-                output = await self.evaluate(self, msg.topic, data)
+                output = await self.evaluate(msg.twin, msg.topic, data)
             except Exception as e:  # pylint: disable=broad-exception-caught
                 status = rp.STS_METHOD_EXCEPTION
                 output = f"{e}"
                 logger.debug("exception: %s", e)
-            outmsg = rp.ResMsg(
-                id=msg.id, status=status, data=rp.df2tag(output)
-            )
+            outmsg = rp.ResMsg(id=msg.id, status=status, data=rp.df2tag(output))
             await msg.twin.send(outmsg)
         elif msg.topic in self.exposers:
-            target_twin = self.select_twin(msg.topic)
-            logger.debug("[%s] sending to [%s]", self, target_twin)
-            futreq = target_twin.send_task(msg)
-            response = await target_twin.wait_response(futreq)
-            logger.debug("[%s] response: %s", target_twin, response)
-            await msg.twin.send(response)
+            target_twin = self._select_twin(msg.topic)
+            logger.debug("[%s] target twin: %s", self, target_twin)
+            if target_twin is not None:
+                logger.debug("[%s] sending to [%s]", self, target_twin)
+                # dispatch to the target twin
+                await target_twin.inbox.put(msg)
         else:
             outmsg = rp.ResMsg(
                 id=msg.id, status=rp.STS_METHOD_NOT_FOUND, data=msg.topic
@@ -393,7 +402,9 @@ class Router(Supervised):
     async def _handle_identity(self, msg: rp.IdentityMsg) -> None:
         twin_id = msg.cid
         if self.isconnected(twin_id):
-            logger.warning("[%s] node with id [%s] is already connected", self, twin_id)
+            logger.warning(
+                "[%s] node with id [%s] is already connected", self, twin_id
+            )
             await msg.twin.close()
         else:
             logger.debug("[%s] identity: %s", self, msg.cid)
@@ -411,6 +422,7 @@ class Router(Supervised):
             await admin_command(msg)
 
     async def _task_impl(self) -> None:
+        """Switch messages between twins."""
         logger.debug("[%s] router started", self)
         while True:
             msg = await self.inbox.get()
@@ -447,8 +459,12 @@ class Router(Supervised):
     async def _client_receiver(self, ws):
         """Receive messages from the client component."""
         url = RbURL()
-        twin = Twin(url, self, False)
-        self.id_twin[url.twkey] = twin
+        if url.twkey in self.id_twin:
+            twin = self.id_twin[url.twkey]
+        else:
+            twin = Twin(url, bottom_router(self), False)
+            self.id_twin[url.twkey] = twin
+
         twin.socket = ws
         await twin.twin_receiver()
 
@@ -466,14 +482,14 @@ class Router(Supervised):
             ssl_context.load_cert_chain(cert_path, keyfile=key_path)
 
         async with serve(
-                self._client_receiver,
-                "0.0.0.0",
-                port,
-                ssl=ssl_context,
-                ping_interval=self.config.ws_ping_interval,) as server:
+            self._client_receiver,
+            "0.0.0.0",
+            port,
+            ssl=ssl_context,
+            ping_interval=self.config.ws_ping_interval,
+        ) as server:
             self.server_instance = server
             await self._shutdown_event.wait()
-            # await server.serve_forever()
 
     def _needs_auth(self, cid: str):
         """Check if the component needs authentication."""
@@ -504,8 +520,9 @@ class Router(Supervised):
 
             pubkey = rp.load_public_key(self, cid)
             if isinstance(pubkey, rsa.RSAPublicKey):
-                pubkey.verify(signature, plain,
-                              padding.PKCS1v15(), hashes.SHA256())
+                pubkey.verify(
+                    signature, plain, padding.PKCS1v15(), hashes.SHA256()
+                )
             elif isinstance(pubkey, ec.EllipticCurvePublicKey):
                 pubkey.verify(signature, plain, ec.ECDSA(hashes.SHA256()))
 
@@ -523,7 +540,7 @@ class Router(Supervised):
         return rp.ResMsg(
             id=msg.id,
             status=rp.STS_CHALLENGE,
-            data=bytes_to_b64(challenge_val, twin.enc)
+            data=bytes_to_b64(challenge_val, twin.enc),
         )
 
     async def _auth_identity(self, msg: rp.IdentityMsg):
@@ -582,8 +599,8 @@ class Router(Supervised):
             await msg.twin.response(sts, msg, reason)
 
 
-
-def response_data(msg:rp.ResMsg):
+def response_data(msg: rp.ResMsg):
+    """Return the response data or raise an exception on error."""
     sts = msg.status
     if sts == rp.STS_OK:
         return rp.tag2df(msg.data)
@@ -592,19 +609,21 @@ def response_data(msg:rp.ResMsg):
     else:
         raise rp.RembusError(sts, msg.data)
 
+
 class Twin(Supervised):
     """
-A Twin represents a Rembus component, either as a client or server.
-It handles the connection, message sending and receiving, and provides methods
-for RPC, pub/sub, and other commands interactions.
+    A Twin represents a Rembus component, either as a client or server.
+    It handles the connection, message sending and receiving, and provides methods
+    for RPC, pub/sub, and other commands interactions.
     """
 
     def __init__(
-            self,
-            uid: RbURL,
-            router: Router,
-            isclient: bool = True,
-            enc: int = rp.CBOR):
+        self,
+        uid: RbURL,
+        router: Supervised,
+        isclient: bool = True,
+        enc: int = rp.CBOR,
+    ):
         super().__init__()
         self.isclient = isclient
         self.enc = enc
@@ -612,7 +631,6 @@ for RPC, pub/sub, and other commands interactions.
         self.socket: websockets.ClientConnection | None = None
         self.receiver = None
         self.uid = uid
-        self.inbox: asyncio.Queue[str] = asyncio.Queue()
         self.handler: dict[str, Callable[..., Any]] = {}
         self.outreq: dict[int, FutureResponse] = {}
         self.reconnect_task: Optional[asyncio.Task[None]] = None
@@ -628,9 +646,6 @@ for RPC, pub/sub, and other commands interactions.
 
     def __eq__(self, other):
         return isinstance(other, Twin) and self.rid == other.rid
-
-    def __hash__(self):
-        return hash(self.rid)
 
     @property
     def rid(self):
@@ -648,8 +663,12 @@ for RPC, pub/sub, and other commands interactions.
 
     @property
     def router(self):
-        """Return the router associated with this twin."""
-        return self._router
+        """Return the top router associated with this twin."""
+        return top_router(self._router)
+
+    @router.setter
+    def router(self, plugin: Supervised):
+        self._router = plugin
 
     def isrepl(self) -> bool:
         """Check if twin is a REPL"""
@@ -660,8 +679,10 @@ for RPC, pub/sub, and other commands interactions.
         if self.isrepl():
             return any([t.isopen() for t in self.router.id_twin.values()])
         else:
-            return (self.socket is not None and
-                    self.socket.state == websockets.State.OPEN)
+            return (
+                self.socket is not None
+                and self.socket.state == websockets.State.OPEN
+            )
 
     async def response(self, status: int, msg: Any, data: Any = None):
         """Send a response to the client."""
@@ -698,17 +719,14 @@ for RPC, pub/sub, and other commands interactions.
         if self.uid.isrepl():
             await self._shutdown_twins()
 
-
     async def _shutdown_router(self):
         if self.router:
             await self.router.shutdown()
-
 
     async def _close_socket(self):
         if self.socket:
             await self.socket.close()
             self.socket = None
-
 
     async def _cancel_task(self, name: str):
         task = getattr(self, name, None)
@@ -720,7 +738,6 @@ for RPC, pub/sub, and other commands interactions.
                 pass
             setattr(self, name, None)
 
-
     async def _shutdown_twins(self):
         # Close the twins (or the components of the pool)
         for t in list(self.router.id_twin.values()):
@@ -728,18 +745,25 @@ for RPC, pub/sub, and other commands interactions.
             if t.socket is not None:
                 await t.shutdown()
 
-
     async def _task_impl(self):
         logger.debug("[%s] task started", self)
         while True:
-            msg: str = await self.inbox.get()
+            msg: Any = await self.inbox.get()
             logger.debug("[%s] twin_task: %s", self, msg)
             if msg == "reconnect":
                 if not self.reconnect_task:
-                    self.reconnect_task = asyncio.create_task(
-                        self._reconnect())
+                    self.reconnect_task = asyncio.create_task(self._reconnect())
             elif msg == "shutdown":
                 break
+            elif isinstance(msg, rp.RpcReqMsg):
+                await self._rpc_to_target(msg)
+
+    async def _rpc_to_target(self, msg):
+        await self.send(msg)
+        futreq = FutureResponse(None, msg.data)
+        self.outreq[msg.id] = futreq
+        response = await self.wait_response(futreq)
+        await msg.twin.send(response)
 
     async def twin_receiver(self):
         """Receive messages from the WebSocket connection."""
@@ -759,7 +783,7 @@ for RPC, pub/sub, and other commands interactions.
                 await self._eval_input(msg)
         except (
             websockets.ConnectionClosedOK,
-            websockets.ConnectionClosedError
+            websockets.ConnectionClosedError,
         ) as e:
             logger.debug("connection closed: %s", e)
         except Exception as e:  # pylint: disable=broad-exception-caught
@@ -778,8 +802,11 @@ for RPC, pub/sub, and other commands interactions.
         """Return the future associated with the message id `msgid`."""
         fut = self.outreq.pop(msgid, None)
         if fut is None:
-            logger.warning("[%s] recv unknown msg id %s",
-                           self, rp.tohex(rp.to_bytes(msgid)))
+            logger.warning(
+                "[%s] recv unknown msg id %s",
+                self,
+                rp.tohex(rp.to_bytes(msgid)),
+            )
         elif fut.future.done():
             return None
 
@@ -819,7 +846,7 @@ for RPC, pub/sub, and other commands interactions.
         elif isinstance(msg, rp.Ack2Msg):
             await self._ack2_msg(msg)
         else:
-            self.router.inbox.put_nowait(msg)
+            self._router.inbox.put_nowait(msg)
 
     async def connect(self):
         """Connect to the broker."""
@@ -837,7 +864,7 @@ for RPC, pub/sub, and other commands interactions.
             broker_url,
             ping_interval=self.router.config.ws_ping_interval,
             max_size=rp.WS_FRAME_MAXSIZE,
-            ssl=ssl_context
+            ssl=ssl_context,
         )
         self.handler["phase"] = lambda: "CONNECTING"
         self.receiver = asyncio.create_task(self.twin_receiver())
@@ -861,41 +888,31 @@ for RPC, pub/sub, and other commands interactions.
         if self.socket is not None:
             await self.socket.send(payload)
 
-    def _qos_send(
-            self,
-            msgid: int,
-            msg: rp.PubSubMsg) -> Any:
+    def _qos_send(self, msgid: int, msg: rp.PubSubMsg) -> Any:
         """Send a pubsub message and wait for the ack."""
         task = asyncio.create_task(self.send(msg))
         futreq = FutureResponse(task, msg.flags & rp.QOS2 == rp.QOS2)
         self.outreq[msgid] = futreq
         return futreq
 
-
-    async def _send_message(
-            self,
-            builder: Callable,
-            data: Any = None) -> Any:
+    async def _send_message(self, builder: Callable, data: Any = None) -> Any:
         """Send a message and wait for a response."""
         reqid = rp.msgid()
         req = builder(reqid)
         req.twin = self
         task = None
         if self.isrepl() and self.isopen():
-            await self.router.inbox.put(req)
+            await self._router.inbox.put(req)
         elif self.socket is None:
             raise rp.RembusConnectionClosed()
         else:
             task = asyncio.create_task(self.send(req))
-        
+
         futreq = FutureResponse(task, data)
         self.outreq[reqid] = futreq
         return futreq
-    
-    def send_task(
-            self,
-            msg: rp.RpcReqMsg
-        ) -> Any:
+
+    def send_task(self, msg: rp.RpcReqMsg) -> Any:
         """Send a message and wait for a response."""
         task = asyncio.create_task(self.send(msg))
         futreq = FutureResponse(task, msg.data)
@@ -910,7 +927,6 @@ for RPC, pub/sub, and other commands interactions.
                 return await futreq.future
         except TimeoutError as e:
             raise rp.RembusTimeout() from e
-
 
     async def _login(self):
         """Connect in free mode or authenticate the provisioned component."""
@@ -928,17 +944,20 @@ for RPC, pub/sub, and other commands interactions.
             privatekey = rp.load_private_key(self.uid.id)
             if isinstance(privatekey, rsa.RSAPrivateKey):
                 signature: bytes = privatekey.sign(
-                    message, padding.PKCS1v15(), hashes.SHA256())
+                    message, padding.PKCS1v15(), hashes.SHA256()
+                )
             elif isinstance(privatekey, ec.EllipticCurvePrivateKey):
                 signature: bytes = privatekey.sign(
-                    message, ec.ECDSA(hashes.SHA256()))
+                    message, ec.ECDSA(hashes.SHA256())
+                )
 
             futreq = await self._send_message(
                 lambda id: rp.AttestationMsg(
                     id=id,
                     cid=self.uid.id,
-                    signature=bytes_to_b64(signature, self.enc)
-                ))
+                    signature=bytes_to_b64(signature, self.enc),
+                )
+            )
             response = await self.wait_response(futreq)
             response_data(response)
         else:
@@ -953,7 +972,7 @@ for RPC, pub/sub, and other commands interactions.
             msg = rp.PubSubMsg(topic=topic, data=data, slot=slot)
             msg.twin = self
             if self.isrepl() and self.isopen():
-                await self.router.inbox.put(msg)
+                await self._router.inbox.put(msg)
             elif self.socket is None:
                 raise rp.RembusConnectionClosed()
             else:
@@ -965,14 +984,14 @@ for RPC, pub/sub, and other commands interactions.
 
     async def put(self, topic: str, *args: Any, **kwargs):
         """Publish a message to the topic prefixed with component name."""
-        await self.publish(self.rid + '/' + topic, *args, **kwargs)
+        await self.publish(self.rid + "/" + topic, *args, **kwargs)
 
     async def _qos_publish(
-            self,
-            topic: str,
-            data: tuple,
-            qos: rp.UInt8,  # type: ignore[valid-type]
-            slot: int | None
+        self,
+        topic: str,
+        data: tuple,
+        qos: rp.UInt8,  # type: ignore[valid-type]
+        slot: int | None,
     ):
         done = False
         max_retries = self.router.config.send_retries
@@ -989,7 +1008,7 @@ for RPC, pub/sub, and other commands interactions.
                     reqid,
                     rp.PubSubMsg(
                         id=reqid, topic=topic, data=data, flags=qos, slot=slot
-                    )
+                    ),
                 )
                 async with async_timeout.timeout(
                     self.router.config.request_timeout
@@ -1011,7 +1030,7 @@ for RPC, pub/sub, and other commands interactions.
         return response_data(response)
 
     async def setting(
-            self, topic: str, command: str, args: dict[str, Any] | None = None
+        self, topic: str, command: str, args: dict[str, Any] | None = None
     ):
         """Send an admin command to the broker."""
         if self.socket:
@@ -1034,13 +1053,14 @@ for RPC, pub/sub, and other commands interactions.
         )
         response = await self.wait_response(futreq)
         return response_data(response)
-    
+
     async def direct(self, target: str, topic: str, *args: Any):
         """Send a RPC request to a specific target."""
         data = rp.df2tag(args)
         futreq = await self._send_message(
             lambda id: rp.RpcReqMsg(
-                id=id, topic=topic, target=target, data=data)
+                id=id, topic=topic, target=target, data=data
+            )
         )
         response = await self.wait_response(futreq)
         return response_data(response)
@@ -1058,20 +1078,19 @@ for RPC, pub/sub, and other commands interactions.
 
         futreq = await self._send_message(
             lambda id: rp.RegisterMsg(
-                id=id, cid=rid, pin=pin, pubkey=pubkey, type=scheme)
+                id=id, cid=rid, pin=pin, pubkey=pubkey, type=scheme
+            )
         )
         response = await self.wait_response(futreq)
         response_data(response)
 
         logger.debug("cid %s registered", rid)
         rp.save_private_key(rid, privkey)
-        return None 
+        return None
 
     async def unregister(self):
         """Unprovisions the component."""
-        futreq = await self._send_message(
-            lambda id: rp.UnregisterMsg(id=id)
-        )
+        futreq = await self._send_message(lambda id: rp.UnregisterMsg(id=id))
         response = await self.wait_response(futreq)
         with suppress(FileNotFoundError):
             os.remove(os.path.join(rs.rembus_dir(), self.uid.id, ".secret"))
@@ -1094,10 +1113,10 @@ for RPC, pub/sub, and other commands interactions.
         return self
 
     async def subscribe(
-            self,
-            fn: Callable[..., Any],
-            retroactive: bool = False,
-            topic: Optional[str] = None
+        self,
+        fn: Callable[..., Any],
+        retroactive: bool = False,
+        topic: Optional[str] = None,
     ):
         """
         Subscribe the function to the corresponding topic.
@@ -1105,17 +1124,19 @@ for RPC, pub/sub, and other commands interactions.
         if topic is None:
             topic = fn.__name__
 
-        await self.setting(
-            topic, rp.ADD_INTEREST, {"retroactive": retroactive}
-        )
+        await self.setting(topic, rp.ADD_INTEREST, {"retroactive": retroactive})
         self.router.handler[topic] = fn
         return self
 
-    async def unsubscribe(self, fn: Callable[..., Any]):
+    async def unsubscribe(
+        self, fn: Callable[..., Any], topic: Optional[str] = None
+    ):
         """
         Unsubscribe the function from the corresponding topic.
         """
-        topic = fn.__name__
+        if topic is None:
+            topic = fn.__name__
+
         await self.setting(topic, rp.REMOVE_INTEREST)
         self.router.handler.pop(topic, None)
         return self
@@ -1155,15 +1176,53 @@ for RPC, pub/sub, and other commands interactions.
                 await self.shutdown()
 
 
+def top_router(router: Supervised) -> Router:
+    """Return the topmost router (the core router)."""
+    r = router
+    while r.downstream is not None:
+        r = r.downstream
+    return cast(Router, r)
+
+
+def bottom_router(router: Supervised) -> Supervised:
+    """Return the router attached to the twins (the lowest router in the chain)."""
+    r = router
+    while r.upstream is not None:
+        r = r.upstream
+    return r
+
+
+def alltwins(router):
+    """Get all the connected twins."""
+    r = top_router(router)
+    return [tw for tw in r.id_twin.values() if tw.rid != "__repl__"]
+
+
+def add_plugin(twin: Twin, plugin: Supervised):
+    """Add a plugin router in front of the current twin router."""
+    router = twin.router
+    router.upstream = plugin
+    plugin.downstream = router
+    twin.router = plugin
+    plugin.start()
+    logger.info("[%s] added plugin %s", twin, plugin)
+    for tw in alltwins(router):
+        tw.router = plugin
+
+
 async def component(
     url: str | List[str] | None = None,
     name: str | None = None,
     port: int | None = None,
     secure: bool = False,
-    enc: int = rp.CBOR
+    enc: int = rp.CBOR,
 ) -> Twin:
     """Return a Rembus component."""
-    isserver = (port is not None) and (url is None)
+    isserver = (url is None) or (port is not None)
+
+    if isserver and port is None:
+        port = rs.DEFAULT_PORT
+
     if isinstance(url, str):
         uid = RbURL(url)
     else:

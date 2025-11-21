@@ -1,4 +1,5 @@
 """Test cases for the rembus API methods."""
+
 import asyncio
 import time
 import logging
@@ -41,7 +42,7 @@ async def test_wait():
 
 async def myservice(x, y):
     """A simple service that adds two numbers."""
-    return x+y
+    return x + y
 
 
 async def test_rpc():
@@ -52,7 +53,7 @@ async def test_rpc():
     rb = await rembus.component("ws://:8002")
     server.expose(myservice)
     result = await rb.rpc("myservice", x, y)
-    assert result == x+y
+    assert result == x + y
     server.unexpose(myservice)
     await rb.close()
     with pytest.raises(rp.RembusConnectionClosed):
@@ -65,7 +66,7 @@ async def myservice_ctx(_, __, x, y):
     A service that adds two numbers,
     expecting a context and a rembus handle.
     """
-    return x+y
+    return x + y
 
 
 async def test_rpc_ctx():
@@ -78,7 +79,7 @@ async def test_rpc_ctx():
     server.expose(myservice_ctx)
     server.inject(ctx)
     result = await rb.rpc("myservice_ctx", x, y)
-    assert result == x+y
+    assert result == x + y
     await rb.close()
     server.close()
 
@@ -91,7 +92,7 @@ async def test_direct():
     rb = await rembus.component("ws://:8004")
     server.expose(myservice)
     result = await rb.direct(rembus.settings.DEFAULT_BROKER, "myservice", x, y)
-    assert result == x+y
+    assert result == x + y
     server.unexpose(myservice)
     await rb.close()
     server.close()
@@ -111,6 +112,11 @@ def mytopic():
     logging.info("mytopic called")
 
 
+def never_called(ctx, rb):
+    logging.error("never_called: unexpected invocation")
+    ctx[rb.rid] = True
+
+
 def puttopic():
     """A simple pubsub method that logs a message."""
     logging.info("puttopic called")
@@ -122,22 +128,35 @@ async def test_publish():
     server.subscribe(puttopic, topic="cmp.net/mytopic")
     server.subscribe(mytopic)
 
+    sub = await rembus.component("ws://:8006/sub.net")
+    await sub.subscribe(mytopic)
+    await sub.reactive()
+
+    ctx = {}
     rb = await rembus.component("ws://:8006/cmp.net")
+    rb.inject(ctx)
+
     assert rb.isrepl() is False
     assert isinstance(rb.router, rembus.core.Router)
-    assert repr(
-        server.router) == "broker: {'cmp.net@ws://127.0.0.1:8000': cmp.net}"
+    assert "'cmp.net@ws://127.0.0.1:8000': cmp.net" in repr(server.router)
     assert repr(rb.uid) == "ws://127.0.0.1:8006/cmp.net"
     assert rembus.core.domain(rb.rid) == "net"
+
+    # subscription to itself
+    await rb.subscribe(never_called, topic="mytopic")
+
     await rb.publish("mytopic")
     await rb.publish("mytopic", "log_warning")
 
     await rb.put("mytopic")
 
     await rb.close()
+    await sub.close()
+
     with pytest.raises(rp.RembusConnectionClosed):
         await rb.publish("mytopic")
     server.close()
+    assert len(ctx) == 0
 
 
 async def test_publish_slot():
@@ -149,8 +168,10 @@ async def test_publish_slot():
     rb = await rembus.component("ws://:8007/cmp.net")
     assert rb.isrepl() is False
     assert isinstance(rb.router, rembus.core.Router)
-    assert repr(
-        server.router) == "broker: {'cmp.net@ws://127.0.0.1:8000': cmp.net}"
+    assert (
+        repr(server.router)
+        == "broker: {'cmp.net@ws://127.0.0.1:8000': cmp.net}"
+    )
     assert repr(rb.uid) == "ws://127.0.0.1:8007/cmp.net"
     assert rembus.core.domain(rb.rid) == "net"
     await rb.publish("mytopic", slot=1234)

@@ -64,6 +64,12 @@ class node:  # pylint: disable=invalid-name
         self._runner = AsyncLoopRunner()
         self._rb = self._runner.run(component(url, name, port, secure, enc))
 
+    def __str__(self):
+        return f"{self._rb.uid.id}"
+
+    def __repr__(self):
+        return self._rb.uid.id
+
     @property
     def router(self):
         """The router object associated with this node."""
@@ -134,11 +140,11 @@ class node:  # pylint: disable=invalid-name
         """
         return self.exec(self._rb.subscribe, fn, retroactive, topic)
 
-    def unsubscribe(self, fn: Callable[..., Any]):
+    def unsubscribe(self, fn: Callable[..., Any], topic: Optional[str] = None):
         """
         Unsubscribe the function from the corresponding topic.
         """
-        return self.exec(self._rb.unsubscribe, fn)
+        return self.exec(self._rb.unsubscribe, fn, topic)
 
     def expose(self, fn: Callable[..., Any]):
         """

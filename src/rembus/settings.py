@@ -1,4 +1,5 @@
 """Settings for Rembus components."""
+
 import json
 import logging
 import os
@@ -7,6 +8,7 @@ from platformdirs import user_config_dir
 logger = logging.getLogger(__name__)
 
 DEFAULT_BROKER = "broker"
+DEFAULT_PORT = 8000
 TENANTS_FILE = "tenants.json"
 
 
@@ -18,7 +20,7 @@ class Config:
         try:
             fn = os.path.join(rembus_dir(), name, "settings.json")
             if os.path.isfile(fn):
-                with open(fn, 'r', encoding='utf-8') as f:
+                with open(fn, "r", encoding="utf-8") as f:
                     cfg = json.load(f)
         except json.decoder.JSONDecodeError as e:
             raise (RuntimeError(f"{fn}: {e}")) from e

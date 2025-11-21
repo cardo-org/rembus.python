@@ -16,6 +16,10 @@ def test_rpc(server):
     x = 2
     y = 3
     rb = rembus.node("client")
+
+    logging.debug("test __str__ for node %s", rb)
+    repr(rb)
+    
     server.expose(myservice)
 
     result = rb.rpc("myservice", x, y)
