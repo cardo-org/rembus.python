@@ -32,3 +32,8 @@ def test_broker():
     srv.close()
     cli.close()
     server.close()
+
+
+def test_default_broker():
+    rb = rembus.node()
+    rb.close()

@@ -59,10 +59,13 @@ class node:  # pylint: disable=invalid-name
         name: str | None = None,
         port: int | None = None,
         secure: bool = False,
+        policy: str = "first_up",
         enc: int = CBOR
     ):
         self._runner = AsyncLoopRunner()
-        self._rb = self._runner.run(component(url, name, port, secure, enc))
+        self._rb = self._runner.run(
+            component(url, name, port, secure, policy, enc)
+        )
 
     def __str__(self):
         return f"{self._rb.uid.id}"
@@ -140,19 +143,20 @@ class node:  # pylint: disable=invalid-name
         """
         return self.exec(self._rb.subscribe, fn, retroactive, topic)
 
-    def unsubscribe(self, fn: Callable[..., Any], topic: Optional[str] = None):
+    def unsubscribe(self, fn: Callable[..., Any] | str):
         """
         Unsubscribe the function from the corresponding topic.
         """
-        return self.exec(self._rb.unsubscribe, fn, topic)
+        return self.exec(self._rb.unsubscribe, fn)
 
-    def expose(self, fn: Callable[..., Any]):
+    def expose(self, fn: Callable[..., Any],
+               topic: Optional[str] = None):
         """
         Expose the function as a remote procedure call(RPC) handler.
         """
-        return self.exec(self._rb.expose, fn)
+        return self.exec(self._rb.expose, fn, topic)
 
-    def unexpose(self, fn: Callable[..., Any]):
+    def unexpose(self, fn: Callable[..., Any] | str):
         """
         Unexpose the function as a remote procedure call(RPC) handler.
         """
@@ -179,9 +183,10 @@ class node:  # pylint: disable=invalid-name
 
     def close(self):
         """Close the connection and clean up resources."""
-        self.exec(self._rb.close)
-        self._runner.shutdown()
-        self._runner = None
+        if self._runner is not None:
+            self.exec(self._rb.close)
+            self._runner.shutdown()
+            self._runner = None
 
     def __enter__(self):
         return self

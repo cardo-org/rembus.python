@@ -33,7 +33,7 @@ async def test_add_plugin():
     await pub.publish("k/e/y", "space")
     await pub.publish("k/@e/y", "space")
 
-    await sub2.unsubscribe(consume, topic="k/*/y")
+    await sub2.unsubscribe("k/*/y")
     await sub1.close()
 
     await asyncio.sleep(0.1)

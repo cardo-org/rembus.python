@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import suppress
 import base64
+from enum import Enum
 import logging
 import os
 import time
@@ -28,6 +29,61 @@ from .admin import admin_command
 
 logger = logging.getLogger(__name__)
 
+
+class Policy(Enum):
+    """Load balancing policies for selecting twins."""
+    FIRST_UP = "first_up"
+    ROUND_ROBIN = "round_robin"
+    LESS_BUSY = "less_busy" 
+
+def less_busy(tenant, implementors):
+    """Select the twin with fewer outstanding requests."""
+    up_and_running = [
+        t for t in implementors if t.isopen() and t.domain == tenant
+    ]
+
+    if not up_and_running:
+        return None
+  
+    return min(up_and_running)
+
+
+
+def round_robin(router, tenant, topic, implementors):
+    """Select the next twin in a round-robin fashion."""
+    if not implementors:
+        return None
+
+    length = len(implementors)
+
+    current_index = router.last_invoked.get(topic, 0)
+    target = None
+    candidate = None
+    candidate_index = 0
+
+    # Iterate with 1-based indexing to mirror Julia `enumerate`
+    for idx, tw in enumerate(implementors):
+        if idx < current_index:
+            # candidate for wrap-around
+            if candidate is None and tw.isopen() and tw.domain == tenant:
+                candidate = tw
+                candidate_index = idx
+
+        else:
+            # forward search from current_index
+            if tw.isopen() and tw.domain == tenant:
+                target = tw
+                router.last_invoked[topic] = 0 if idx >= length-1 else idx + 1
+                break
+
+    # If no forward match found but we have a candidate
+    if target is None and candidate is not None:
+        target = candidate
+        router.last_invoked[topic] = (
+            0 if candidate_index >= length-1 else candidate_index + 1
+        )
+
+    return target
 
 def domain(s: str) -> str:
     """Return the domain part from the string.
@@ -260,12 +316,13 @@ class Router(Supervised):
         self.handler: dict[str, Callable[..., Any]] = {}
         self.exposers: dict[str, list[Twin]] = {}
         self.subscribers: dict[str, list[Twin]] = {}
+        self.last_invoked: dict[str, int] = {}
         self.shared: Any = None
         self.serve_task: Optional[asyncio.Task[None]] = None
         self.server_instance = None  # To store the server object
         self._shutdown_event = asyncio.Event()  # For controlled shutdown
         self.config = rs.Config(name)
-        self.policy = "first_up"
+        self.policy = Policy.FIRST_UP
         self.owners = rs.load_tenants(self)
         self.start_ts = time.time()
         self._builtins()
@@ -276,6 +333,16 @@ class Router(Supervised):
 
     def __repr__(self):
         return f"{self.id}: {self.id_twin}"
+
+    def set_policy(self, policy: str) -> None:
+        """Set the load balancing policy for selecting twins."""
+        try:
+            self.policy = Policy(policy)
+        except ValueError as e:
+            raise ValueError(
+                "wrong routing policy, must be one of first_up, "
+                "less_busy, round_robin"
+            ) from e
 
     def isconnected(self, rid: str) -> bool:
         """Check if a component with the given rid is connected."""
@@ -366,8 +433,13 @@ class Router(Supervised):
 
     def _select_twin(self, topic):
         twins = self.exposers[topic]
-        if self.policy == "first_up":
+        if self.policy == Policy.FIRST_UP:
             return next((t for t in twins if t.isopen()), None)
+        elif self.policy == Policy.ROUND_ROBIN:
+            return round_robin(self, domain(topic), topic, twins)
+        elif self.policy == Policy.LESS_BUSY:
+            return less_busy(domain(topic), twins)
+
 
     async def _rpcreq_msg(self, msg: rp.RpcReqMsg):
         """Handle an RPC request."""
@@ -388,7 +460,12 @@ class Router(Supervised):
         elif msg.topic in self.exposers:
             target_twin = self._select_twin(msg.topic)
             logger.debug("[%s] target twin: %s", self, target_twin)
-            if target_twin is not None:
+            if target_twin is None:
+                outmsg = rp.ResMsg(
+                    id=msg.id, status=rp.STS_METHOD_UNAVAILABLE, data=msg.topic
+                )
+                await msg.twin.send(outmsg)
+            else:
                 logger.debug("[%s] sending to [%s]", self, target_twin)
                 # dispatch to the target twin
                 await target_twin.inbox.put(msg)
@@ -647,6 +724,9 @@ class Twin(Supervised):
     def __eq__(self, other):
         return isinstance(other, Twin) and self.rid == other.rid
 
+    def __lt__(self, other):
+        return len(self.outreq) < len(other.outreq)
+
     @property
     def rid(self):
         """Return the unique id of the rembus component."""
@@ -669,6 +749,11 @@ class Twin(Supervised):
     @router.setter
     def router(self, plugin: Supervised):
         self._router = plugin
+
+    @property
+    def domain(self) -> str:
+        """Return the domain of the twin."""
+        return domain(self.rid)
 
     def isrepl(self) -> bool:
         """Check if twin is a REPL"""
@@ -1129,31 +1214,48 @@ class Twin(Supervised):
         return self
 
     async def unsubscribe(
-        self, fn: Callable[..., Any], topic: Optional[str] = None
-    ):
+        self, fn: Callable[..., Any] | str):
         """
         Unsubscribe the function from the corresponding topic.
         """
-        if topic is None:
+        #if topic is None:
+        #    topic = fn.__name__
+        
+        if isinstance(fn, str):
+            topic = fn
+        else:
             topic = fn.__name__
 
         await self.setting(topic, rp.REMOVE_INTEREST)
         self.router.handler.pop(topic, None)
         return self
 
-    async def expose(self, fn: Callable[..., Any]):
+    async def expose(
+            self, fn: Callable[..., Any], topic: Optional[str] = None
+    ):
         """
         Expose the function as a remote procedure call(RPC) handler.
         """
-        topic = fn.__name__
+        if topic is None:
+            topic = fn.__name__
+
         self.router.handler[topic] = fn
         await self.setting(topic, rp.ADD_IMPL)
 
-    async def unexpose(self, fn: Callable[..., Any]):
+    async def unexpose(
+            self, fn: Callable[..., Any] | str, topic: Optional[str] = None
+    ):
         """
         Unexpose the function as a remote procedure call(RPC) handler.
         """
-        topic = fn.__name__
+        #if topic is None:
+        #    topic = fn.__name__
+
+        if isinstance(fn, str):
+            topic = fn
+        else:
+            topic = fn.__name__
+
         self.router.handler.pop(topic, None)
         await self.setting(topic, rp.REMOVE_IMPL)
 
@@ -1215,6 +1317,7 @@ async def component(
     name: str | None = None,
     port: int | None = None,
     secure: bool = False,
+    policy: str = "first_up",
     enc: int = rp.CBOR,
 ) -> Twin:
     """Return a Rembus component."""
@@ -1234,7 +1337,7 @@ async def component(
 
     router_name = name if name else default_name
     router = await init_router(router_name, uid, port, secure)
-
+    router.set_policy(policy)
     handle = await router.init_twin(uid, enc, isserver)
     if isinstance(url, list):
         for netlink in url:

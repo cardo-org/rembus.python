@@ -37,7 +37,8 @@ async def admin_command(msg: rp.AdminMsg):
         if topic in router.exposers:
             if twin in router.exposers[topic]:
                 router.exposers[topic].remove(twin)
-
+        logger.info("[%s] removed [%s] exposer for topic [%s]", router, twin, topic)
+        logger.info("exposers: %s", router.exposers)
     elif cmd == rp.ADD_INTEREST:
         logger.debug(
             "[%s] adding [%s] subscriber for topic [%s]", router, twin, topic
