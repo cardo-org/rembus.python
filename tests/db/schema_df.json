@@ -1,0 +1,60 @@
+{
+  "tables": [
+  {
+    "table": "topic1",
+    "columns": [
+      { "col": "name", "type": "TEXT"},
+      { "col": "type", "type": "TEXT"},
+      { "col": "tinyint", "type": "TINYINT" },
+      { "col": "smallint", "type": "SMALLINT" },
+      { "col": "integer", "type": "INTEGER" },
+      { "col": "bigint", "type": "BIGINT" }
+    ],
+    "format": "dataframe",
+    "extras": {
+      "recv_ts": "ts",
+      "slot": "rop"
+    }
+  },
+  {
+    "table": "topic2",
+    "columns": [
+      { "col": "name", "type": "TEXT" },
+      { "col": "type", "type": "TEXT" },
+      { "col": "utinyint", "type": "UTINYINT" },
+      { "col": "usmallint", "type": "USMALLINT" },
+      { "col": "uinteger", "type": "UINTEGER" },
+      { "col": "ubigint", "type": "UBIGINT" }
+    ],
+    "keys": ["name"],
+    "format": "dataframe",
+    "extras": {
+      "recv_ts": "ts",
+      "slot": "rop"
+    }
+  },
+  {
+    "table": "topic3",
+    "columns": [
+      { "col": "name", "type": "TEXT" },
+      { "col": "type", "type": "TEXT" },
+      { "col": "float", "type": "FLOAT" },
+      { "col": "double", "type": "DOUBLE" }
+    ],
+    "format": "dataframe",
+    "extras": {
+      "recv_ts": "ts",
+      "slot": "rop"
+    }
+  },
+  {
+    "table": "topic4",
+    "columns": [
+      { "col": "name", "type": "TEXT" },
+      { "col": "type", "type": "TEXT" },
+      { "col": "value", "type": "TEXT" }
+    ],
+    "keys": ["name", "type"],
+    "format": "dataframe"
+  }]
+}

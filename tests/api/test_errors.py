@@ -1,4 +1,5 @@
 """Tests for miscellaneous error conditions."""
+
 import os
 import stat
 import pytest
@@ -17,8 +18,7 @@ async def test_register_error(server):
 
     key_dir = rs.keys_dir(server.router.id)
     curr_mode = os.stat(key_dir).st_mode
-    os.chmod(key_dir, curr_mode & ~(
-        stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
+    os.chmod(key_dir, curr_mode & ~(stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
 
     try:
         myname = rembus.node(cid)
@@ -35,12 +35,12 @@ async def test_register_error(server):
     # server.close()
 
 
-def test_settings_error():
+def test_settings_error(server):
     """Test the error condition when settings file is not valid JSON."""
     fn = os.path.join(rs.rembus_dir(), rs.DEFAULT_BROKER, "settings.json")
 
     with open(fn, "w", encoding="utf-8") as f:
-        f.write('this is not a valid json')
+        f.write("this is not a valid json")
 
     with pytest.raises(RuntimeError):
         rs.Config(rs.DEFAULT_BROKER)
@@ -48,7 +48,7 @@ def test_settings_error():
     os.remove(fn)
 
 
-def test_unknown_message_type():
+def test_unknown_message_type(server):
     """Test a reception of a Wrong payload"""
     rb = rembus.node("client")
 
@@ -58,11 +58,16 @@ def test_unknown_message_type():
     rb.close()
 
 
-def test_response_no_data():
+def test_response_no_data(server):
     """Test missing data field"""
     rb = rembus.node("client")
     mid = 1234
     # This is not an error, data is set by default to None
-    rb._runner.run(rb._rb._send(cbor2.dumps(
-        [rp.TYPE_RESPONSE, mid.to_bytes(rp.MSGID_SZ), rp.STS_OK])))
+    rb._runner.run(
+        rb._rb._send(
+            cbor2.dumps(
+                [rp.TYPE_RESPONSE, mid.to_bytes(rp.MSGID_SZ), rp.STS_OK]
+            )
+        )
+    )
     rb.close()

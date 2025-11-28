@@ -185,6 +185,8 @@ async def test_publish_slot():
 async def test_cancel_server_task():
     """Test shutdown in case of task cancellation"""
     server = await rembus.component(port=8000)
-
     await asyncio.sleep(0)
     server._task.cancel()
+
+    # close the db
+    server.db.close()

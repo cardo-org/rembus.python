@@ -10,7 +10,7 @@ import polars as pl
 import pyarrow as pa
 from pydantic import BaseModel, Field, model_validator
 from rembus.settings import rembus_dir
-from rembus.protocol import tag2df, df2tag
+from rembus.protocol import tag2df, df2tag, PubSubMsg
 
 logger = logging.getLogger(__name__)
 
@@ -193,11 +193,9 @@ def getobj(topic, values):
     return dict(v)
 
 
-def set_default(row, tabledef, d, add_nullable=True):
+def set_default(msg: PubSubMsg, tabledef: Table, d: dict, add_nullable=True):
     """
-    row: Pandas Series
-    tabledef: Table (Pydantic model)
-    d: dict that will receive defaults
+    Update dictionary `d` with defaults values.
     """
     for col in tabledef.columns:
         name = col.col
@@ -206,10 +204,11 @@ def set_default(row, tabledef, d, add_nullable=True):
         if name in d:
             continue
 
-        # present in a row column
-        col_key = name
-        if col_key in row and pd.notna(row[col_key]):
-            d[name] = row[col_key]
+        # extract pieces from topic if applicable (msg.regex is set)
+        topic_map = expand(msg)
+
+        if name in topic_map:
+            d[name] = topic_map[name]
             continue
 
         # column has an explicit default
@@ -223,19 +222,19 @@ def set_default(row, tabledef, d, add_nullable=True):
             continue
 
 
-def df_extras(tabledef, df, row):
-    """Add extra columns (recv_ts, slot) to the end of df."""
+def df_extras(tabledef, df, msg):
+    """Add extra columns (recvts, slot) to the end of df."""
     exprs = []
     extras_cols = []
 
     if "recv_ts" in tabledef.extras:
         cname = tabledef.extras["recv_ts"]
-        exprs.append(pl.lit(row["recv"]).cast(pl.UInt64).alias(cname))
+        exprs.append(pl.lit(msg.recvts).cast(pl.UInt64).alias(cname))
         extras_cols.append(cname)
 
     if "slot" in tabledef.extras:
         cname = tabledef.extras["slot"]
-        exprs.append(pl.lit(row["slot"]).cast(pl.UInt32).alias(cname))
+        exprs.append(pl.lit(msg.slot).cast(pl.UInt32).alias(cname))
         extras_cols.append(cname)
 
     # If no extras, return early
@@ -252,38 +251,13 @@ def df_extras(tabledef, df, row):
     return df
 
 
-# TODO: a more efficient version that avoids creating a new Series per column
-# if df is large — using pl.lit() in expressions instead
-def df_extras_old(tabledef, df, row):
-    new_cols = []
-
-    if "recv_ts" in tabledef.extras:
-        col = tabledef.extras["recv_ts"]
-        new_cols.append(
-            pl.Series(name=col, values=[row["recv"]] * len(df), dtype=pl.UInt64)
-        )
-    if "slot" in tabledef.extras:
-        col = tabledef.extras["slot"]
-        new_cols.append(
-            pl.Series(name=col, values=[row["slot"]] * len(df), dtype=pl.UInt32)
-        )
-
-    if new_cols:
-        df = df.with_columns(new_cols)
-
-    return df
-
-
-def extras(tabledef, fields, row):
+def extras(tabledef, msg):
     vals = []
-
-    # If table has extra "recv_ts", append row.recv
     if "recv_ts" in tabledef.extras:
-        vals.append(row["recv"])
+        vals.append(msg.recvts)
 
-    # If table has extra "slot", append row.slot
     if "slot" in tabledef.extras:
-        vals.append(row["slot"])
+        vals.append(msg.slot)
 
     return vals
 
@@ -292,21 +266,21 @@ def columns(table):
     return [t.col for t in table.columns]
 
 
-def append(con: duckdb.DuckDBPyConnection, tabledef, df: pd.DataFrame):
+def append(con: duckdb.DuckDBPyConnection, tabledef, msgs):
     # logger.debug("[%s] appending:\n%s", tabledef.table, df)
     topic = tabledef.table
     fmt = tabledef.format
     tblfields = columns(tabledef)
-    logger.debug("columns: %s", tblfields)
+    logger.debug("[%s] appending columns: %s", topic, tblfields)
     all_rows = []  # will become a DataFrame batch
 
-    for _, row in df.iterrows():
+    for msg in msgs:
         try:
-            values = row["data"]
+            values = msg.data
             # key_value format
             if fmt == "key_value":
                 obj = getobj(topic, values)
-                set_default(row, tabledef, obj, add_nullable=True)
+                set_default(msg, tabledef, obj, add_nullable=True)
 
                 # Check required fields
                 if not all(k in obj for k in tblfields):
@@ -319,8 +293,8 @@ def append(con: duckdb.DuckDBPyConnection, tabledef, df: pd.DataFrame):
 
             # dataframe format
             elif fmt == "dataframe":
-                df2 = tag2df(values[0])
-                if list(df2.columns) != tblfields:
+                df = tag2df(values[0])
+                if list(df.columns) != tblfields:
                     logger.warning(
                         "[%s] unsaved df with mismatched fields %s",
                         topic,
@@ -328,9 +302,8 @@ def append(con: duckdb.DuckDBPyConnection, tabledef, df: pd.DataFrame):
                     )
                     continue
 
-                df2 = df_extras(tabledef, df2, row)
-
-                con.register("df_view", df2)
+                df = df_extras(tabledef, df, msg)
+                con.register("df_view", df)
                 con.execute(f"INSERT INTO {topic} SELECT * FROM df_view")
                 con.unregister("df_view")
                 continue
@@ -346,8 +319,7 @@ def append(con: duckdb.DuckDBPyConnection, tabledef, df: pd.DataFrame):
                 fields = values
 
             # Append extras
-            extra_vals = extras(tabledef, fields, row)
-
+            extra_vals = extras(tabledef, msg)
             all_rows.append(fields + extra_vals)
         except Exception as e:
             logger.error("[append] %s: %s", topic, e)
@@ -387,35 +359,32 @@ def schema_to_polars(tabledef: Table):
     return schema
 
 
-def upsert(con: duckdb.DuckDBPyConnection, tabledef, df: pd.DataFrame):
+def upsert(con: duckdb.DuckDBPyConnection, tabledef, messages):
     tname = tabledef.table
     fmt = tabledef.format
     col_names = columns(tabledef) + list(tabledef.extras.values())
     indexes = list(tabledef.keys)
-    tdf = pl.DataFrame([], schema=schema_to_polars(tabledef))
+    records = []
+    dataframes = []
 
     # Build final DataFrame (tdf)
-    for _, row in df.iterrows():
+    for msg in messages:
         try:
-            values = row["data"]
+            values = msg.data
 
             # key_value
             if fmt == "key_value":
                 obj = getobj(tname, values)
-                set_default(row, tabledef, obj, add_nullable=True)
+                set_default(msg, tabledef, obj, add_nullable=True)
 
                 if "recv_ts" in tabledef.extras:
-                    obj[tabledef.extras["recv_ts"]] = row.recv
+                    obj[tabledef.extras["recv_ts"]] = msg.recvts
                 if "slot" in tabledef.extras:
-                    obj[tabledef.extras["slot"]] = row.slot
+                    obj[tabledef.extras["slot"]] = msg.slot
 
-                # ensure all fields exist
+                # Ensure all fields exist
                 if all(k in obj for k in col_names):
-                    row_df = pl.DataFrame(
-                        obj, schema=schema_to_polars(tabledef)
-                    )[col_names]  # reorder columns
-
-                    tdf = pl.concat([tdf, row_df], how="vertical")
+                    records.append(obj)
                 else:
                     logger.warning(
                         "[%s] unsaved %s missing required fields %s",
@@ -427,28 +396,21 @@ def upsert(con: duckdb.DuckDBPyConnection, tabledef, df: pd.DataFrame):
 
             # dataframe
             elif fmt == "dataframe":
-                df2 = tag2df(values[0])
-                df2 = df_extras(tabledef, df2, row)
-                if list(df2.columns) == col_names:
-                    tdf = pl.concat([tdf, df2], how="vertical")
+                df = tag2df(values[0])
+                df = df_extras(tabledef, df, msg)
+                if list(df.columns) == col_names:
+                    dataframes.append(df)
                 else:
-                    logger.warning(
-                        "[%s] unsaved df2 (mismatched fields)", tname
-                    )
+                    logger.warning("[%s] unsaved df (mismatched fields)", tname)
                     continue
 
             # default format
             else:
                 vals = values
                 if len(vals) == len(tabledef.columns):
-                    extra_vals = extras(tabledef, vals, row)
+                    extra_vals = extras(tabledef, msg)
                     all_vals = vals + extra_vals
-
-                    row_df = pl.DataFrame(
-                        [dict(zip(col_names, all_vals))],
-                        schema=schema_to_polars(tabledef),
-                    )
-                    tdf = pl.concat([tdf, row_df], how="vertical")
+                    records.append(all_vals)
                 else:
                     logger.warning(
                         "[%s] unsaved %s with mismatched fields", tname, vals
@@ -457,17 +419,19 @@ def upsert(con: duckdb.DuckDBPyConnection, tabledef, df: pd.DataFrame):
         except Exception as e:
             logger.error("[upsert] %s: %s", tname, e)
 
+    tdf = pl.DataFrame(records, schema=schema_to_polars(tabledef), orient="row")
+    tdf = pl.concat([tdf, *dataframes], how="vertical")
     if tdf.is_empty():
         return
 
     if indexes:
         tdf = (
-            tdf.sort(indexes)  # sort so last row is last
+            tdf.sort(indexes)  # Sort so last row is last
             .group_by(indexes)
-            .agg([pl.all().last()])  # take last row of each group
+            .agg([pl.all().last()])  # Take last row of each group
         )
 
-    logger.debug("[%s] upserting dataframe:\n%s", tname, tdf)
+    # logger.debug("[%s] upserting dataframe:\n%s", tname, tdf)
 
     con.register("df_view", tdf)
 
@@ -492,44 +456,23 @@ def upsert(con: duckdb.DuckDBPyConnection, tabledef, df: pd.DataFrame):
     con.unregister("df_view")
 
 
-def expand(df: pd.DataFrame):
+def expand(msg: PubSubMsg):
     """
-    Given a DataFrame `df` containing a topic string column (e.g. `:topic`)
-    and a pattern column (e.g. `:regexp`) with placeholders like
-    `:regione/:loc/temperature`, this function extracts the named parts from
-    `topic` according to the `regexp`and adds them as new columns to `df`.
-
-    Example:
-        df = DataFrame(
-            topic=["veneto/agordo/temperature", "veneto/feltre/temperature"],
-            table=["temperature", "temperature"],
-            regexp=[":regione/:loc/temperature", ":regione/:loc/temperature"]
-        )
-
-        expand!(df, :topic, :regexp)
+    Given a message `msg` containing a topic string
+    (e.g. `veneto/agordo/temperature`) and a regex value
+    (e.g. `:regione/:loc/temperature`) extract the named parts from
+    `msg.topic` according to `msg.regex`and add them as new attributes to `msg`.
     """
-    pattern = df.iloc[0]["regexp"]
-    if pattern is None:
-        return df
+    d = {}
+    if msg.regex is not None:
+        names = extract_names(msg.regex)
+        regex = make_regex(msg.regex)
 
-    names = extract_names(pattern)
-    regex = make_regex(pattern)
-
-    extracted_columns = {name: [] for name in names}
-
-    # For each row, extract variables
-    for _, row in df.iterrows():
-        topic = row["topic"]
-        match = regex.match(topic)
+        match = regex.match(msg.topic)
         if match:
             for name in names:
-                extracted_columns[name].append(match.group(name))
-
-    # Add new columns to df
-    for name in names:
-        df[name] = extracted_columns[name]
-
-    return df
+                d[name] = match.group(name)
+    return d
 
 
 def extract_names(pattern: str):
@@ -559,65 +502,40 @@ def make_regex(pattern: str):
     return re.compile("^" + "/".join(parts) + "$")
 
 
-def settable(router, df):
+def msg_table(router, msg: PubSubMsg):
     """
-    Given a router with defined tables and a DataFrame `df` containing a
-    `:topic` column, this function matches each topic against the router's table
-    patterns and assigns the corresponding table name and pattern to new
-    `:table` and `:regexp` columns in `df`.
+    Given a router with defined tables and a message `msg` containing, this
+    function matches the topic against the router's table
+    patterns and assigns the corresponding table name and pattern.
     If no pattern matches, the topic name itself is used as the table name and
     `nothing` for the pattern.
     """
     schema_tables = router.tables.values()
 
-    tables_out = []
-    regexps_out = []
-
-    for _, msg in df.iterrows():
-        topic = msg["topic"]
-        topic_tokens = topic.split("/")
-
-        matched = False
-
-        for schema_table in schema_tables:
-            schema_topic = schema_table.topic
-            schema_tokens = schema_topic.split("/")
-
-            # must have same number of segments
-            if len(topic_tokens) != len(schema_tokens):
-                continue
-
-            # token-by-token comparison
-            ok = True
-            is_param = False
-            for idx, schema_token in enumerate(schema_tokens):
-                # literal match required when schema token does NOT start with ':'
-                if schema_token.startswith(":"):
-                    is_param = True
-                else:
-                    if schema_token != topic_tokens[idx]:
-                        ok = False
-                        break
-
-            if ok:
-                matched = True
-                tables_out.append(schema_table.table)  # table name
-                if is_param:
-                    regexps_out.append(schema_topic)  # regexp pattern topic
-                else:
-                    regexps_out.append(None)
-                break
-
-        if not matched:
-            # fallback: table equals the raw message topic
-            tables_out.append(topic)
-            regexps_out.append(None)
-
-    # Add columns to dataframe
-    df["table"] = tables_out
-    df["regexp"] = regexps_out
-
-    return df  # optional, since df modified in-place
+    topic = msg.topic
+    topic_tokens = topic.split("/")
+    for schema_table in schema_tables:
+        schema_topic = schema_table.topic
+        schema_tokens = schema_topic.split("/")
+        # Must have same number of segments
+        if len(topic_tokens) != len(schema_tokens):
+            continue
+        # token-by-token comparison
+        ok = True
+        is_param = False
+        for idx, schema_token in enumerate(schema_tokens):
+            # Literal match required when schema token does NOT start with ':'
+            if schema_token.startswith(":"):
+                is_param = True
+            else:
+                if schema_token != topic_tokens[idx]:
+                    ok = False
+                    break
+        if ok:
+            msg.table = schema_table.table
+            if is_param:
+                msg.regex = schema_topic
+            break
 
 
 def save_data_at_rest(router):
@@ -630,39 +548,17 @@ def save_data_at_rest(router):
         return
 
     batch = build_message_batch(router.id, msgs)
-
     (router.db.from_arrow(batch).insert_into("message"))
 
-    # create per-table batches
-    records = [
-        {
-            "recv": m.recvts,
-            "slot": m.slot,
-            "qos": m.flags,
-            "uid": m.id,
-            "topic": m.topic,
-            "data": m.data,
-        }
-        for m in msgs
-    ]
-    df = pd.DataFrame(records)
-    settable(router, df)
-    logger.debug("[save_data_at_rest] initial df:\n%s", df)
-
-    for tbl in df["table"].unique():
-        if tbl in router.tables:
-            logger.debug("[save_data_at_rest][%s] processing df\n%s", tbl, df)
-            topicdf = df[df["table"] == tbl].copy()
-            if not topicdf.empty:
-                expand(topicdf)
-                tabledef = router.tables[tbl]
-                # if isempty(tabledef.keys)
-                if not tabledef.keys:
-                    append(router.db, tabledef, topicdf)
-                else:
-                    upsert(router.db, tabledef, topicdf)
+    for topic, msgs in router.msg_topic_cache.items():
+        table = router.tables[topic]
+        if table.keys:
+            upsert(router.db, table, msgs)
+        else:
+            append(router.db, table, msgs)
 
     router.msg_cache.clear()
+    router.msg_topic_cache.clear()
 
 
 def build_message_batch(broker_id: str, msgs: list):

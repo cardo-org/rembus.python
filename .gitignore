@@ -128,7 +128,7 @@ celerybeat.pid
 
 # Environments
 .env
-penv/
+.env.test
 
 # Spyder project settings
 .spyderproject

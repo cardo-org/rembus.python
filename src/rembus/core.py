@@ -342,6 +342,8 @@ class Router(Supervised):
         self.owners = rs.load_tenants(self)
         self.start_ts = time.time()
         self.msg_cache: list[rp.PubSubMsg] = []
+        self.msg_topic_cache: dict[str, List[rp.PubSubMsg]] = {}
+        self.tables: dict[str, rdb.Table] = {}
         self._builtins()
         if data_at_rest:
             self.db = rdb.init_db(self, schema)
@@ -423,8 +425,9 @@ class Router(Supervised):
 
         data = rp.tag2df(msg.data)
 
-        # save the message into msg_cache
-        self.msg_cache.append(msg)
+        if self.db is not None:
+            # save the message into msg_cache
+            self.append_message(msg)
 
         try:
             if msg.topic in self.handler:
@@ -440,6 +443,16 @@ class Router(Supervised):
             logger.warning("[%s] error in method invocation: %s", self, e)
             traceback.print_exc()
         return
+
+    def append_message(self, msg: rp.PubSubMsg):
+        """Append a message to the message cache."""
+        topic = msg.topic
+        rdb.msg_table(self, msg)
+        self.msg_cache.append(msg)
+        if msg.table in self.tables:
+            if topic not in self.msg_topic_cache:
+                self.msg_topic_cache[msg.table] = []
+            self.msg_topic_cache[msg.table].append(msg)
 
     async def send_message(self, msg):
         """Send message to remote node using a twin from the pool of twins"""
@@ -763,7 +776,7 @@ class Twin(Supervised):
     def db(self):
         """Return the database associated with this twin."""
         return self.router.db
-    
+
     @property
     def rid(self):
         """Return the unique id of the rembus component."""
