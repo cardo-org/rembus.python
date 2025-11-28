@@ -29,7 +29,8 @@ dependencies = [
   "cryptography",
   "narwhals",
   "polars",
-  "pydantic"
+  "pydantic",
+  "duckdb>=1.4.2",
 ]
 
 #

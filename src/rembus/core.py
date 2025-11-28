@@ -24,6 +24,7 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa, ec
 import websockets
 import rembus.protocol as rp
 import rembus.settings as rs
+import rembus.db as rdb
 from . import __version__
 from .admin import admin_command
 
@@ -32,9 +33,11 @@ logger = logging.getLogger(__name__)
 
 class Policy(Enum):
     """Load balancing policies for selecting twins."""
+
     FIRST_UP = "first_up"
     ROUND_ROBIN = "round_robin"
-    LESS_BUSY = "less_busy" 
+    LESS_BUSY = "less_busy"
+
 
 def less_busy(tenant, implementors):
     """Select the twin with fewer outstanding requests."""
@@ -44,9 +47,8 @@ def less_busy(tenant, implementors):
 
     if not up_and_running:
         return None
-  
-    return min(up_and_running)
 
+    return min(up_and_running)
 
 
 def round_robin(router, tenant, topic, implementors):
@@ -73,17 +75,18 @@ def round_robin(router, tenant, topic, implementors):
             # forward search from current_index
             if tw.isopen() and tw.domain == tenant:
                 target = tw
-                router.last_invoked[topic] = 0 if idx >= length-1 else idx + 1
+                router.last_invoked[topic] = 0 if idx >= length - 1 else idx + 1
                 break
 
     # If no forward match found but we have a candidate
     if target is None and candidate is not None:
         target = candidate
         router.last_invoked[topic] = (
-            0 if candidate_index >= length-1 else candidate_index + 1
+            0 if candidate_index >= length - 1 else candidate_index + 1
         )
 
     return target
+
 
 def domain(s: str) -> str:
     """Return the domain part from the string.
@@ -281,9 +284,16 @@ class Supervised:
             logger.debug("[%s] shutdown complete", self)
 
 
-async def init_router(router_name, uid, port, secure):
+async def init_router(router_name, policy, uid, port, secure, isserver, schema):
     """Start the router"""
-    router = Router(router_name)
+
+    if policy not in ["first_up", "less_busy", "round_robin"]:
+        raise ValueError(
+            "wrong routing policy, must be one of first_up, "
+            "less_busy, round_robin"
+        )
+
+    router = Router(router_name, policy, isserver, schema)
     logger.debug("component %s created, port: %s", uid.id, port)
     # start a websocket server
     if port:
@@ -309,7 +319,13 @@ class Router(Supervised):
     between Rembus components(Twins).
     """
 
-    def __init__(self, name: str):
+    def __init__(
+        self,
+        name: str,
+        policy: str = "first_up",
+        data_at_rest: bool = True,
+        schema: str | None = None,
+    ):
         super().__init__()
         self.id = name
         self.id_twin: dict[str, Twin] = {}
@@ -322,10 +338,17 @@ class Router(Supervised):
         self.server_instance = None  # To store the server object
         self._shutdown_event = asyncio.Event()  # For controlled shutdown
         self.config = rs.Config(name)
-        self.policy = Policy.FIRST_UP
+        self.policy = Policy(policy)
         self.owners = rs.load_tenants(self)
         self.start_ts = time.time()
+        self.msg_cache: list[rp.PubSubMsg] = []
         self._builtins()
+        if data_at_rest:
+            self.db = rdb.init_db(self, schema)
+            self.save_task = asyncio.create_task(self._periodic_saver())
+        else:
+            self.db = None
+            self.save_task = None
         self.start()
 
     def __str__(self):
@@ -333,16 +356,6 @@ class Router(Supervised):
 
     def __repr__(self):
         return f"{self.id}: {self.id_twin}"
-
-    def set_policy(self, policy: str) -> None:
-        """Set the load balancing policy for selecting twins."""
-        try:
-            self.policy = Policy(policy)
-        except ValueError as e:
-            raise ValueError(
-                "wrong routing policy, must be one of first_up, "
-                "less_busy, round_robin"
-            ) from e
 
     def isconnected(self, rid: str) -> bool:
         """Check if a component with the given rid is connected."""
@@ -386,7 +399,14 @@ class Router(Supervised):
             self._shutdown_event.set()
             await self.server_instance.wait_closed()
 
+        if self.serve_task is not None:
+            self.save_task.cancel()
+
+        if self.db is not None:
+            self.db.close()
+
     async def _pubsub_msg(self, msg: rp.PubSubMsg):
+        msg.recvts = int(time.time())
         twin = msg.twin
         qos = msg.flags & rp.QOS2
         if qos > rp.QOS0 and msg.id:
@@ -402,6 +422,10 @@ class Router(Supervised):
                     twin.ackdf[msg.id] = int(time.time())
 
         data = rp.tag2df(msg.data)
+
+        # save the message into msg_cache
+        self.msg_cache.append(msg)
+
         try:
             if msg.topic in self.handler:
                 await self.evaluate(msg.twin, msg.topic, data)
@@ -439,7 +463,6 @@ class Router(Supervised):
             return round_robin(self, domain(topic), topic, twins)
         elif self.policy == Policy.LESS_BUSY:
             return less_busy(domain(topic), twins)
-
 
     async def _rpcreq_msg(self, msg: rp.RpcReqMsg):
         """Handle an RPC request."""
@@ -498,6 +521,12 @@ class Router(Supervised):
         else:
             await admin_command(msg)
 
+    async def _periodic_saver(self, interval: float = 1.0):
+        """Push periodic save messages into the inbox."""
+        while True:
+            await asyncio.sleep(interval)
+            await self.inbox.put("save_messages")
+
     async def _task_impl(self) -> None:
         """Switch messages between twins."""
         logger.debug("[%s] router started", self)
@@ -507,6 +536,9 @@ class Router(Supervised):
                 case "shutdown":
                     logger.debug("[%s] router shutting down", self)
                     break
+                case "save_messages":
+                    # save messages to the database periodically
+                    rdb.save_data_at_rest(self)
                 case rp.PubSubMsg():
                     await self._pubsub_msg(msg)
                 case rp.RpcReqMsg():
@@ -727,6 +759,11 @@ class Twin(Supervised):
     def __lt__(self, other):
         return len(self.outreq) < len(other.outreq)
 
+    @property
+    def db(self):
+        """Return the database associated with this twin."""
+        return self.router.db
+    
     @property
     def rid(self):
         """Return the unique id of the rembus component."""
@@ -1213,14 +1250,13 @@ class Twin(Supervised):
         self.router.handler[topic] = fn
         return self
 
-    async def unsubscribe(
-        self, fn: Callable[..., Any] | str):
+    async def unsubscribe(self, fn: Callable[..., Any] | str):
         """
         Unsubscribe the function from the corresponding topic.
         """
-        #if topic is None:
+        # if topic is None:
         #    topic = fn.__name__
-        
+
         if isinstance(fn, str):
             topic = fn
         else:
@@ -1230,9 +1266,7 @@ class Twin(Supervised):
         self.router.handler.pop(topic, None)
         return self
 
-    async def expose(
-            self, fn: Callable[..., Any], topic: Optional[str] = None
-    ):
+    async def expose(self, fn: Callable[..., Any], topic: Optional[str] = None):
         """
         Expose the function as a remote procedure call(RPC) handler.
         """
@@ -1243,12 +1277,12 @@ class Twin(Supervised):
         await self.setting(topic, rp.ADD_IMPL)
 
     async def unexpose(
-            self, fn: Callable[..., Any] | str, topic: Optional[str] = None
+        self, fn: Callable[..., Any] | str, topic: Optional[str] = None
     ):
         """
         Unexpose the function as a remote procedure call(RPC) handler.
         """
-        #if topic is None:
+        # if topic is None:
         #    topic = fn.__name__
 
         if isinstance(fn, str):
@@ -1318,6 +1352,7 @@ async def component(
     port: int | None = None,
     secure: bool = False,
     policy: str = "first_up",
+    schema: str | None = None,
     enc: int = rp.CBOR,
 ) -> Twin:
     """Return a Rembus component."""
@@ -1336,8 +1371,9 @@ async def component(
         default_name = uid.id
 
     router_name = name if name else default_name
-    router = await init_router(router_name, uid, port, secure)
-    router.set_policy(policy)
+    router = await init_router(
+        router_name, policy, uid, port, secure, isserver, schema
+    )
     handle = await router.init_twin(uid, enc, isserver)
     if isinstance(url, list):
         for netlink in url:

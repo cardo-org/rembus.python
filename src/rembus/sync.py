@@ -1,4 +1,5 @@
 """Synchronous APIs."""
+
 import asyncio
 import logging
 import threading
@@ -47,7 +48,8 @@ class AsyncLoopRunner:
                 task.cancel()
             if pending:
                 self.loop.run_until_complete(
-                    asyncio.gather(*pending, return_exceptions=True))
+                    asyncio.gather(*pending, return_exceptions=True)
+                )
 
 
 class node:  # pylint: disable=invalid-name
@@ -60,11 +62,12 @@ class node:  # pylint: disable=invalid-name
         port: int | None = None,
         secure: bool = False,
         policy: str = "first_up",
-        enc: int = CBOR
+        schema: str | None = None,
+        enc: int = CBOR,
     ):
         self._runner = AsyncLoopRunner()
         self._rb = self._runner.run(
-            component(url, name, port, secure, policy, enc)
+            component(url, name, port, secure, policy, schema, enc)
         )
 
     def __str__(self):
@@ -131,13 +134,15 @@ class node:  # pylint: disable=invalid-name
     def put(self, topic: str, *args: Any, **kwargs):
         """Publish a message to the specified topic."""
         return self.exec(
-            self._rb.publish, self.rid + '/' + topic, *args, **kwargs
+            self._rb.publish, self.rid + "/" + topic, *args, **kwargs
         )
 
-    def subscribe(self,
-                  fn: Callable[..., Any],
-                  retroactive: bool = False,
-                  topic: Optional[str] = None):
+    def subscribe(
+        self,
+        fn: Callable[..., Any],
+        retroactive: bool = False,
+        topic: Optional[str] = None,
+    ):
         """
         Subscribe the function to the corresponding topic.
         """
@@ -149,8 +154,7 @@ class node:  # pylint: disable=invalid-name
         """
         return self.exec(self._rb.unsubscribe, fn)
 
-    def expose(self, fn: Callable[..., Any],
-               topic: Optional[str] = None):
+    def expose(self, fn: Callable[..., Any], topic: Optional[str] = None):
         """
         Expose the function as a remote procedure call(RPC) handler.
         """
@@ -192,10 +196,11 @@ class node:  # pylint: disable=invalid-name
         return self
 
     def __exit__(
-            self,
-            exc_type: Optional[Type[BaseException]],
-            exc_val: Optional[BaseException],
-            exc_tb: Optional[TracebackType]) -> Optional[bool]:
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> Optional[bool]:
         self.close()
 
 

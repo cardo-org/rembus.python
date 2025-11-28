@@ -255,6 +255,7 @@ class PubSubMsg(RembusMsg):
     data: Any = None
     flags: UInt8 = QOS0  # type: ignore[valid-type]
     slot: int | None = None
+    recvts: int | None = None
 
     def to_payload(self, enc: int) -> bytes | str:
         """Return the PubSubMsg list of values to encode"""
