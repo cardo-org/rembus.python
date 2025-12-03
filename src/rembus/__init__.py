@@ -10,6 +10,7 @@ from .settings import (  # noqa: F401
     TENANTS_FILE,
 )
 from .protocol import (  # noqa: F401
+    RembusError,
     CBOR,
     JSON,
     QOS0,

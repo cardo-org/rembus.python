@@ -1,5 +1,7 @@
 import asyncio
+import logging
 import rembus as rb
+import pytest
 from tests.db.broker import start_broker
 
 
@@ -8,15 +10,7 @@ async def test_init_db():
     await asyncio.sleep(0.1)
 
     pub = await rb.component("test_pub")
-    await pub.publish(
-        "topic1",
-        "name_a",
-        "type_a",
-        1,
-        16,
-        32,
-        64,
-    )
+    await pub.publish("topic1", "name_a", "type_a", 1, 16, 32, 64, slot=1234)
 
     await pub.publish(
         "topic2",
@@ -59,8 +53,40 @@ async def test_init_db():
     await asyncio.sleep(3)
 
     db = bro.db
+
+    topic1_df = db.execute("select * from topic1").pl()
+    assert topic1_df.shape[0] == 1
+    logging.info(topic1_df)
+
     topic3_df = db.execute("select * from topic3").pl()
     assert topic3_df.shape[0] == 1
+
+    await pub.rpc(
+        "deletelake",
+        {
+            "table": "topic3",
+            "where": {"name": "name_a", "type": "type_default"},
+        },
+    )
+    topic3_df = db.execute("select * from topic3").pl()
+    assert topic3_df.shape[0] == 0
+
+    # test errors
+    with pytest.raises(rb.RembusError):
+        await pub.rpc(
+            "deletelake",
+            {
+                "where": {"name": "name_a", "type": "type_default"},
+            },
+        )
+
+    with pytest.raises(rb.RembusError):
+        await pub.rpc(
+            "deletelake",
+            {
+                "table": "topic3",
+            },
+        )
 
     await pub.close()
     await bro.close()

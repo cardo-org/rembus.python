@@ -61,7 +61,7 @@ async def test_rpc():
     server.close()
 
 
-async def myservice_ctx(_, __, x, y):
+async def myservice_ctx(x, y, ctx, node):
     """
     A service that adds two numbers,
     expecting a context and a rembus handle.

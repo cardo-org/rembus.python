@@ -571,7 +571,11 @@ class Router(Supervised):
         """Invoke the handler associate with the message topic."""
         if self.shared is not None:
             output = await get_response(
-                self.handler[topic](self.shared, twin, *getargs(data))
+                self.handler[topic](
+                    *getargs(data),
+                    ctx=self.shared,
+                    node=twin,
+                )
             )
         else:
             output = await get_response(self.handler[topic](*getargs(data)))

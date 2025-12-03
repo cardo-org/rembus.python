@@ -602,36 +602,49 @@ def cbor_parse(pkt) -> RembusMsg:
     mtype = type_byte & 0x0F
     flags = type_byte & 0xF0
 
-    def f(idx):  # shortcut for from_bytes
-        return from_bytes(pkt[idx])
-
     # Special cases first (because of flag-dependent structure)
     if mtype == TYPE_PUB:
         if flags == QOS0:
             return PubSubMsg(topic=pkt[1], data=pkt[2])
-        return PubSubMsg(id=f(1), topic=pkt[2], data=pkt[3], flags=flags)
+
+        slot = None
+        mid = from_bytes(pkt[1])
+        if flags & SLOT_FLAG:
+            slot = mid & 0xFFFFFFFF
+
+        return PubSubMsg(
+            id=mid, slot=slot, topic=pkt[2], data=pkt[3], flags=flags
+        )
 
     if mtype == TYPE_RESPONSE:
         return ResMsg(
-            id=f(1), status=pkt[2], data=pkt[3] if len(pkt) > 3 else None
+            id=from_bytes(pkt[1]),
+            status=pkt[2],
+            data=pkt[3] if len(pkt) > 3 else None,
         )
 
     # Dispatch table for the rest
     table = {
         TYPE_RPC: lambda: RpcReqMsg(
-            id=f(1), topic=pkt[2], target=pkt[3], data=pkt[4]
+            id=from_bytes(pkt[1]), topic=pkt[2], target=pkt[3], data=pkt[4]
         ),
-        TYPE_ACK: lambda: AckMsg(id=f(1)),
-        TYPE_ACK2: lambda: Ack2Msg(id=f(1)),
-        TYPE_ADMIN: lambda: AdminMsg(id=f(1), topic=pkt[2], data=pkt[3]),
-        TYPE_IDENTITY: lambda: IdentityMsg(id=f(1), cid=pkt[2]),
+        TYPE_ACK: lambda: AckMsg(id=from_bytes(pkt[1])),
+        TYPE_ACK2: lambda: Ack2Msg(id=from_bytes(pkt[1])),
+        TYPE_ADMIN: lambda: AdminMsg(
+            id=from_bytes(pkt[1]), topic=pkt[2], data=pkt[3]
+        ),
+        TYPE_IDENTITY: lambda: IdentityMsg(id=from_bytes(pkt[1]), cid=pkt[2]),
         TYPE_ATTESTATION: lambda: AttestationMsg(
-            id=f(1), cid=pkt[2], signature=pkt[3]
+            id=from_bytes(pkt[1]), cid=pkt[2], signature=pkt[3]
         ),
         TYPE_REGISTER: lambda: RegisterMsg(
-            id=f(1), cid=pkt[2], pin=pkt[3], pubkey=pkt[4], type=pkt[5]
+            id=from_bytes(pkt[1]),
+            cid=pkt[2],
+            pin=pkt[3],
+            pubkey=pkt[4],
+            type=pkt[5],
         ),
-        TYPE_UNREGISTER: lambda: UnregisterMsg(id=f(1)),
+        TYPE_UNREGISTER: lambda: UnregisterMsg(id=from_bytes(pkt[1])),
     }
 
     try:

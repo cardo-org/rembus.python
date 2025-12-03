@@ -183,7 +183,35 @@ def init_db(router, schema):
             logger.debug("creating table %s: %s", table.table, sql)
             db.execute(sql)
 
+    # Register deletelake handler
+    router.handler["deletelake"] = lambda msg, ctx=None, node=None: deletelake(
+        router, msg
+    )
+
     return db
+
+
+def deletelake(router, msg):
+    """Delete all data from the ducklake database."""
+    logger.info("[deletelake][%s] recv: %s", router, msg)
+    if "table" not in msg:
+        raise KeyError("error: missing table field")
+
+    if "where" not in msg:
+        raise KeyError("error: missing where field")
+
+    table = msg["table"]
+    delete(router.db, table, msg["where"])
+
+
+def delete(db, table, obj):
+    """Delete rows from `table` matching conditions in `obj`."""
+    conds = [f"{k} = ?" for k in obj.keys()]
+    cond_str = " AND ".join(conds)
+    sql = f"DELETE FROM {table} WHERE {cond_str}"
+    params = list(obj.values())
+    logger.info("deletelake: %s with %s", sql, params)
+    db.execute(sql, params)
 
 
 def getobj(topic, values):

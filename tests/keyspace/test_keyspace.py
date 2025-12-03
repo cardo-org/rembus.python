@@ -4,9 +4,10 @@ import pytest
 import rembus
 
 
-def consume(ctx, rb, topic, data):
+# def consume(ctx, rb, topic, data):
+def consume(topic, data, ctx, node):
     logging.info("[%s] recv: %s", topic, data)
-    ctx[rb.rid] = data
+    ctx[node.rid] = data
 
 
 async def create_sub(name, topic, ctx):
