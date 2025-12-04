@@ -55,6 +55,10 @@ jobs:
     - name: Test with pytest
       env:
         PYTHONPATH: ${{ github.workspace }}/src
+        PGHOST: localhost
+        PGPORT: 5432
+        PGUSER: admin
+        PGPASSWORD: secret
       run: |
         pytest
     - name: Upload coverage to Codecov
