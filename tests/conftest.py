@@ -56,7 +56,7 @@ def setup_before(request):  # pylint: disable=unused-argument
 
     broker_dir = os.path.join(rembus.rembus_dir(), rembus.DEFAULT_BROKER)
     
-    init_ducklake(reset=True)
+    rembus.db.reset_db(rembus.DEFAULT_BROKER)
     os.makedirs(broker_dir)
 
     # Setup tenant settings
@@ -139,42 +139,3 @@ class WebSocketMock:
 def ws_mock():
     """Fixture to create a WebSocketMock instance for testing."""
     return WebSocketMock
-
-def init_ducklake(reset=True):
-    ducklake_url = os.environ.get("DUCKLAKE_URL")
-
-    if ducklake_url:
-        if ducklake_url.startswith("postgres"):
-            dbname = "rembus_test"
-            user = os.environ.get("PGUSER", "postgres")
-            pwd = os.environ.get("PGPASSWORD", "postgres")
-            db_url = f"postgresql://{user}:{pwd}@127.0.0.1/{dbname}"
-            os.environ["DATABASE_URL"] = db_url
-            os.environ["DUCKLAKE_URL"] = f"postgres:{db_url}"
-
-            if reset:
-                logging.info("resetting test database %s", dbname)
-                subprocess.run(["dropdb", dbname, "--if-exists"], check=True)
-                subprocess.run(["createdb", dbname], check=True)
-
-        elif ducklake_url.startswith("sqlite"):
-            db_file = os.path.join(rs.rembus_dir(), "rembus_test.sqlite")
-            if reset and os.path.exists(db_file):
-                os.remove(db_file)
-            os.environ["DUCKLAKE_URL"] = f"sqlite:{db_file}"
-
-    elif reset:
-        broker_ducklake = os.path.join(rs.rembus_dir(), "broker.ducklake")
-
-        if os.path.exists(broker_ducklake):
-            if os.path.isdir(broker_ducklake):
-                shutil.rmtree(broker_ducklake)
-            else:
-                os.remove(broker_ducklake)
-
-        broker_path = rs.broker_dir("broker")
-        if os.path.exists(broker_path):
-            if os.path.isdir(broker_path):
-                shutil.rmtree(broker_path)
-            else:
-                os.remove(broker_path)
