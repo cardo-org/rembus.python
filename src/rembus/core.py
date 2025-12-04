@@ -407,6 +407,23 @@ class Router(Supervised):
         if self.db is not None:
             self.db.close()
 
+    async def _broadcast(self, msg):
+        twin = msg.twin
+        data = rp.tag2df(msg.data)
+        try:
+            if msg.topic in self.handler:
+                await self.evaluate(msg.twin, msg.topic, data)
+
+            subs = self.subscribers.get(msg.topic, [])
+            for t in subs:
+                if t != twin:
+                    # Do not send back to publisher.
+                    await t.send(msg)
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.warning("[%s] error in method invocation: %s", self, e)
+            traceback.print_exc()
+
     async def _pubsub_msg(self, msg: rp.PubSubMsg):
         msg.recvts = int(time.time())
         twin = msg.twin
@@ -423,26 +440,11 @@ class Router(Supervised):
                     # Save the message id to guarantee exactly one delivery.
                     twin.ackdf[msg.id] = int(time.time())
 
-        data = rp.tag2df(msg.data)
-
         if self.db is not None:
             # save the message into msg_cache
             self.append_message(msg)
 
-        try:
-            if msg.topic in self.handler:
-                await self.evaluate(msg.twin, msg.topic, data)
-
-            subs = self.subscribers.get(msg.topic, [])
-            for t in subs:
-                if t != twin:
-                    # Do not send back to publisher.
-                    await t.send(msg)
-
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.warning("[%s] error in method invocation: %s", self, e)
-            traceback.print_exc()
-        return
+        await self._broadcast(msg)
 
     def append_message(self, msg: rp.PubSubMsg):
         """Append a message to the message cache."""

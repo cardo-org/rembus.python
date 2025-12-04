@@ -342,7 +342,7 @@ def append(con: duckdb.DuckDBPyConnection, tabledef, msgs):
     for msg in msgs:
         try:
             values = msg.data
-            # key_value format
+            # key_value
             if fmt == "key_value":
                 obj = getobj(topic, values)
                 set_default(msg, tabledef, obj, add_nullable=True)
@@ -356,7 +356,7 @@ def append(con: duckdb.DuckDBPyConnection, tabledef, msgs):
 
                 fields = [obj[f] for f in tblfields]
 
-            # dataframe format
+            # dataframe
             elif fmt == "dataframe":
                 df = tag2df(values[0])
                 if list(df.columns) != tblfields:
@@ -424,90 +424,66 @@ def schema_to_polars(tabledef: Table):
     return schema
 
 
-def upsert(con: duckdb.DuckDBPyConnection, tabledef, messages):
-    tname = tabledef.table
-    fmt = tabledef.format
-    col_names = columns(tabledef) + list(tabledef.extras.values())
-    indexes = list(tabledef.keys)
-    records = []
-    dataframes = []
+def add_extras(table, msg, obj):
+    if "recv_ts" in table.extras:
+        obj[table.extras["recv_ts"]] = msg.recvts
+    if "slot" in table.extras:
+        obj[table.extras["slot"]] = msg.slot
 
-    # Build final DataFrame (tdf)
-    for msg in messages:
-        try:
-            values = msg.data
 
-            # key_value
-            if fmt == "key_value":
-                obj = getobj(tname, values)
-                set_default(msg, tabledef, obj, add_nullable=True)
+def handle_key_value(msg, table, col_names, records, tname):
+    obj = getobj(tname, msg.data)
+    set_default(msg, table, obj, add_nullable=True)
+    add_extras(table, msg, obj)
 
-                if "recv_ts" in tabledef.extras:
-                    obj[tabledef.extras["recv_ts"]] = msg.recvts
-                if "slot" in tabledef.extras:
-                    obj[tabledef.extras["slot"]] = msg.slot
+    if all(k in obj for k in col_names):
+        records.append(obj)
+    else:
+        logger.warning(
+            "[%s] unsaved %s missing required fields %s", tname, obj, col_names
+        )
 
-                # Ensure all fields exist
-                if all(k in obj for k in col_names):
-                    records.append(obj)
-                else:
-                    logger.warning(
-                        "[%s] unsaved %s missing required fields %s",
-                        tname,
-                        obj,
-                        col_names,
-                    )
-                    continue
 
-            # dataframe
-            elif fmt == "dataframe":
-                df = tag2df(values[0])
-                df = df_extras(tabledef, df, msg)
-                if list(df.columns) == col_names:
-                    dataframes.append(df)
-                else:
-                    logger.warning("[%s] unsaved df (mismatched fields)", tname)
-                    continue
+def handle_dataframe(msg, table, col_names, dataframes, tname):
+    df = tag2df(msg.data[0])
+    df = df_extras(table, df, msg)
 
-            # default format
-            else:
-                vals = values
-                if len(vals) == len(tabledef.columns):
-                    extra_vals = extras(tabledef, msg)
-                    all_vals = vals + extra_vals
-                    records.append(all_vals)
-                else:
-                    logger.warning(
-                        "[%s] unsaved %s with mismatched fields", tname, vals
-                    )
-                    continue
-        except Exception as e:
-            logger.error("[upsert] %s: %s", tname, e)
+    if list(df.columns) == col_names:
+        dataframes.append(df)
+    else:
+        logger.warning("[%s] unsaved df (mismatched fields)", tname)
 
-    tdf = pl.DataFrame(records, schema=schema_to_polars(tabledef), orient="row")
+
+def handle_default(msg, table, col_names, records, tname):
+    vals = msg.data
+    if len(vals) != len(table.columns):
+        logger.warning("[%s] unsaved %s with mismatched fields", tname, vals)
+        return
+
+    extra_vals = extras(table, msg)
+    records.append(vals + extra_vals)
+
+
+def execute_upsert(con, table, col_names, indexes, records, dataframes):
+    tname = table.table
+
+    tdf = pl.DataFrame(records, schema=schema_to_polars(table), orient="row")
     tdf = pl.concat([tdf, *dataframes], how="vertical")
+
     if tdf.is_empty():
         return
 
     if indexes:
-        tdf = (
-            tdf.sort(indexes)  # Sort so last row is last
-            .group_by(indexes)
-            .agg([pl.all().last()])  # Take last row of each group
-        )
-
-    # logger.debug("[%s] upserting dataframe:\n%s", tname, tdf)
+        tdf = tdf.sort(indexes).group_by(indexes).agg([pl.all().last()])
 
     con.register("df_view", tdf)
 
-    conds = [f"df_view.{k} = {tname}.{k}" for k in indexes]
-    cond_str = " AND ".join(conds)
-
+    cond_str = " AND ".join(f"df_view.{k} = {tname}.{k}" for k in indexes)
     col_list = ", ".join(col_names)
     val_list = ", ".join(f"df_view.{c}" for c in col_names)
 
-    update_columns = [c for c in col_names if c not in indexes]
-    update_list = ", ".join(f"{c} = df_view.{c}" for c in update_columns)
+    update_cols = [c for c in col_names if c not in indexes]
+    update_list = ", ".join(f"{c} = df_view.{c}" for c in update_cols)
 
     sql = f"""
         MERGE INTO {tname}
@@ -519,6 +495,33 @@ def upsert(con: duckdb.DuckDBPyConnection, tabledef, messages):
 
     con.execute(sql)
     con.unregister("df_view")
+
+
+def upsert(con: duckdb.DuckDBPyConnection, table, messages):
+    """Insert/update a record in a table with keywords."""
+    tname = table.table
+    fmt = table.format
+    col_names = columns(table) + list(table.extras.values())
+    indexes = list(table.keys)
+
+    records = []
+    dataframes = []
+
+    for msg in messages:
+        try:
+            if fmt == "key_value":
+                handle_key_value(msg, table, col_names, records, tname)
+
+            elif fmt == "dataframe":
+                handle_dataframe(msg, table, col_names, dataframes, tname)
+
+            else:
+                handle_default(msg, table, col_names, records, tname)
+
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("[upsert] %s: %s", tname, e)
+
+    execute_upsert(con, table, col_names, indexes, records, dataframes)
 
 
 def expand(msg: PubSubMsg):

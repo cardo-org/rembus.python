@@ -74,6 +74,28 @@ class KeySpaceRouter(rc.Supervised):
                 if el in self.spaces[retopic]:
                     self.spaces[retopic].remove(el)
 
+    async def broadcast(self, topic, msg, space_twins):
+        """Brodcast the message to all subscribed spaces."""
+        to_remove = []
+        for space_twin in space_twins:
+            pattern = space_twin.space
+            logger.debug(
+                "[keyspace] publish to %s: %s, %s",
+                pattern,
+                topic,
+                msg.data,
+            )
+            twid = space_twin.twid
+            if twid in self.broker.id_twin:
+                tw = self.broker.id_twin[twid]
+                if tw.isopen():
+                    await tw.publish(pattern, topic, *msg.data)
+            else:
+                # cleanup, the twin has gone
+                to_remove.append(space_twin)
+        for el in to_remove:
+            space_twins.remove(el)
+
     async def publish_interceptor(self, msg):
         """Parse the topic and dispatch to all twins subscribed to spaces
         with regex matching the topic"""
@@ -84,7 +106,6 @@ class KeySpaceRouter(rc.Supervised):
                 if m is not None:
                     unsealed = True
 
-                    # m.groups() == captures in Julia
                     for capture in m.groups():
                         if "@" in capture:
                             # a regex chunk matched a verbatim chunk → reject
@@ -92,27 +113,8 @@ class KeySpaceRouter(rc.Supervised):
                             break
 
                     if unsealed:
-                        to_remove = []
-                        # for pattern, twid in space_twins:
-                        for space_twin in space_twins:
-                            pattern = space_twin.space
-                            logger.debug(
-                                "[keyspace] publish to %s: %s, %s",
-                                pattern,
-                                topic,
-                                msg.data,
-                            )
-                            twid = space_twin.twid
-                            if twid in self.broker.id_twin:
-                                tw = self.broker.id_twin[twid]
-                                if tw.isopen():
-                                    await tw.publish(pattern, topic, *msg.data)
-                            else:
-                                # cleanup, the twin has gone
-                                to_remove.append(space_twin)
+                        await self.broadcast(topic, msg, space_twins)
 
-                        for el in to_remove:
-                            space_twins.remove(el)
 
     async def _task_impl(self) -> None:
         """Override in subclasses for supervised task impl."""
