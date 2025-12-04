@@ -57,6 +57,30 @@
         "recv_ts": "ts",
         "slot": "rop"
       }
+    },
+    {
+      "table": "device",
+      "topic": ":site/:type/:dn/device",
+      "columns": [
+        {
+          "col": "site",
+          "type": "TEXT",
+          "nullable": false
+        },
+        {
+          "col": "type",
+          "type": "TEXT",
+          "nullable": false
+        },
+        {
+          "col": "dn",
+          "type": "TEXT"
+        }
+      ],
+      "format": "key_value",
+      "keys": [
+        "dn"
+      ]
     }
   ]
 }

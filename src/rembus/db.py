@@ -1,6 +1,10 @@
 import os
+import subprocess
+from pathlib import Path
 import logging
+import shutil
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 import json
 import re
 import cbor2
@@ -9,7 +13,7 @@ import pandas as pd
 import polars as pl
 import pyarrow as pa
 from pydantic import BaseModel, Field, model_validator
-from rembus.settings import rembus_dir
+from rembus.settings import broker_dir, rembus_dir
 from rembus.protocol import tag2df, df2tag, PubSubMsg
 
 logger = logging.getLogger(__name__)
@@ -91,6 +95,36 @@ def create_table_sql(t: Table) -> str:
     cols_sql = ",".join(fields)
     sql = f"CREATE TABLE IF NOT EXISTS {t.table} ({cols_sql});"
     return sql
+
+
+def parse_dburl():
+    raw = os.environ["DUCKLAKE_URL"]
+    # remove prefix "postgres:"
+    _, url = raw.split(":", 1)
+    o = urlparse(url)
+    return [o.username, o.password, o.hostname, o.path.lstrip("/")]
+
+
+def reset_db(broker_name):
+    dl_url = os.environ.get("DUCKLAKE_URL")
+
+    if dl_url:
+        _, _, _, db = parse_dburl()
+        if dl_url.startswith("postgres"):
+            subprocess.run(["dropdb", db, "--if-exists"], check=False)
+            subprocess.run(["createdb", db], check=True)
+
+        elif dl_url.startswith("sqlite"):
+            logger.debug("removing db %s", db)
+            os.remove(db)
+    else:
+        broker_ducklake = Path(rembus_dir()) / f"{broker_name}.ducklake"
+        broker_ducklake.unlink()
+
+    broker_folder = Path(broker_dir(broker_name)) / "main"
+
+    if broker_folder.exists() and broker_folder.is_dir():
+        shutil.rmtree(broker_folder)
 
 
 def init_db(router, schema):
@@ -215,6 +249,9 @@ def delete(db, table, obj):
 
 
 def getobj(topic, values):
+    if not values:
+        return dict()
+
     v = values[0]
     if not isinstance(v, dict):
         raise ValueError("[format is key_value: data must be a dictionary")

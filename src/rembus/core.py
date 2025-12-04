@@ -809,6 +809,11 @@ class Twin(Supervised):
         """Return the domain of the twin."""
         return domain(self.rid)
 
+    @property
+    def broker_dir(self) -> str:
+        """Return the directory of this broker."""
+        return rs.broker_dir(self.router.id)
+
     def isrepl(self) -> bool:
         """Check if twin is a REPL"""
         return self.uid.protocol == "repl"
