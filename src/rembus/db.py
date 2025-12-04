@@ -119,7 +119,7 @@ def reset_db(broker_name):
             os.remove(db)
     else:
         broker_ducklake = Path(rembus_dir()) / f"{broker_name}.ducklake"
-        broker_ducklake.unlink()
+        broker_ducklake.unlink(True)
 
     broker_folder = Path(broker_dir(broker_name)) / "main"
 
