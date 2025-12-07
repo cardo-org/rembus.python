@@ -629,23 +629,27 @@ def save_data_at_rest(router):
 async def send_messages(twin, df, ts):
     r = twin.router
     for (name, recv, slot, qos, uid, topic, data) in df.iter_rows():
-        if recv>=ts and topic in r.subscribers and twin in r.subscribers[topic]: 
+        if (recv>twin.mark and
+            recv>ts-twin.msg_from.get(topic, 0) and
+            topic in r.subscribers and
+            twin in r.subscribers[topic]):
             payload = cbor2.loads(data)
             if payload:
                 await twin.publish(topic, *payload, slot=slot, qos=qos)
             else:
                 await twin.publish(topic, slot=slot, qos=qos)
+            twin.mark = recv
 
-async def send_data_at_rest(msg, max_period=3600000000000):
+async def send_data_at_rest(msg, max_period=3600_000_000_000):
     twin = msg.twin
     r = twin.router
     db = twin.db
 
-    ts = timestamp() - max_period
+    ts = timestamp()
     if twin.uid.hasname:
         logger.debug("[%s] sending data at rest", twin)
         df = db.execute(
-            f"SELECT * FROM message WHERE name='{r.id}' AND recv>={ts}").pl()
+            f"SELECT * FROM message WHERE name='{r.id}' AND recv>={ts-max_period}").pl()
         await send_messages(twin, df, ts)
 
 def build_message_batch(broker_id: str, msgs: list):
