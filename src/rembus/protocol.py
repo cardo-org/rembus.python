@@ -8,6 +8,7 @@ import os
 import logging
 from typing import Any, List
 import json
+import time
 import cbor2
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, ec
@@ -29,6 +30,9 @@ SIG_ECDSA = 0x2
 
 CBOR = 0
 JSON = 1
+
+Now = 0.0
+LastReceived = float("inf")
 
 UInt8 = conint(ge=0, le=255)
 
@@ -83,11 +87,16 @@ retcode = {
 
 BROKER_CONFIG = "__config__"
 COMMAND = "cmd"
+MSG_FROM = "msg_from"
 ADD_INTEREST = "subscribe"
 REMOVE_INTEREST = "unsubscribe"
 ADD_IMPL = "expose"
 REMOVE_IMPL = "unexpose"
+REACTIVE_CMD = "reactive"
+STATUS = "status"
 
+def timestamp():
+    return time.time_ns()
 
 def msgid():
     """Return an array of MSGID_SZ random bytes."""
@@ -116,6 +125,9 @@ def bytes2id(byte_data: bytearray) -> int:
     # Convert bytes to integer (assuming little-endian, adjust if big-endian)
     return from_bytes(byte_data)
 
+class SendDataAtRest:
+    def __init__(self, twin):
+        self.twin = twin
 
 class RembusException(Exception):
     """Base class for all Rembus exceptions."""

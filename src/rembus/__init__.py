@@ -13,6 +13,8 @@ from .protocol import (  # noqa: F401
     RembusError,
     CBOR,
     JSON,
+    LastReceived,
+    Now,
     QOS0,
     QOS1,
     QOS2,

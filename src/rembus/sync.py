@@ -8,6 +8,7 @@ from typing import Any, Callable, Coroutine, Optional, Type, List
 from rembus import (
     component,
     RbURL,
+    Now,
     CBOR,
     SIG_RSA,
 )
@@ -140,13 +141,13 @@ class node:  # pylint: disable=invalid-name
     def subscribe(
         self,
         fn: Callable[..., Any],
-        retroactive: bool = False,
+        msgfrom: float = Now,
         topic: Optional[str] = None,
     ):
         """
         Subscribe the function to the corresponding topic.
         """
-        return self.exec(self._rb.subscribe, fn, retroactive, topic)
+        return self.exec(self._rb.subscribe, fn, msgfrom, topic)
 
     def unsubscribe(self, fn: Callable[..., Any] | str):
         """

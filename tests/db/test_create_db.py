@@ -15,20 +15,20 @@ def publish_something():
 
 def test_create_sqlite():
     os.environ["DUCKLAKE_URL"] = "sqlite:tmp/rembus/rembus_test.sqlite"
-    publish_something()
     rb.db.reset_db("broker")
+    publish_something()
 
 
 def test_create_postgres():
     os.environ["DUCKLAKE_URL"] = (
         "postgres:postgresql://admin:secret@localhost/rembus_test"
     )
-    publish_something()
     rb.db.reset_db("broker")
+    publish_something()
 
 
 def test_create_duckdb():
     os.environ.pop("DUCKLAKE_URL")
 
-    publish_something()
     rb.db.reset_db("broker")
+    publish_something()

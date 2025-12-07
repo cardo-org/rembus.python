@@ -14,7 +14,7 @@ import polars as pl
 import pyarrow as pa
 from pydantic import BaseModel, Field, model_validator
 from rembus.settings import broker_dir, rembus_dir
-from rembus.protocol import tag2df, df2tag, PubSubMsg
+from rembus.protocol import tag2df, df2tag, timestamp, PubSubMsg
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ def reset_db(broker_name):
 
         elif dl_url.startswith("sqlite"):
             logger.debug("removing db %s", db)
-            os.remove(db)
+            Path(db).unlink(missing_ok=True)
     else:
         broker_ducklake = Path(rembus_dir()) / f"{broker_name}.ducklake"
         broker_ducklake.unlink(True)
@@ -151,7 +151,7 @@ def init_db(router, schema):
             qos UTINYINT,
             uid UBIGINT,
             topic TEXT NOT NULL,
-            data TEXT
+            data BLOB
         )""",
         """
         CREATE TABLE IF NOT EXISTS exposer (
@@ -608,9 +608,7 @@ def msg_table(router, msg: PubSubMsg):
 
 def save_data_at_rest(router):
     """Save cached messages to the database."""
-    logger.debug(
-        "[save_data_at_rest] saving %d messages", len(router.msg_cache)
-    )
+    #logger.debug("[%s] saving %d messages", router, len(router.msg_cache))
     msgs = router.msg_cache
     if not msgs:
         return
@@ -628,6 +626,27 @@ def save_data_at_rest(router):
     router.msg_cache.clear()
     router.msg_topic_cache.clear()
 
+async def send_messages(twin, df, ts):
+    r = twin.router
+    for (name, recv, slot, qos, uid, topic, data) in df.iter_rows():
+        if recv>=ts and topic in r.subscribers and twin in r.subscribers[topic]: 
+            payload = cbor2.loads(data)
+            if payload:
+                await twin.publish(topic, *payload, slot=slot, qos=qos)
+            else:
+                await twin.publish(topic, slot=slot, qos=qos)
+
+async def send_data_at_rest(msg, max_period=3600000000000):
+    twin = msg.twin
+    r = twin.router
+    db = twin.db
+
+    ts = timestamp() - max_period
+    if twin.uid.hasname:
+        logger.debug("[%s] sending data at rest", twin)
+        df = db.execute(
+            f"SELECT * FROM message WHERE name='{r.id}' AND recv>={ts}").pl()
+        await send_messages(twin, df, ts)
 
 def build_message_batch(broker_id: str, msgs: list):
     """Build a PyArrow Table from a list of message tuples."""

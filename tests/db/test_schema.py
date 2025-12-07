@@ -5,12 +5,21 @@ import pytest
 from tests.db.broker import start_broker
 
 
+def topic4(d):
+    logging.info("[topic4] recv: %s", d)
+
 async def test_init_db():
     bro = await start_broker("schema.json")
     await asyncio.sleep(0.1)
 
+    sub = await rb.component("sub")
+    await sub.subscribe(topic4)
+    await sub.reactive()
+
     pub = await rb.component("test_pub")
-    await pub.publish("topic1", "name_a", "type_a", 1, 16, 32, 64, slot=1234)
+    await pub.publish(
+        "topic1", "name_a", "type_a", 1, 16, 32, 64, slot=1234, qos=rb.QOS2
+    )
 
     await pub.publish(
         "topic2",
@@ -89,4 +98,5 @@ async def test_init_db():
         )
 
     await pub.close()
+    await sub.close()
     await bro.close()

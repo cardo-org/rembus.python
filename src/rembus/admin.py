@@ -1,5 +1,6 @@
 import logging
 import rembus.protocol as rp
+#import rembus.db as rdb
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +30,14 @@ def remove_exposer(router, twin, topic):
     )
 
 
-def add_subscriber(router, twin, topic):
+def add_subscriber(router, twin, topic, msgfrom):
     logger.debug(
         "[%s] adding [%s] subscriber for topic [%s]", router, twin, topic
     )
     if topic not in router.subscribers:
         router.subscribers[topic] = []
+
+    twin.msg_from[topic] = msgfrom
     upsert_twin(router.subscribers[topic], twin)
 
 def remove_subscriber(router, twin, topic):
@@ -44,6 +47,12 @@ def remove_subscriber(router, twin, topic):
     logger.debug(
         "[%s] removed [%s] subscriber for topic [%s]", router, twin, topic
     )
+
+async def reactive(router, twin, status: bool):
+    logger.debug("[%s] reactive: %s", twin, status)
+    twin.isreactive = status
+    if status:
+        await router.inbox.put(rp.SendDataAtRest(twin))
 
 async def admin_command(msg: rp.AdminMsg):
     """Handle admin commands"""
@@ -61,8 +70,9 @@ async def admin_command(msg: rp.AdminMsg):
     elif cmd == rp.REMOVE_IMPL:
         remove_exposer(router, twin, topic)
     elif cmd == rp.ADD_INTEREST:
-        add_subscriber(router, twin, topic)
+        add_subscriber(router, twin, topic, msg.data[rp.MSG_FROM])
     elif cmd == rp.REMOVE_INTEREST:
         remove_subscriber(router, twin, topic)
-
+    elif cmd == rp.REACTIVE_CMD:
+        await reactive(router, twin, msg.data[rp.STATUS])
     await twin.response(rp.STS_OK, msg)

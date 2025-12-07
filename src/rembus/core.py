@@ -340,7 +340,7 @@ class Router(Supervised):
         self.config = rs.Config(name)
         self.policy = Policy(policy)
         self.owners = rs.load_tenants(self)
-        self.start_ts = time.time()
+        self.start_ts = rp.timestamp()
         self.msg_cache: list[rp.PubSubMsg] = []
         self.msg_topic_cache: dict[str, List[rp.PubSubMsg]] = {}
         self.tables: dict[str, rdb.Table] = {}
@@ -361,9 +361,10 @@ class Router(Supervised):
 
     def isconnected(self, rid: str) -> bool:
         """Check if a component with the given rid is connected."""
-        for tk in self.id_twin:
+        for tk, twin in self.id_twin.items():
             if tk.startswith(rid + "@"):
-                return True
+                if twin.isopen():
+                    return True
         return False
 
     def uptime(self) -> str:
@@ -419,14 +420,16 @@ class Router(Supervised):
                 if t != twin:
                     # Do not send back to publisher.
                     await t.send(msg)
+                    t.mark = msg.recvts
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.warning("[%s] error in method invocation: %s", self, e)
             traceback.print_exc()
 
     async def _pubsub_msg(self, msg: rp.PubSubMsg):
-        msg.recvts = int(time.time())
         twin = msg.twin
+        ts = rp.timestamp()
+        msg.recvts = ts
         qos = msg.flags & rp.QOS2
         if qos > rp.QOS0 and msg.id:
             if twin.socket:
@@ -438,7 +441,8 @@ class Router(Supervised):
                     return
                 else:
                     # Save the message id to guarantee exactly one delivery.
-                    twin.ackdf[msg.id] = int(time.time())
+                    ##twin.ackdf[msg.id] = int(time.time())
+                    twin.ackdf[msg.id] = rp.timestamp()
 
         if self.db is not None:
             # save the message into msg_cache
@@ -526,7 +530,7 @@ class Router(Supervised):
             await self._auth_identity(msg)
 
     async def _handle_attestation(self, msg: rp.AttestationMsg) -> None:
-        sts = self._verify_signature(msg)
+        sts = await self._verify_signature(msg)
         await msg.twin.response(sts, msg)
 
     async def _handle_admin(self, msg: rp.AdminMsg) -> None:
@@ -554,6 +558,8 @@ class Router(Supervised):
                 case "save_messages":
                     # save messages to the database periodically
                     rdb.save_data_at_rest(self)
+                case rp.SendDataAtRest():
+                    await rdb.send_data_at_rest(msg)
                 case rp.PubSubMsg():
                     await self._pubsub_msg(msg)
                 case rp.RpcReqMsg():
@@ -587,11 +593,8 @@ class Router(Supervised):
     async def _client_receiver(self, ws):
         """Receive messages from the client component."""
         url = RbURL()
-        if url.twkey in self.id_twin:
-            twin = self.id_twin[url.twkey]
-        else:
-            twin = Twin(url, bottom_router(self), False)
-            self.id_twin[url.twkey] = twin
+        twin = Twin(url, bottom_router(self), False)
+        self.id_twin[url.twkey] = twin
 
         twin.socket = ws
         await twin.twin_receiver()
@@ -627,13 +630,15 @@ class Router(Supervised):
         except FileNotFoundError:
             return False
 
-    def _update_twin(self, twin, identity):
+    async def _update_twin(self, twin, identity):
         logger.debug("[%s] setting name: [%s]", twin, identity)
         self.id_twin.pop(twin.twkey, twin)
         twin.rid = identity
         self.id_twin[twin.twkey] = twin
+        if twin.db is not None:
+            load_mark(twin)
 
-    def _verify_signature(self, msg: rp.AttestationMsg):
+    async def _verify_signature(self, msg: rp.AttestationMsg):
         """Verify the signature of the attestation message."""
         twin = msg.twin
         cid = msg.cid
@@ -654,7 +659,7 @@ class Router(Supervised):
             elif isinstance(pubkey, ec.EllipticCurvePublicKey):
                 pubkey.verify(signature, plain, ec.ECDSA(hashes.SHA256()))
 
-            self._update_twin(twin, msg.cid)
+            await self._update_twin(twin, msg.cid)
             return rp.STS_OK
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("verification failed: %s (%s)", e, type(e))
@@ -680,7 +685,7 @@ class Router(Supervised):
             # component is provisioned, send the challenge
             response = self._challenge(msg)
         else:
-            self._update_twin(twin, identity)
+            await self._update_twin(twin, identity)
             response = rp.ResMsg(id=msg.id, status=rp.STS_OK)
 
         await twin.send(response)
@@ -764,6 +769,9 @@ class Twin(Supervised):
         self.reconnect_task: Optional[asyncio.Task[None]] = None
         self.ackdf: dict[int, int] = {}  # msgid => ts
         self.handler["phase"] = lambda: "CLOSED"
+        self.isreactive: bool = False
+        self.msg_from: dict[str, float] = {}
+        self.mark: int = 0
         self.start()
 
     def __str__(self):
@@ -790,6 +798,7 @@ class Twin(Supervised):
 
     @rid.setter
     def rid(self, rid: str):
+        self.uid.hasname = True
         self.uid.id = rid
 
     @property
@@ -854,7 +863,10 @@ class Twin(Supervised):
     async def _shutdown(self):
         """Cleanup logic when shutting down the twin."""
         logger.debug("[%s] twin shutdown", self)
-
+        
+        if self.db is not None:
+            save_mark(self)
+        
         if self.isclient or self.uid.isrepl():
             await self._shutdown_router()
 
@@ -1113,7 +1125,7 @@ class Twin(Supervised):
         """Publish a message to the specified topic."""
 
         slot = kwargs.get("slot", None)
-        qos = kwargs.get("qos", rp.QOS0)
+        qos = kwargs.get("qos", rp.QOS0) & rp.QOS2
         if qos == rp.QOS0:
             msg = rp.PubSubMsg(topic=topic, data=data, slot=slot)
             msg.twin = self
@@ -1261,7 +1273,7 @@ class Twin(Supervised):
     async def subscribe(
         self,
         fn: Callable[..., Any],
-        retroactive: bool = False,
+        msgfrom: float = rp.Now,
         topic: Optional[str] = None,
     ):
         """
@@ -1270,7 +1282,7 @@ class Twin(Supervised):
         if topic is None:
             topic = fn.__name__
 
-        await self.setting(topic, rp.ADD_INTEREST, {"retroactive": retroactive})
+        await self.setting(topic, rp.ADD_INTEREST, {"msg_from": msgfrom})
         self.router.handler[topic] = fn
         return self
 
@@ -1278,9 +1290,6 @@ class Twin(Supervised):
         """
         Unsubscribe the function from the corresponding topic.
         """
-        # if topic is None:
-        #    topic = fn.__name__
-
         if isinstance(fn, str):
             topic = fn
         else:
@@ -1306,9 +1315,6 @@ class Twin(Supervised):
         """
         Unexpose the function as a remote procedure call(RPC) handler.
         """
-        # if topic is None:
-        #    topic = fn.__name__
-
         if isinstance(fn, str):
             topic = fn
         else:
@@ -1404,3 +1410,32 @@ async def component(
             await router.init_twin(RbURL(netlink), enc, isserver)
 
     return handle
+
+def load_mark(twin):
+    result =twin.db.sql("""
+        SELECT mark
+        FROM mark
+        WHERE twin = ? AND name = ?
+    """, params=[twin.rid, twin.router.id]).fetchone()
+
+    if result:
+        twin.mark = result[0]
+        logger.debug("[%s] loaded mark %s", twin, twin.mark)
+    else:
+        logger.debug("[%s] no mark found in database", twin)
+
+def save_mark(twin):
+    db = twin.db
+    mark = twin.mark
+    tid = twin.rid
+    name = twin.router.id
+    db.sql("""
+            MERGE INTO mark AS m
+            USING (SELECT ? AS name, ? AS twin, ? AS mark) AS t
+            ON m.name = t.name AND m.twin = t.twin
+            WHEN MATCHED THEN
+                UPDATE SET mark = t.mark
+            WHEN NOT MATCHED THEN
+                INSERT (name, twin, mark) VALUES (t.name, t.twin, t.mark)
+        """, params=[name, tid, mark])
+    logger.debug("[%s] saved mark %s", twin, mark)

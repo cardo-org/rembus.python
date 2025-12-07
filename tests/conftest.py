@@ -110,7 +110,7 @@ class WebSocketMock:
                 msg = cbor2.loads(pkt)
             else:
                 msg = pkt
-            logging.debug("[mock_send]: %s", msg)
+            #logging.debug("[mock_send]: %s", msg)
             await self.queue.put(msg)
         else:
             self.count += 1
