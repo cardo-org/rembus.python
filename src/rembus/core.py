@@ -21,6 +21,7 @@ from websockets.asyncio.server import serve
 import cbor2
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa, ec
+import polars as pl
 import websockets
 import rembus.protocol as rp
 import rembus.settings as rs
@@ -377,8 +378,11 @@ class Router(Supervised):
         self.handler["uptime"] = lambda *_: self.uptime()
 
     async def init_twin(self, uid: RbURL, enc: int, isserver: bool):
-        """Create and start a Twin"""
+        """
+        Create and start a Twin for the component that connects to a server.
+        """
         cmp = Twin(uid, bottom_router(self), not isserver, enc)
+        cmp.start()
         if not uid.isrepl():
             self.id_twin[uid.twkey] = cmp
 
@@ -441,7 +445,7 @@ class Router(Supervised):
                     return
                 else:
                     # Save the message id to guarantee exactly one delivery.
-                    ##twin.ackdf[msg.id] = int(time.time())
+                    # twin.ackdf[msg.id] = int(time.time())
                     twin.ackdf[msg.id] = rp.timestamp()
 
         if self.db is not None:
@@ -594,6 +598,7 @@ class Router(Supervised):
         """Receive messages from the client component."""
         url = RbURL()
         twin = Twin(url, bottom_router(self), False)
+        twin.start()
         self.id_twin[url.twkey] = twin
 
         twin.socket = ws
@@ -636,7 +641,7 @@ class Router(Supervised):
         twin.rid = identity
         self.id_twin[twin.twkey] = twin
         if twin.db is not None:
-            load_mark(twin)
+            load_twin(twin)
 
     async def _verify_signature(self, msg: rp.AttestationMsg):
         """Verify the signature of the attestation message."""
@@ -772,7 +777,7 @@ class Twin(Supervised):
         self.isreactive: bool = False
         self.msg_from: dict[str, float] = {}
         self.mark: int = 0
-        self.start()
+        # self.start()
 
     def __str__(self):
         return f"{self.uid.id}"
@@ -863,10 +868,10 @@ class Twin(Supervised):
     async def _shutdown(self):
         """Cleanup logic when shutting down the twin."""
         logger.debug("[%s] twin shutdown", self)
-        
+
         if self.db is not None:
-            save_mark(self)
-        
+            save_twin(self)
+
         if self.isclient or self.uid.isrepl():
             await self._shutdown_router()
 
@@ -1411,31 +1416,164 @@ async def component(
 
     return handle
 
-def load_mark(twin):
-    result =twin.db.sql("""
-        SELECT mark
-        FROM mark
-        WHERE twin = ? AND name = ?
-    """, params=[twin.rid, twin.router.id]).fetchone()
+
+def sync_table(
+    db, table_name: str, current_df: pl.DataFrame, new_df: pl.DataFrame
+):
+    """
+    Synchronize a db table by removing rows not in `new_df`
+    and adding rows not in `current_df`.
+    """
+    fields = current_df.columns
+
+    conds = ["df.name = t.name"]
+    for field in fields:
+        conds.append(f"df.{field} = t.{field}")
+    cond_str = " AND ".join(conds)
+
+    # Find rows in current_df that are not in new_df (rows to delete)
+    diff_df = current_df.join(new_df, on=fields, how="anti")
+
+    if not diff_df.is_empty():
+        # Delete rows that exist in current but not in new
+        db.sql(f"""
+            DELETE FROM {table_name} t WHERE EXISTS (
+                SELECT 1 FROM diff_df WHERE {cond_str}
+            )
+        """)
+
+    # Find rows in new_df that are not in current_df (rows to insert)
+    diff_df = new_df.join(current_df, on=fields, how="anti")
+
+    if not diff_df.is_empty():
+        db.sql(f"INSERT INTO {table_name} SELECT * FROM diff_df")
+
+
+def sync_twin(
+    db, router_name: str, twin_name: str, table_name: str, new_df: pl.DataFrame
+):
+    """Synchronize a twin's data in a specific table."""
+    current_df = db.sql(
+        f"""
+        SELECT * FROM {table_name} 
+        WHERE name = ? AND twin = ?
+    """,
+        params=[router_name, twin_name],
+    ).pl()
+
+    sync_table(db, table_name, current_df, new_df)
+
+
+def sync_cfg(db, router_name: str, table_name: str, new_df: pl.DataFrame):
+    """Synchronize configuration data for a router."""
+    current_df = db.sql(
+        f"""
+        SELECT * FROM {table_name} 
+        WHERE name = ?
+    """,
+        params=[router_name],
+    ).pl()
+
+    sync_table(db, table_name, current_df, new_df)
+
+
+def save_twin(twin):
+    """
+    Save twin data (subscribers, exposers, and marks) to the database.
+    """
+    router = twin.router
+    tid = twin.rid
+    name = router.id
+    db = router.db
+
+    # Save subscriber data
+    if twin.msg_from:
+        current_df = pl.DataFrame(
+            {
+                "name": [name] * len(twin.msg_from),
+                "twin": [tid] * len(twin.msg_from),
+                "topic": list(twin.msg_from.keys()),
+                "msg_from": list(twin.msg_from.values()),
+            }
+        )
+        sync_twin(db, name, tid, "subscriber", current_df)
+
+    # Save exposer data
+    exposed_topics = exposed_topics_for_twin(router, twin)
+    if exposed_topics:
+        current_df = pl.DataFrame(
+            {
+                "name": [name] * len(exposed_topics),
+                "twin": [tid] * len(exposed_topics),
+                "topic": exposed_topics,
+            }
+        )
+        sync_twin(db, name, tid, "exposer", current_df)
+
+    # Save mark data
+    current_df = pl.DataFrame(
+        {"name": [name], "twin": [tid], "mark": [twin.mark]}
+    )
+    sync_twin(db, name, tid, "mark", current_df)
+
+
+def exposed_topics_for_twin(router, twin) -> List[str]:
+    """
+    Get list of topics exposed by this twin.
+    """
+    exposed = []
+    for topic, twins in router.exposers.items():
+        if twin in twins:
+            exposed.append(topic)
+    return exposed
+
+
+def load_twin(twin):
+    """
+    Load twin data (subscribers, exposers, and marks) from the database.
+    """
+    router = twin.router
+    name = router.id
+    tid = twin.rid
+    db = router.db
+
+    df = db.sql(
+        "SELECT topic, msg_from FROM subscriber WHERE name = ? AND twin = ?",
+        params=[name, tid],
+    ).pl()
+
+    if not df.is_empty():
+        twin.msg_from = dict(
+            zip(df["topic"].to_list(), df["msg_from"].to_list())
+        )
+
+        # Update router's subscribers
+        for topic in df["topic"].to_list():
+            if topic not in router.subscribers:
+                router.subscribers[topic] = []
+            if twin not in router.subscribers[topic]:
+                router.subscribers[topic].append(twin)
+
+    df = db.sql(
+        "SELECT topic FROM exposer WHERE name = ? AND twin = ?",
+        params=[name, tid],
+    ).pl()
+
+    if not df.is_empty():
+        # Update router's exposers
+        for topic in df["topic"].to_list():
+            if topic not in router.exposers:
+                router.exposers[topic] = []
+            if twin not in router.exposers[topic]:
+                router.exposers[topic].append(twin)
+
+    # Load mark data
+    result = db.sql(
+        "SELECT mark FROM mark WHERE name = ? AND twin = ?", params=[name, tid]
+    ).fetchone()
 
     if result:
         twin.mark = result[0]
         logger.debug("[%s] loaded mark %s", twin, twin.mark)
     else:
         logger.debug("[%s] no mark found in database", twin)
-
-def save_mark(twin):
-    db = twin.db
-    mark = twin.mark
-    tid = twin.rid
-    name = twin.router.id
-    db.sql("""
-            MERGE INTO mark AS m
-            USING (SELECT ? AS name, ? AS twin, ? AS mark) AS t
-            ON m.name = t.name AND m.twin = t.twin
-            WHEN MATCHED THEN
-                UPDATE SET mark = t.mark
-            WHEN NOT MATCHED THEN
-                INSERT (name, twin, mark) VALUES (t.name, t.twin, t.mark)
-        """, params=[name, tid, mark])
-    logger.debug("[%s] saved mark %s", twin, mark)

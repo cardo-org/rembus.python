@@ -1,8 +1,0 @@
-{
-  "typeCheckingMode": "basic",
-  "reportMissingTypeStubs": false,
-  "reportMissingImports": true,
-  "reportOptionalSubscript": true,
-  "reportOptionalMemberAccess": true,
-  "useLibraryCodeForTypes": true
-}

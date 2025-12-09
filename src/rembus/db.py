@@ -608,7 +608,7 @@ def msg_table(router, msg: PubSubMsg):
 
 def save_data_at_rest(router):
     """Save cached messages to the database."""
-    #logger.debug("[%s] saving %d messages", router, len(router.msg_cache))
+    # logger.debug("[%s] saving %d messages", router, len(router.msg_cache))
     msgs = router.msg_cache
     if not msgs:
         return
@@ -626,19 +626,21 @@ def save_data_at_rest(router):
     router.msg_cache.clear()
     router.msg_topic_cache.clear()
 
+
 async def send_messages(twin, df, ts):
     r = twin.router
     for (name, recv, slot, qos, uid, topic, data) in df.iter_rows():
-        if (recv>twin.mark and
-            recv>ts-twin.msg_from.get(topic, 0) and
+        if (recv > twin.mark and
+            recv > ts-twin.msg_from.get(topic, 0) and
             topic in r.subscribers and
-            twin in r.subscribers[topic]):
+                twin in r.subscribers[topic]):
             payload = cbor2.loads(data)
             if payload:
                 await twin.publish(topic, *payload, slot=slot, qos=qos)
             else:
                 await twin.publish(topic, slot=slot, qos=qos)
             twin.mark = recv
+
 
 async def send_data_at_rest(msg, max_period=3600_000_000_000):
     twin = msg.twin
@@ -651,6 +653,7 @@ async def send_data_at_rest(msg, max_period=3600_000_000_000):
         df = db.execute(
             f"SELECT * FROM message WHERE name='{r.id}' AND recv>={ts-max_period}").pl()
         await send_messages(twin, df, ts)
+
 
 def build_message_batch(broker_id: str, msgs: list):
     """Build a PyArrow Table from a list of message tuples."""

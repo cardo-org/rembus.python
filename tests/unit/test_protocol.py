@@ -48,6 +48,7 @@ async def test_rembus_messages():
     """Test the string representation of rembus protocol messages."""
     router = rc.Router("broker")
     twin = rc.Twin(rc.RbURL("twin"), router)
+    twin.start()
     for msg in [
         rp.AttestationMsg(id=1, cid="cid", signature=b"signature"),
         rp.IdentityMsg(id=2, cid="cid"),
