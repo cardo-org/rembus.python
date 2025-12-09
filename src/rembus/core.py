@@ -460,7 +460,7 @@ class Router(Supervised):
         rdb.msg_table(self, msg)
         self.msg_cache.append(msg)
         if msg.table in self.tables:
-            if topic not in self.msg_topic_cache:
+            if msg.table not in self.msg_topic_cache:
                 self.msg_topic_cache[msg.table] = []
             self.msg_topic_cache[msg.table].append(msg)
 
