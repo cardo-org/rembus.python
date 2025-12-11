@@ -5,15 +5,12 @@ import json
 import logging
 import os
 import time
-from pathlib import Path
-import subprocess
 import shutil
+import websockets
 import cbor2
 import pytest
-import websockets
 import rembus
 import rembus.protocol as rp
-import rembus.settings as rs
 
 
 @pytest.fixture(scope="module")
@@ -55,7 +52,7 @@ def setup_before(request):  # pylint: disable=unused-argument
         shutil.rmtree(rembus_dir)
 
     broker_dir = os.path.join(rembus.rembus_dir(), rembus.DEFAULT_BROKER)
-    
+
     rembus.db.reset_db(rembus.DEFAULT_BROKER)
     os.makedirs(broker_dir)
 
@@ -63,7 +60,6 @@ def setup_before(request):  # pylint: disable=unused-argument
     fn = os.path.join(broker_dir, rembus.TENANTS_FILE)
     with open(fn, "w", encoding="utf-8") as f:
         f.write(json.dumps({".": "11223344"}))
-
 
     yield
 
@@ -110,7 +106,7 @@ class WebSocketMock:
                 msg = cbor2.loads(pkt)
             else:
                 msg = pkt
-            #logging.debug("[mock_send]: %s", msg)
+            # logging.debug("[mock_send]: %s", msg)
             await self.queue.put(msg)
         else:
             self.count += 1

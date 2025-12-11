@@ -7,7 +7,7 @@ Rembus is a Pub/Sub and RPC middleware.
 
 There are few key concepts to get confident with Rembus:
 
-- A Component is a distributed application that communicate with Pub/Sub or RPC styles;
+- A Component is a node of a distributed system that communicate with Pub/Sub or RPC styles;
 - A Component connect to a Broker;
 - A Broker dispatch messages between Components;
 - A Component expose RPC services and/or subscribe to Pub/Sub topics;
@@ -17,37 +17,47 @@ This API version supports only the WebSocket protocol.
 
 ## Getting Started
 
-Start the [Rembus](https://cardo-org.github.io/Rembus.python/stable/) broker.
-
 Install the package:
 
 ```shell
 pip install rembus
 ```
 
-```python
-import rembus
+Start the [Rembus.jl](https://cardo-org.github.io/Rembus.python/stable/) broker
+or start a component that accepts WebSocket connections:
 
-rb = rembus.node()
-rb.publish({'name': 'sensor_1', 'metric': 'T', 'value':21.6})
-rb.close()
+```python
+# Broker side
+import rembus as rb
+
+bro = rb.node() # equivalent to rb.node(port = 8000)
+bro.wait() # rembus loop, unnecessary if running in REPL interpreter 
 ```
 
-or call `component("myname")` for the asynchronous Python API:
+A Rembus component has a name and connects to the broker. The `node` api is for
+the sync version and the `component` api is for the async version.
 
 ```python
+# Client side (sync version)
+import rembus as rb
+
+cli = rb.node("mynode")
+cli.publish("mytopic", {'name': 'sensor_1', 'metric': 'T', 'value':21.6})
+cli.close()
+```
+
+```python
+# Client side (async version)
 import asyncio
-import rembus
+import rembus as rb
 
 async def main():
-    rb = await rembus.component("myname")
-    await rb.publish("mytopic", {'name': 'sensor_1','metric': 'T','value':21.6})
-    await rb.close()
-
+    cli = await rembus.component("myname")
+    await cli.publish("mytopic", {'name': 'sensor_1','metric': 'T','value':21.6})
+    await cli.close()
 
 loop = asyncio.new_event_loop()
 loop.run_until_complete(main())
-
 ```
 
 ## Initialize a Component
@@ -172,10 +182,4 @@ async def main():
 
 loop = asyncio.new_event_loop()
 loop.run_until_complete(main())
-```
-
-## Test
-
-```shell
-pytest --cov=rembus --cov-report=lcov:lcov.info
 ```

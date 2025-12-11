@@ -1,4 +1,5 @@
 """Tests RPC failure for wrong method invocation."""
+
 import logging
 import rembus
 import rembus.protocol as rp
@@ -6,8 +7,8 @@ import rembus.protocol as rp
 
 async def myservice(data):
     """A simple service that expects a single argument."""
-    logging.info('[myservice]: %s', data)
-    return data*2
+    logging.info("[myservice]: %s", data)
+    return data * 2
 
 
 async def test_rpc_method_exception(mocker, ws_mock):
@@ -21,11 +22,11 @@ async def test_rpc_method_exception(mocker, ws_mock):
     responses = [
         {
             # identity
-            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
+            "reply": lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
             # expose
-            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
+            "reply": lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
             # rpc
@@ -33,10 +34,10 @@ async def test_rpc_method_exception(mocker, ws_mock):
     ]
 
     mocked_connect = mocker.patch(
-        "websockets.connect", mocker.AsyncMock(
-            return_value=ws_mock(responses))
+        "websockets.connect", mocker.AsyncMock(return_value=ws_mock(responses))
     )
-    rb = await rembus.component('bar')
+
+    rb = await rembus.component("bar")
 
     mocked_connect.assert_called_once()
     assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000/bar"
@@ -50,7 +51,7 @@ async def test_rpc_method_exception(mocker, ws_mock):
         assert isinstance(e, rp.RembusError)
         assert e.status == rp.STS_METHOD_EXCEPTION
         assert (
-            e.message ==
-            "myservice() missing 1 required positional argument: 'data'"
+            e.message
+            == "myservice() missing 1 required positional argument: 'data'"
         )
     await rb.close()

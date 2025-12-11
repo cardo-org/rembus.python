@@ -2,9 +2,11 @@ import logging
 import time
 import rembus as rb
 
+
 def mytopic(ctx, node):
     logging.info("[%s] recv mytopic", node)
     ctx[node.rid] += 1
+
 
 def test_retroactive(server):
     cli = rb.node("cli")
@@ -15,7 +17,7 @@ def test_retroactive(server):
     ctx = {"sub": 0}
     sub = rb.node("sub")
     sub.inject(ctx)
-    sub.subscribe(mytopic, 900_000_000) # 900 usec
+    sub.subscribe(mytopic, 900_000_000)  # 900 usec
     sub.reactive()
     time.sleep(1)
     sub.close()

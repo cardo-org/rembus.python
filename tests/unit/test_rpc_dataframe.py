@@ -1,10 +1,11 @@
 """Tests for Dataframes arguments."""
+
 import narwhals as nw
 import pandas as pd
 import rembus
 import rembus.protocol as rp
 
-df = pd.DataFrame({'a': [1, 2], 'b': [3, 4]})
+df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
 df_list = [df, df]
 
 
@@ -21,26 +22,25 @@ async def test_rpc(mocker, ws_mock):
     responses = [
         {
             # identity
-            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
+            "reply": lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
             # expose
-            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
+            "reply": lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
             # rpc
         },
         {
             # response from exposed method
-        }
+        },
     ]
 
     mocked_connect = mocker.patch(
-        "websockets.connect", mocker.AsyncMock(
-            return_value=ws_mock(responses))
+        "websockets.connect", mocker.AsyncMock(return_value=ws_mock(responses))
     )
 
-    rb = await rembus.component('bar')
+    rb = await rembus.component("bar")
     mocked_connect.assert_called_once()
     assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000/bar"
     await rb.expose(echo_service)

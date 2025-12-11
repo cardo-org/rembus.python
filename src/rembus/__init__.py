@@ -21,6 +21,7 @@ from .protocol import (  # noqa: F401
     SIG_ECDSA,
     SIG_RSA,
 )
+
 from .sync import node, register
 from .keyspace import KeySpaceRouter
 

@@ -136,7 +136,7 @@ def init_db(router, schema):
         db_name = f"{data_dir}.ducklake"
     db = duckdb.connect()
     db.sql("INSTALL ducklake")
-    logger.debug(
+    logger.info(
         "ATTACH 'ducklake:%s' AS rl (DATA_PATH '%s')", db_name, data_dir
     )
     db.sql(f"ATTACH 'ducklake:{db_name}' AS rl (DATA_PATH '{data_dir}')")
@@ -446,6 +446,10 @@ def handle_key_value(msg, table, col_names, records, tname):
 
 def handle_dataframe(msg, table, col_names, dataframes, tname):
     df = tag2df(msg.data[0])
+
+    if not isinstance(df, pl.DataFrame):
+        raise ValueError(f"expected a dataframe, got: {df}")
+
     df = df_extras(table, df, msg)
 
     if list(df.columns) == col_names:

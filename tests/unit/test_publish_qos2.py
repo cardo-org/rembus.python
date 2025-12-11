@@ -1,4 +1,5 @@
 """Test pubsub QOS2."""
+
 import asyncio
 import logging
 import rembus
@@ -11,7 +12,7 @@ RECEIVED = None
 async def mytopic(data):
     """A simple pubsub handler that logs the received data."""
     global RECEIVED  # pylint: disable=global-statement
-    logging.info('[mytopic]: %s', data)
+    logging.info("[mytopic]: %s", data)
     RECEIVED = PAYLOAD
 
 
@@ -20,11 +21,11 @@ async def test_publish(mocker, ws_mock):
     responses = [
         {
             # identity
-            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
+            "reply": lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
             # subscribe
-            'reply': lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
+            "reply": lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
             # publish
@@ -38,15 +39,14 @@ async def test_publish(mocker, ws_mock):
     ]
 
     mocked_connect = mocker.patch(
-        "websockets.connect", mocker.AsyncMock(
-            return_value=ws_mock(responses))
+        "websockets.connect", mocker.AsyncMock(return_value=ws_mock(responses))
     )
 
-    rb = await rembus.component('foo')
+    rb = await rembus.component("foo")
     mocked_connect.assert_called_once()
     assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000/foo"
 
-    assert rb.uid.id == 'foo'
+    assert rb.uid.id == "foo"
 
     await rb.subscribe(mytopic)
 

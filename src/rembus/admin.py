@@ -1,6 +1,5 @@
 import logging
 import rembus.protocol as rp
-#import rembus.db as rdb
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +15,12 @@ def upsert_twin(lst, twin):
 
 
 def add_exposer(router, twin, topic):
-    logger.debug("[%s] adding [%s] exposer for topic [%s]", router, twin, topic)
+    logger.debug("[%s] adding [%s] exposer for topic [%s]",
+                 router, twin, topic)
     if topic not in router.exposers:
         router.exposers[topic] = []
     upsert_twin(router.exposers[topic], twin)
+
 
 def remove_exposer(router, twin, topic):
     if topic in router.exposers:
@@ -37,8 +38,9 @@ def add_subscriber(router, twin, topic, msgfrom):
     if topic not in router.subscribers:
         router.subscribers[topic] = []
 
-    twin.msg_from[topic] = msgfrom
+    twin.msg_from[topic] = float(msgfrom)
     upsert_twin(router.subscribers[topic], twin)
+
 
 def remove_subscriber(router, twin, topic):
     if topic in router.subscribers:
@@ -48,18 +50,21 @@ def remove_subscriber(router, twin, topic):
         "[%s] removed [%s] subscriber for topic [%s]", router, twin, topic
     )
 
+
 async def reactive(router, twin, status: bool):
     logger.debug("[%s] reactive: %s", twin, status)
     twin.isreactive = status
     if status:
         await router.inbox.put(rp.SendDataAtRest(twin))
 
+
 async def admin_command(msg: rp.AdminMsg):
     """Handle admin commands"""
     twin = msg.twin
     topic = msg.topic
     if not isinstance(msg.data, dict) or rp.COMMAND not in msg.data:
-        logger.warning("admin error: expected cmd property (got: %s)", msg.data)
+        logger.warning(
+            "admin error: expected cmd property (got: %s)", msg.data)
         await twin.response(rp.STS_ERROR, msg)
         return
 

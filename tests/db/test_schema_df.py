@@ -47,6 +47,19 @@ async def test_init_db():
         },
     )
 
+    topic_without_extras_df = pl.DataFrame(
+        {
+            "name": ["name_a", "name_b", "name_c"],
+            "type": ["type_a", "type_b", "type_c"],
+            "value": ["a", "b", "c"],
+        },
+        schema={
+            "name": pl.Utf8,
+            "type": pl.Utf8,
+            "value": pl.Utf8,
+        },
+    )
+
     await pub.publish("topic1", topic1_df)
     await pub.publish("topic1", topic1_df)
     await pub.publish("topic1", invalid_df)
@@ -56,8 +69,23 @@ async def test_init_db():
     await pub.publish("topic2", topic2_df)
     await pub.publish("topic2", invalid_df)
 
-    # this is not saved because a map object is expected
-    await pub.publish("topic4", "a map is expected")
+    # this is not saved because a dataframe is expected
+    await pub.publish("topic_without_extras", "a string is not a dataframe")
+
+    await pub.publish(
+        "topic_without_extras",
+        pl.DataFrame(
+            schema={
+                "name": pl.String,
+                "type": pl.String,
+                "value": pl.String,
+            }
+        ),
+    )
+    await asyncio.sleep(2)
+
+    await pub.publish("topic_without_extras", topic_without_extras_df)
+
     await asyncio.sleep(3)
 
     await pub.close()

@@ -13,6 +13,7 @@ import os
 import time
 import traceback
 from typing import Callable, Any, Optional, List, cast
+import signal
 import ssl
 from urllib.parse import urlparse
 import uuid
@@ -160,7 +161,11 @@ class RbURL:
             self.hasname = False
             self.id = "repl"
         else:
-            if isinstance(uri.path, str) and uri.path:
+            if (
+                isinstance(uri.path, str)
+                and uri.path
+                and uri.path != "__noname__"
+            ):
                 self.hasname = True
                 self.id = uri.path[1:] if uri.path.startswith("/") else uri.path
             else:
@@ -1381,7 +1386,11 @@ def add_plugin(twin: Twin, plugin: Supervised):
         tw.router = plugin
 
 
-async def component(
+def receiveSignal(handle, loop):
+    asyncio.run_coroutine_threadsafe(handle.shutdown(), loop)
+
+
+async def _component(
     url: str | List[str] | None = None,
     name: str | None = None,
     port: int | None = None,
@@ -1398,6 +1407,7 @@ async def component(
 
     if isinstance(url, str):
         uid = RbURL(url)
+
     else:
         uid = RbURL("repl://")
 
@@ -1417,6 +1427,23 @@ async def component(
     return handle
 
 
+async def component(
+    url: str | List[str] | None = None,
+    name: str | None = None,
+    port: int | None = None,
+    secure: bool = False,
+    policy: str = "first_up",
+    schema: str | None = None,
+    enc: int = rp.CBOR,
+) -> Twin:
+    handle = await _component(url, name, port, secure, policy, schema, enc)
+    signal.signal(
+        signal.SIGINT,
+        lambda snum, frame: receiveSignal(handle, asyncio.get_running_loop()),
+    )
+    return handle
+
+
 def sync_table(
     db, table_name: str, current_df: pl.DataFrame, new_df: pl.DataFrame
 ):
@@ -1432,21 +1459,21 @@ def sync_table(
     cond_str = " AND ".join(conds)
 
     # Find rows in current_df that are not in new_df (rows to delete)
-    diff_df = current_df.join(new_df, on=fields, how="anti")
+    df = current_df.join(new_df, on=fields, how="anti")
 
-    if not diff_df.is_empty():
+    if not df.is_empty():
         # Delete rows that exist in current but not in new
         db.sql(f"""
             DELETE FROM {table_name} t WHERE EXISTS (
-                SELECT 1 FROM diff_df WHERE {cond_str}
+                SELECT 1 FROM df WHERE {cond_str}
             )
         """)
 
     # Find rows in new_df that are not in current_df (rows to insert)
-    diff_df = new_df.join(current_df, on=fields, how="anti")
+    df = new_df.join(current_df, on=fields, how="anti")
 
-    if not diff_df.is_empty():
-        db.sql(f"INSERT INTO {table_name} SELECT * FROM diff_df")
+    if not df.is_empty():
+        db.sql(f"INSERT INTO {table_name} SELECT * FROM df")
 
 
 def sync_twin(
@@ -1464,17 +1491,17 @@ def sync_twin(
     sync_table(db, table_name, current_df, new_df)
 
 
-def sync_cfg(db, router_name: str, table_name: str, new_df: pl.DataFrame):
-    """Synchronize configuration data for a router."""
-    current_df = db.sql(
-        f"""
-        SELECT * FROM {table_name} 
-        WHERE name = ?
-    """,
-        params=[router_name],
-    ).pl()
-
-    sync_table(db, table_name, current_df, new_df)
+# def sync_cfg(db, router_name: str, table_name: str, new_df: pl.DataFrame):
+#    """Synchronize configuration data for a router."""
+#    current_df = db.sql(
+#        f"""
+#        SELECT * FROM {table_name}
+#        WHERE name = ?
+#    """,
+#        params=[router_name],
+#    ).pl()
+#
+#    sync_table(db, table_name, current_df, new_df)
 
 
 def save_twin(twin):

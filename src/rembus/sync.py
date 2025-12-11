@@ -2,16 +2,17 @@
 
 import asyncio
 import logging
+import signal
 import threading
 from types import TracebackType
 from typing import Any, Callable, Coroutine, Optional, Type, List
 from rembus import (
-    component,
     RbURL,
     Now,
     CBOR,
     SIG_RSA,
 )
+from rembus.core import _component
 
 from rembus.protocol import RembusConnectionClosed
 
@@ -53,6 +54,10 @@ class AsyncLoopRunner:
                 )
 
 
+def receiveSignal(handle):
+    handle.close()
+
+
 class node:  # pylint: disable=invalid-name
     """The synchronous Rembus twin."""
 
@@ -68,7 +73,11 @@ class node:  # pylint: disable=invalid-name
     ):
         self._runner = AsyncLoopRunner()
         self._rb = self._runner.run(
-            component(url, name, port, secure, policy, schema, enc)
+            _component(url, name, port, secure, policy, schema, enc)
+        )
+        signal.signal(
+            signal.SIGINT,
+            lambda snum, frame: receiveSignal(self),
         )
 
     def __str__(self):
