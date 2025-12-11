@@ -1386,7 +1386,7 @@ def add_plugin(twin: Twin, plugin: Supervised):
         tw.router = plugin
 
 
-def receiveSignal(handle, loop):
+def receive_signal(handle, loop):
     asyncio.run_coroutine_threadsafe(handle.shutdown(), loop)
 
 
@@ -1439,7 +1439,7 @@ async def component(
     handle = await _component(url, name, port, secure, policy, schema, enc)
     signal.signal(
         signal.SIGINT,
-        lambda snum, frame: receiveSignal(handle, asyncio.get_running_loop()),
+        lambda snum, frame: receive_signal(handle, asyncio.get_running_loop()),
     )
     return handle
 

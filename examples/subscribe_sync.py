@@ -6,8 +6,8 @@ import pandas as pd
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
 
 
-def receiveSignal(handle):
-    print('rembus done')
+def receive_signal(handle):
+    print("rembus done")
     handle.close()
 
 
@@ -22,7 +22,7 @@ def main():
     handle = rembus.node("sub_a")
     signal.signal(
         signal.SIGINT,
-        lambda signum, frame: receiveSignal(handle),
+        lambda signum, frame: receive_signal(handle),
     )
 
     handle.subscribe(mytopic, True)

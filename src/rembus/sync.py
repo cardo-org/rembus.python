@@ -54,7 +54,7 @@ class AsyncLoopRunner:
                 )
 
 
-def receiveSignal(handle):
+def receive_signal(handle):
     handle.close()
 
 
@@ -77,7 +77,7 @@ class node:  # pylint: disable=invalid-name
         )
         signal.signal(
             signal.SIGINT,
-            lambda snum, frame: receiveSignal(self),
+            lambda snum, frame: receive_signal(self),
         )
 
     def __str__(self):
