@@ -12,8 +12,13 @@ There are few key concepts to get confident with Rembus:
 - A Broker dispatch messages between Components;
 - A Component expose RPC services and/or subscribe to Pub/Sub topics;
 - A Component make RPC requests and/or publish messages to Pub/Sub topics;
+- A schema may be associated to a broker for structuring data at rest;
 
-This API version supports only the WebSocket protocol.
+The Rembus python version supports only the WebSocket protocol.
+
+See [Rembus.jl](https://cardo-org.github.io/Rembus.python/stable/) broker
+for a full fledged broker that supports WebSocket, ZMQ and plain tcp protocols
+and more features like private topics, multi tenancy and more.
 
 ## Getting Started
 
@@ -23,163 +28,242 @@ Install the package:
 pip install rembus
 ```
 
-Start the [Rembus.jl](https://cardo-org.github.io/Rembus.python/stable/) broker
-or start a component that accepts WebSocket connections:
+## Cheatsheet
+
+The following `schema.json` will be used in the cheatsheet:
+
+```json
+{
+    "tables": [
+        {
+            "table": "sensor",
+            "topic": ":site/:type/:dn/sensor",
+            "columns": [
+                {"col": "site", "type": "TEXT", "nullable": false},
+                {"col": "type", "type": "TEXT", "nullable": false},
+                {"col": "dn", "type": "TEXT"}
+            ],
+            "keys": ["dn"]
+        },
+        {
+            "table": "telemetry",
+            "topic": ":dn/telemetry",
+            "columns": [
+                {"col": "dn", "type": "TEXT"},
+                {"col": "temperature", "type": "DOUBLE"},
+                {"col": "pressure", "type": "DOUBLE"}
+            ],
+            "extras": {"recv_ts": "ts", "slot": "time_bucket"}
+        }
+    ]
+}
+```
+
+### Broker start
+
+A Rembus component has a name and connects to the broker. The `node` method is
+for the sync version and the `component` method is for the async version.
+
+`node`/`component` without the `url` argument starts a broker
+component.
 
 ```python
-# Broker side
 import rembus as rb
 
 bro = rb.node() # equivalent to rb.node(port = 8000)
 bro.wait() # rembus loop, unnecessary if running in REPL interpreter 
 ```
 
-A Rembus component has a name and connects to the broker. The `node` api is for
-the sync version and the `component` api is for the async version.
-
 ```python
-# Client side (sync version)
 import rembus as rb
 
-cli = rb.node("mynode")
-cli.publish("mytopic", {'name': 'sensor_1', 'metric': 'T', 'value':21.6})
-cli.close()
+bro = await rb.component()
+await bro.wait() 
+```
+
+### Broker with Data at Rest tables
+
+With a data schema the DataLake DuckDB tables are created if they not exist and
+published messages are persisted into.  
+
+```python
+import rembus as rb
+
+bro = await rb.component(schema="schema.json")
+await bro.wait() 
+```
+
+### Connect to a Broker
+
+Component `myname` connects to a Broker listening on port `8000`
+on host `willy.acme.org`. Only one component with name `myname` may connect to
+the broker:
+
+```python
+cli = await rb.component("ws://willy.acme.org:8000/myname")
+```
+
+Component `myname` connects to a Broker listening on default port `8000`
+on default host `127.0.0.1`:
+
+```python
+cli = await rb.component("myname")
+```
+
+Anonymous component to a Broker listening on port `8000`
+on host `willy.acme.org`. Any number of anonymous components may connect to
+the broker:
+
+```python
+cli = await rb.component("ws://willy.acme.org:8000")
+```
+
+Anonymous component connects to a Broker listening on default port `8000`
+on default host `127.0.0.1`:
+
+```python
+cli = await rb.component("")
+```
+
+> **WHY ASSIGN A NAME TO A COMPONENT?**
+If component is anonymous then a random identifier that changes at each
+connection event is used as the component identifier. In this case the broker
+is unable to bind the component to a persistent twin and messages published
+when the component is offline get not broadcasted to the component when it gets
+online again.
+
+### Publish a sensor dataframe
+
+```python
+import polars as pl
+import rembus as rb
+
+df = pl.DataFrame(
+    {
+        "site": ["mysite", "mysite"],
+        "dn":["mysite.sensor1", "mysite.sensor2"],
+        "type": ["HVAC", "HVAC"]
+    }
+)
+
+cli = rb.node("myclient")
+cli.publish("sensor", df)
+```
+
+### Publish a telemetry dictionary
+
+```python
+import rembus as rb
+
+dn = "mysite.sensor1" # dn: unique Distinguish Name
+cli = rb.node(dn)
+cli.publish(f"{dn}/telemetry", {'temperature': 21.6, 'pressure': 980})
 ```
 
 ```python
-# Client side (async version)
 import asyncio
 import rembus as rb
 
 async def main():
-    cli = await rembus.component("myname")
-    await cli.publish("mytopic", {'name': 'sensor_1','metric': 'T','value':21.6})
+    dn = "mysite.sensor1"
+    cli = await rembus.component(dn)
+    await cli.publish(f"{dn}/telemetry", {'temperature': 18, 'pressure': 770})
     await cli.close()
-
-loop = asyncio.new_event_loop()
-loop.run_until_complete(main())
 ```
 
-## Initialize a Component
-
-Currently the Python API provides the WebSocket protocol for connecting to the Rembus broker.
-
-The url argument of the `component` function define the component identity and the broker endpoint to connect:
+### Publish a telemetry dataframe
 
 ```python
-import rembus
+import polars as pl
+import rembus as rb
 
-# Broker endpoint and named component
-rb = await rembus.component('ws://hostname:port/component_name')
+df = pl.DataFrame(
+    {
+        "dn":["mysite.sensor1", "mysite.sensor2"],
+        "temperature": [15.0, 18.8],
+        "pressure": [900, 1020],
+    }
+)
 
-# Broker endpoint and anonymous component 
-rb = await rembus.component('ws://hostname:port')
-
-# Default broker and named component 
-rb = await rembus.component('component_name')
-
-# Default broker and anonymous component 
-rb = await rembus.component()
+cli = rb.node("myclient")
+cli.publish("telemetry", df)
 ```
 
-The `component` builder function returns a Rembus handler that will be used for interacting with the components via Pub/Sub and RPC messages.
-
-`component_name` is the unique name that assert the component identity between online sessions (connect/disconnect windows).
-
-`component_name` is optional: if it is missing then a random identifier that changes at each connection event is used as the component identifier. In this case the broker is unable to bind the component to a persistent twin and messages published when the component is offline get not broadcasted to the component when it gets online again.
-
-The default broker endpoint is set by `REMBUS_BASE_URL` environment variable and default to `ws://127.0.0.1:8000`.
-
-## Pub/Sub example
-
-A message is published with `publish` function.
+### Publish to an alarm topic
 
 ```python
-rb.publish('mytopic', arg_1, arg_2, ..., arg_N)
+import rembus as rb
+
+slogan = "mydevice: battery very low"
+severity = "CRITICAL"
+
+dev = rb.node("mydevice")
+dev.publish("alarm", slogan, severity)
 ```
 
-Where the arguments `arg_i` comprise the message data payload that gets received by the subscribed components.
+### Subscribe to a topic and declare interest in undelivered messages
 
-A subscribed component interested to the topic `mytopic` have to define a function named as the topic of interest and with the same numbers of arguments:
+The subscribed function gets called with the pubsub message payload arguments.
+
+The option `msgfrom` setup for receiving published messages when the component
+was not subscribed to the topic, for example because it was not connected.
 
 ```python
-# do something each time a message published to topic mytopic is published
-def mytopic(arg_1, arg_2, ..., arg_N):
-    ...
+import rembus as rb
 
-rb.subscribe(mytopic)
+def alarm(descr, severity):
+    print(f"{severity}: {descr}")
 
-rb.wait()
+sub = rb.node("monitor", msgfrom=rb.LastReceived)
+sub.subscribe(alarm)
 ```
 
-The first argument to `subscribe` is the function, named as the topic of interest, that will be called each time a message is published.
+### Subscribe to the telemetry space
 
-The optional second argument of `subscribe` define the "retroactive" feature of the
-subscribed topic.
+You can subscribe to set of topics (a topic space) using a 'regular expression', all
+topics matching the pattern are subscribed.
 
-If the second argument is `True` then the messages published when the component is offline will be delivered as soon as the component will get online again, otherwise
-the messages published before connecting will be lost.
+The subscribed function gets called with the originating topic as
+first argument followed by the pubsub message payload arguments. 
 
-> **NOTE**: To cache messages for an offline component the broker needs to know that such component has subscribed for a specific topic. This imply that messages published before the first subscribe happens will be lost. If you want all message will be delivered subscribe first and publish after.  
+```python
+import rembus as rb
 
-## RPC example
+def telemetry(topic, data):
+    print(f"from {topic}: do something with {data}")
+
+sub = rb.node("collector")
+sub.subscribe(telemetry, topic="*/telemetry")
+```
+
+> **NOTE**: To cache messages for an offline component the broker needs to know that
+  such component has subscribed for a specific topic. This imply that messages 
+  published before the first subscribe happens will be lost. If you want all message
+  will be delivered subscribe first and publish after.  
+
+### Expose a RPC service
 
 A RPC service is implemented with a function named as the exposed service.
 
 ```python
-import rembus as rembus
+import rembus as rb
 
 def add(x,y):
     return x+y
 
-rb = rembus.node('calculator')
+handle = rb.node('calculator')
 
-rb.expose(add)
-
-rb.wait()
+handle.expose(add)
 ```
 
-The `calculator` component expose the `add` service, the RPC client will invoke as:
+### Call a RPC service
+
+The `calculator` component exposes the `add` service, the RPC client will invoke as:
 
 ```python
-import rembus as rembus
+import rembus as rb
 
-rb = rembus.node()
-result = rb.rpc('add', 1, 2)
+handle = rb.node("myclient")
+result = handle.rpc('add', 1, 2)
 ```
 
-The asynchronous client and server implementations will be something like:
-
-```python
-#server.py
-import asyncio
-import rembus
-
-async def add(x, y):
-    return x+y
-
-async def main():
-    rb = await rembus.component()
-    
-    await rb.expose(add)
-    await rb.wait()
-
-loop = asyncio.new_event_loop()
-loop.run_until_complete(main())
-```
-
-```python
-# client.py
-import asyncio
-import rembus
-
-async def main():
-    rb = await rembus.component()
-    result = await rb.rpc('add', 1, 2)
-    print(f'result={result}')
-    await rb.close()
-
-
-loop = asyncio.new_event_loop()
-loop.run_until_complete(main())
-```
