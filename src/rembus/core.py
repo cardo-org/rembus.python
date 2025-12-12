@@ -13,7 +13,6 @@ import os
 import time
 import traceback
 from typing import Callable, Any, Optional, List, cast
-import signal
 import ssl
 from urllib.parse import urlparse
 import uuid
@@ -66,18 +65,18 @@ def round_robin(router, tenant, topic, implementors):
     candidate_index = 0
 
     # Iterate with 1-based indexing to mirror Julia `enumerate`
-    for idx, tw in enumerate(implementors):
-        if idx < current_index:
+    for ix, tw in enumerate(implementors):
+        if ix < current_index:
             # candidate for wrap-around
             if candidate is None and tw.isopen() and tw.domain == tenant:
                 candidate = tw
-                candidate_index = idx
+                candidate_index = ix
 
         else:
             # forward search from current_index
             if tw.isopen() and tw.domain == tenant:
                 target = tw
-                router.last_invoked[topic] = 0 if idx >= length - 1 else idx + 1
+                router.last_invoked[topic] = 0 if ix >= length - 1 else ix + 1
                 break
 
     # If no forward match found but we have a candidate
@@ -97,7 +96,7 @@ def domain(s: str) -> str:
     """
     dot_index = s.find(".")
     if dot_index != -1:
-        return s[dot_index + 1 :]
+        return s[dot_index + 1:]
     else:
         return "."
 
@@ -152,38 +151,38 @@ class RbURL:
     def __init__(self, url: str | None = None) -> None:
         default_url = os.getenv("REMBUS_BASE_URL", "ws://127.0.0.1:8000")
         baseurl = urlparse(default_url)
-        uri = urlparse(url)
+        u = urlparse(url)
 
-        if uri.scheme == "repl":
-            self.protocol = uri.scheme
+        if u.scheme == "repl":
+            self.protocol = u.scheme
             self.hostname = ""
             self.port = 0
             self.hasname = False
             self.id = "repl"
         else:
             if (
-                isinstance(uri.path, str)
-                and uri.path
-                and uri.path != "__noname__"
+                isinstance(u.path, str)
+                and u.path
+                and u.path != "__noname__"
             ):
                 self.hasname = True
-                self.id = uri.path[1:] if uri.path.startswith("/") else uri.path
+                self.id = u.path[1:] if u.path.startswith("/") else u.path
             else:
                 self.hasname = False
                 self.id = randname()
 
-            if uri.scheme:
-                self.protocol = uri.scheme
+            if u.scheme:
+                self.protocol = u.scheme
             else:
                 self.protocol = baseurl.scheme
 
-            if uri.hostname:
-                self.hostname = uri.hostname
+            if u.hostname:
+                self.hostname = u.hostname
             else:
                 self.hostname = baseurl.hostname
 
-            if uri.port:
-                self.port = uri.port
+            if u.port:
+                self.port = u.port
             else:
                 self.port = baseurl.port
 
@@ -262,7 +261,7 @@ class Supervised:
                 if self._should_run:
                     await asyncio.sleep(0.5)
 
-    def start(self) -> None:
+    async def start(self) -> None:
         """Starts the supervisor task."""
         self._should_run = True
         self._supervisor_task = asyncio.create_task(self._supervisor())
@@ -300,6 +299,7 @@ async def init_router(router_name, policy, uid, port, secure, isserver, schema):
         )
 
     router = Router(router_name, policy, isserver, schema)
+    await router.start()
     logger.debug("component %s created, port: %s", uid.id, port)
     # start a websocket server
     if port:
@@ -357,7 +357,6 @@ class Router(Supervised):
         else:
             self.db = None
             self.save_task = None
-        self.start()
 
     def __str__(self):
         return f"{self.id}"
@@ -387,7 +386,7 @@ class Router(Supervised):
         Create and start a Twin for the component that connects to a server.
         """
         cmp = Twin(uid, bottom_router(self), not isserver, enc)
-        cmp.start()
+        await cmp.start()
         if not uid.isrepl():
             self.id_twin[uid.twkey] = cmp
 
@@ -506,7 +505,9 @@ class Router(Supervised):
                 status = rp.STS_METHOD_EXCEPTION
                 output = f"{e}"
                 logger.debug("exception: %s", e)
-            outmsg = rp.ResMsg(id=msg.id, status=status, data=rp.df2tag(output))
+            outmsg = rp.ResMsg(id=msg.id,
+                               status=status,
+                               data=rp.df2tag(output))
             await msg.twin.send(outmsg)
         elif msg.topic in self.exposers:
             target_twin = self._select_twin(msg.topic)
@@ -603,7 +604,7 @@ class Router(Supervised):
         """Receive messages from the client component."""
         url = RbURL()
         twin = Twin(url, bottom_router(self), False)
-        twin.start()
+        await twin.start()
         self.id_twin[url.twkey] = twin
 
         twin.socket = ws
@@ -920,7 +921,8 @@ class Twin(Supervised):
             logger.debug("[%s] twin_task: %s", self, msg)
             if msg == "reconnect":
                 if not self.reconnect_task:
-                    self.reconnect_task = asyncio.create_task(self._reconnect())
+                    self.reconnect_task = asyncio.create_task(
+                        self._reconnect())
             elif msg == "shutdown":
                 break
             elif isinstance(msg, rp.RpcReqMsg):
@@ -1374,74 +1376,16 @@ def alltwins(router):
     return [tw for tw in r.id_twin.values() if tw.rid != "__repl__"]
 
 
-def add_plugin(twin: Twin, plugin: Supervised):
+async def add_plugin(twin: Twin, plugin: Supervised):
     """Add a plugin router in front of the current twin router."""
     router = twin.router
     router.upstream = plugin
     plugin.downstream = router
     twin.router = plugin
-    plugin.start()
+    await plugin.start()  # Make start async and await it
     logger.info("[%s] added plugin %s", twin, plugin)
     for tw in alltwins(router):
         tw.router = plugin
-
-
-def receive_signal(handle, loop):
-    asyncio.run_coroutine_threadsafe(handle.shutdown(), loop)
-
-
-async def _component(
-    url: str | List[str] | None = None,
-    name: str | None = None,
-    port: int | None = None,
-    secure: bool = False,
-    policy: str = "first_up",
-    schema: str | None = None,
-    enc: int = rp.CBOR,
-) -> Twin:
-    """Return a Rembus component."""
-    isserver = (url is None) or (port is not None)
-
-    if isserver and port is None:
-        port = rs.DEFAULT_PORT
-
-    if isinstance(url, str):
-        uid = RbURL(url)
-
-    else:
-        uid = RbURL("repl://")
-
-    default_name = rs.DEFAULT_BROKER
-    if uid.hasname:
-        default_name = uid.id
-
-    router_name = name if name else default_name
-    router = await init_router(
-        router_name, policy, uid, port, secure, isserver, schema
-    )
-    handle = await router.init_twin(uid, enc, isserver)
-    if isinstance(url, list):
-        for netlink in url:
-            await router.init_twin(RbURL(netlink), enc, isserver)
-
-    return handle
-
-
-async def component(
-    url: str | List[str] | None = None,
-    name: str | None = None,
-    port: int | None = None,
-    secure: bool = False,
-    policy: str = "first_up",
-    schema: str | None = None,
-    enc: int = rp.CBOR,
-) -> Twin:
-    handle = await _component(url, name, port, secure, policy, schema, enc)
-    signal.signal(
-        signal.SIGINT,
-        lambda snum, frame: receive_signal(handle, asyncio.get_running_loop()),
-    )
-    return handle
 
 
 def sync_table(

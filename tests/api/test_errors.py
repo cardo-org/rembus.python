@@ -9,16 +9,15 @@ import rembus.protocol as rp
 import rembus.settings as rs
 
 
-async def test_register_error(server):
+def test_register_error(server):
     """Test the error condition that should restart the router task."""
     cid = "myname"
-    # server = start_server(port=8000)
-    # server = start_server_fixture
     rembus.register(cid, "11223344")
 
     key_dir = rs.keys_dir(server.router.id)
     curr_mode = os.stat(key_dir).st_mode
-    os.chmod(key_dir, curr_mode & ~(stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
+    os.chmod(key_dir, curr_mode & ~(
+        stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
 
     try:
         myname = rembus.node(cid)
@@ -32,7 +31,6 @@ async def test_register_error(server):
 
     myname.unregister()
     myname.close()
-    # server.close()
 
 
 def test_settings_error(server):

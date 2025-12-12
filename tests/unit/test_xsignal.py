@@ -1,7 +1,7 @@
 import asyncio
 from unittest.mock import Mock, patch, AsyncMock
 import pytest
-from rembus.core import receive_signal
+from rembus.component import receive_signal
 
 
 class TestReceiveSignal:

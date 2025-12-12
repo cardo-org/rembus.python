@@ -12,7 +12,7 @@ from rembus import (
     CBOR,
     SIG_RSA,
 )
-from rembus.core import _component
+from rembus.component import _component
 
 from rembus.protocol import RembusConnectionClosed
 
@@ -70,10 +70,11 @@ class node:  # pylint: disable=invalid-name
         policy: str = "first_up",
         schema: str | None = None,
         enc: int = CBOR,
+        keyspace: bool = True
     ):
         self._runner = AsyncLoopRunner()
         self._rb = self._runner.run(
-            _component(url, name, port, secure, policy, schema, enc)
+            _component(url, name, port, secure, policy, schema, enc, keyspace)
         )
         signal.signal(
             signal.SIGINT,

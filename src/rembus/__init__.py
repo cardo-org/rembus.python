@@ -1,9 +1,10 @@
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import version
 
 __version__ = version("rembus")
 
 # import logging
-from .core import component, add_plugin, RbURL  # noqa: F401
+from .core import add_plugin, RbURL  # noqa: F401
+from .component import component
 from .settings import (  # noqa: F401
     rembus_dir,
     DEFAULT_BROKER,

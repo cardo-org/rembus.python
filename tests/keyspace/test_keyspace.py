@@ -25,9 +25,6 @@ async def test_add_plugin():
 
     pub = await rembus.component("pub")
 
-    kspace = rembus.KeySpaceRouter()
-
-    rembus.add_plugin(server, kspace)
     sub1 = await create_sub("sub1", "k/*/y", ctx)
     sub2 = await create_sub("sub2", "k/*/y", ctx)
 

@@ -1,7 +1,6 @@
 """Test cases for the rembus API methods."""
 
 import asyncio
-import time
 import logging
 import pytest
 import rembus
@@ -17,19 +16,20 @@ async def shutdown(cli):
     await cli.close()
 
 
-def start_server(port):
+async def start_server(port):
     """Start a rembus server on the given port.
     This is a helper function to create a server for testing purposes:
     it initializes a server and waits for it to be ready.
     """
-    server = rembus.node(port=port)
-    time.sleep(1)
+    server = await rembus.component(port=port)
+    await asyncio.sleep(1)
     return server
 
 
+@pytest.mark.asyncio
 async def test_wait():
     """Test the wait functionality of the rembus component."""
-    server = start_server(port=8001)
+    server = await start_server(port=8001)
     cli = await rembus.component("ws://:8001")
     assert cli.broker_dir == rembus.settings.broker_dir(rembus.DEFAULT_BROKER)
 
@@ -39,7 +39,7 @@ async def test_wait():
     asyncio.create_task(shutdown(cli))
     await cli.wait()
     await cli.close()
-    server.close()
+    await server.close()
 
 
 async def myservice(x, y):
@@ -47,20 +47,21 @@ async def myservice(x, y):
     return x + y
 
 
+@pytest.mark.asyncio
 async def test_rpc():
     """Test the RPC method of the rembus component."""
     x = 2
     y = 3
-    server = start_server(port=8002)
+    server = await start_server(port=8002)
     cli = await rembus.component("ws://:8002")
-    server.expose(myservice)
+    await server.expose(myservice)
     result = await cli.rpc("myservice", x, y)
     assert result == x + y
-    server.unexpose(myservice)
+    await server.unexpose(myservice)
     await cli.close()
     with pytest.raises(rp.RembusConnectionClosed):
         await cli.rpc("myservice", x, y)
-    server.close()
+    await server.close()
 
 
 async def myservice_ctx(x, y, ctx, node):
@@ -71,42 +72,45 @@ async def myservice_ctx(x, y, ctx, node):
     return x + y
 
 
+@pytest.mark.asyncio
 async def test_rpc_ctx():
     """Test the RPC method of the rembus component with an injected context."""
     x = 2
     y = 3
-    server = start_server(port=8003)
+    server = await start_server(port=8003)
     ctx = {}
     cli = await rembus.component("ws://:8003")
-    server.expose(myservice_ctx)
+    await server.expose(myservice_ctx)
     server.inject(ctx)
     result = await cli.rpc("myservice_ctx", x, y)
     assert result == x + y
     await cli.close()
-    server.close()
+    await server.close()
 
 
+@pytest.mark.asyncio
 async def test_direct():
     """Test the direct method of the rembus component."""
     x = 2
     y = 3
-    server = start_server(port=8004)
+    server = await start_server(port=8004)
     cli = await rembus.component("ws://:8004")
-    server.expose(myservice)
+    await server.expose(myservice)
     result = await cli.direct(rembus.settings.DEFAULT_BROKER, "myservice", x, y)
     assert result == x + y
-    server.unexpose(myservice)
+    await server.unexpose(myservice)
     await cli.close()
-    server.close()
+    await server.close()
 
 
+@pytest.mark.asyncio
 async def test_unreactive():
     """Test the unreactive method of the rembus component."""
-    server = start_server(port=8005)
+    server = await start_server(port=8005)
     cli = await rembus.component("ws://:8005")
     await cli.unreactive()
     await cli.close()
-    server.close()
+    await server.close()
 
 
 def mytopic():
@@ -124,11 +128,12 @@ def puttopic():
     logging.info("puttopic called")
 
 
+@pytest.mark.asyncio
 async def test_publish():
     """Test the publish method of the rembus component."""
-    server = start_server(port=8006)
-    server.subscribe(puttopic, topic="cmp.net/mytopic")
-    server.subscribe(mytopic)
+    server = await start_server(port=8006)
+    await server.subscribe(puttopic, topic="cmp.net/mytopic")
+    await server.subscribe(mytopic)
 
     sub = await rembus.component("ws://:8006/sub.net")
     await sub.subscribe(mytopic)
@@ -157,15 +162,16 @@ async def test_publish():
 
     with pytest.raises(rp.RembusConnectionClosed):
         await cli.publish("mytopic")
-    server.close()
+    await server.close()
     assert len(ctx) == 0
 
 
+@pytest.mark.asyncio
 async def test_publish_slot():
     """Test the slot option of the publish api."""
-    server = start_server(port=8007)
-    server.subscribe(puttopic, topic="cmp.net/mytopic")
-    server.subscribe(mytopic)
+    server = await start_server(port=8007)
+    await server.subscribe(puttopic, topic="cmp.net/mytopic")
+    await server.subscribe(mytopic)
 
     cli = await rembus.component("ws://:8007/cmp.net")
     assert cli.isrepl() is False
@@ -181,9 +187,10 @@ async def test_publish_slot():
     await cli.publish("mytopic", "log_warning", slot=1234, qos=rp.QOS1)
 
     await cli.close()
-    server.close()
+    await server.close()
 
 
+@pytest.mark.asyncio
 async def test_cancel_server_task():
     """Test shutdown in case of task cancellation"""
     server = await rembus.component(port=8000)
