@@ -2,14 +2,18 @@ import asyncio
 import logging
 import rembus as rb
 
+
 def foo(d):
     logging.info("foo recv: %s", d)
 
-def sum(x,y):
+
+def sum(x, y):
     logging.info("sum recv: x=%s, y=%s", x, y)
+
 
 def signal():
     logging.info("signal recv")
+
 
 async def test_msg_from():
     bro = await rb.component()
@@ -22,11 +26,11 @@ async def test_msg_from():
     await asyncio.sleep(3)
 
     sub = await rb.component("subscriber")
-    
+
     await sub.subscribe(foo, msgfrom=rb.LastReceived)
     await sub.subscribe(sum, msgfrom=rb.LastReceived)
     await sub.subscribe(signal, msgfrom=rb.LastReceived)
-    
+
     await sub.reactive()
     await asyncio.sleep(1)
 

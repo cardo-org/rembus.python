@@ -28,7 +28,6 @@
           "type": "BIGINT"
         }
       ],
-      "format": "dataframe",
       "extras": {
         "recv_ts": "ts",
         "slot": "rop"
@@ -65,7 +64,6 @@
       "keys": [
         "name"
       ],
-      "format": "dataframe",
       "extras": {
         "recv_ts": "ts",
         "slot": "rop"
@@ -91,7 +89,6 @@
           "type": "DOUBLE"
         }
       ],
-      "format": "dataframe",
       "extras": {
         "recv_ts": "ts",
         "slot": "rop"
@@ -116,8 +113,7 @@
       "keys": [
         "name",
         "type"
-      ],
-      "format": "dataframe"
+      ]
     }
   ]
 }

@@ -23,7 +23,6 @@
           "type": "DOUBLE"
         }
       ],
-      "format": "key_value",
       "extras": {
         "recv_ts": "ts",
         "slot": "rop"
@@ -52,7 +51,6 @@
           "type": "DOUBLE"
         }
       ],
-      "format": "key_value",
       "extras": {
         "recv_ts": "ts",
         "slot": "rop"
@@ -77,7 +75,6 @@
           "type": "TEXT"
         }
       ],
-      "format": "key_value",
       "keys": [
         "dn"
       ]

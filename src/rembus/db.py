@@ -1,3 +1,4 @@
+from functools import partial
 import os
 import subprocess
 from pathlib import Path
@@ -49,7 +50,6 @@ class Column(BaseModel):
 
 class Table(BaseModel):
     table: str
-    format: str = "sequence"
     columns: List[Column] = Field(default_factory=list)
     keys: List[str] = Field(default_factory=list)
     extras: Dict[str, Any] = Field(default_factory=dict)
@@ -213,39 +213,65 @@ def init_db(router, schema):
         sch = Schema(**data)
         router.tables = {tbl.table: tbl for tbl in sch.tables}
         for table in sch.tables:
+            tname = table.table
             sql = create_table_sql(table)
-            logger.debug("creating table %s: %s", table.table, sql)
+            logger.debug("creating table %s: %s", tname, sql)
             db.execute(sql)
-
-    # Register deletelake handler
-    router.handler["deletelake"] = lambda msg, ctx=None, node=None: deletelake(
-        router, msg
-    )
+            # Create the query and delete rpc topics.
+            router.handler[f"query_{tname}"] = partial(
+                query, router, tname)
+            router.handler[f"delete_{tname}"] = partial(
+                delete, router, tname)
 
     return db
 
 
-def deletelake(router, msg):
-    """Delete all data from the ducklake database."""
-    logger.info("[deletelake][%s] recv: %s", router, msg)
-    if "table" not in msg:
-        raise KeyError("error: missing table field")
+def delete(router, table, obj=None, ctx=None, node=None):
+    """Delete rows from `table` matching conditions in `obj["where"]`."""
+    cond_str = None
+    if obj is not None:
+        cond_str = obj.get("where", None)
 
-    if "where" not in msg:
-        raise KeyError("error: missing where field")
+    if cond_str:
+        sql = f"DELETE FROM {table} WHERE {cond_str}"
+    else:
+        sql = f"DELETE FROM {table}"
 
-    table = msg["table"]
-    delete(router.db, table, msg["where"])
+    logger.debug("db delete: %s", sql)
+    router.db.execute(sql)
 
 
-def delete(db, table, obj):
-    """Delete rows from `table` matching conditions in `obj`."""
-    conds = [f"{k} = ?" for k in obj.keys()]
-    cond_str = " AND ".join(conds)
-    sql = f"DELETE FROM {table} WHERE {cond_str}"
-    params = list(obj.values())
-    logger.info("deletelake: %s with %s", sql, params)
-    db.execute(sql, params)
+def query(router, table, obj=None, ctx=None, node=None):
+    """Select rows from `table` matching conditions in `obj["where"]`."""
+    cond_str = None
+    if obj is not None:
+        cond_str = obj.get("where", None)
+
+    if cond_str:
+        sql = f"SELECT * FROM {table} WHERE {cond_str}"
+    else:
+        sql = f"SELECT * FROM {table}"
+
+    logger.debug("db query: %s", sql)
+    return router.db.execute(sql).pl()
+
+
+def get_format(msg):
+    """Return the format of the message data."""
+    data = msg.data
+
+    fmt = "sequence"
+    if msg.regex is not None:
+        fmt = "key_value"
+
+    if len(data) == 1:
+        obj = data[0]
+        if isinstance(obj, dict):
+            return "key_value"
+        elif isinstance(obj, cbor2.CBORTag):
+            return "dataframe"
+
+    return fmt
 
 
 def getobj(topic, values):
@@ -253,8 +279,6 @@ def getobj(topic, values):
         return dict()
 
     v = values[0]
-    if not isinstance(v, dict):
-        raise ValueError("[format is key_value: data must be a dictionary")
     return dict(v)
 
 
@@ -334,60 +358,49 @@ def columns(table):
 def append(con: duckdb.DuckDBPyConnection, tabledef, msgs):
     # logger.debug("[%s] appending:\n%s", tabledef.table, df)
     topic = tabledef.table
-    fmt = tabledef.format
     tblfields = columns(tabledef)
     logger.debug("[%s] appending columns: %s", topic, tblfields)
     all_rows = []  # will become a DataFrame batch
 
     for msg in msgs:
-        try:
-            values = msg.data
-            # key_value
-            if fmt == "key_value":
-                obj = getobj(topic, values)
-                set_default(msg, tabledef, obj, add_nullable=True)
-
-                # Check required fields
-                if not all(k in obj for k in tblfields):
-                    logger.warning(
-                        "[%s] unsaved %s with missed fields", topic, obj
-                    )
-                    continue
-
-                fields = [obj[f] for f in tblfields]
-
-            # dataframe
-            elif fmt == "dataframe":
-                df = tag2df(values[0])
-                if list(df.columns) != tblfields:
-                    logger.warning(
-                        "[%s] unsaved df with mismatched fields %s",
-                        topic,
-                        tblfields,
-                    )
-                    continue
-
-                df = df_extras(tabledef, df, msg)
-                con.register("df_view", df)
-                con.execute(f"INSERT INTO {topic} SELECT * FROM df_view")
-                con.unregister("df_view")
+        fmt = get_format(msg)
+        values = msg.data
+        # key_value
+        if fmt == "key_value":
+            obj = getobj(topic, values)
+            set_default(msg, tabledef, obj, add_nullable=True)
+            # Check required fields
+            if not all(k in obj for k in tblfields):
+                logger.warning(
+                    "[%s] unsaved %s with missed fields", topic, obj)
                 continue
-
-            # default format
-            else:
-                if len(values) != len(tblfields):
-                    logger.warning(
-                        "[%s] unsaved %s with mismatched fields", topic, values
-                    )
-                    continue
-
-                fields = values
-
-            # Append extras
-            extra_vals = extras(tabledef, msg)
-            all_rows.append(fields + extra_vals)
-        except Exception as e:
-            logger.error("[append] %s: %s", topic, e)
+            fields = [obj[f] for f in tblfields]
+        # dataframe
+        elif fmt == "dataframe":
+            df = tag2df(values[0])
+            if list(df.columns) != tblfields:
+                logger.warning(
+                    "[%s] unsaved df with mismatched fields [%s]",
+                    topic,
+                    tblfields,
+                )
+                continue
+            df = df_extras(tabledef, df, msg)
+            con.register("df_view", df)
+            con.execute(f"INSERT INTO {topic} SELECT * FROM df_view")
+            con.unregister("df_view")
+            continue
+        # default format
+        else:
+            if len(values) != len(tblfields):
+                logger.warning(
+                    "[%s] unsaved %s with mismatched fields", topic, values
+                )
+                continue
+            fields = values
+        # Append extras
+        extra_vals = extras(tabledef, msg)
+        all_rows.append(fields + extra_vals)
 
     if not all_rows:
         return
@@ -446,16 +459,25 @@ def handle_key_value(msg, table, col_names, records, tname):
 
 def handle_dataframe(msg, table, col_names, dataframes, tname):
     df = tag2df(msg.data[0])
-
-    if not isinstance(df, pl.DataFrame):
-        raise ValueError(f"expected a dataframe, got: {df}")
-
     df = df_extras(table, df, msg)
 
-    if list(df.columns) == col_names:
-        dataframes.append(df)
-    else:
-        logger.warning("[%s] unsaved df (mismatched fields)", tname)
+    actual_cols = set(df.columns)
+    expected_cols = set(col_names)
+
+    missing = expected_cols - actual_cols
+    if missing:
+        logger.warning(
+            "[%s] missing columns %s (expected %s, got %s)",
+            tname,
+            missing,
+            col_names,
+            df.columns,
+        )
+        return
+
+    # Reorder columns to the expected order
+    df = df.select(col_names)
+    dataframes.append(df)
 
 
 def handle_default(msg, table, col_names, records, tname):
@@ -504,7 +526,6 @@ def execute_upsert(con, table, col_names, indexes, records, dataframes):
 def upsert(con: duckdb.DuckDBPyConnection, table, messages):
     """Insert/update a record in a table with keywords."""
     tname = table.table
-    fmt = table.format
     col_names = columns(table) + list(table.extras.values())
     indexes = list(table.keys)
 
@@ -512,18 +533,17 @@ def upsert(con: duckdb.DuckDBPyConnection, table, messages):
     dataframes = []
 
     for msg in messages:
-        try:
-            if fmt == "key_value":
-                handle_key_value(msg, table, col_names, records, tname)
+        fmt = get_format(msg)
+        #        try:
+        if fmt == "key_value":
+            handle_key_value(msg, table, col_names, records, tname)
+        elif fmt == "dataframe":
+            handle_dataframe(msg, table, col_names, dataframes, tname)
+        else:
+            handle_default(msg, table, col_names, records, tname)
 
-            elif fmt == "dataframe":
-                handle_dataframe(msg, table, col_names, dataframes, tname)
-
-            else:
-                handle_default(msg, table, col_names, records, tname)
-
-        except Exception as e:  # pylint: disable=broad-except
-            logger.error("[upsert] %s: %s", tname, e)
+    #        except Exception as e:  # pylint: disable=broad-except
+    #            logger.error("[upsert] %s: %s", tname, e)
 
     execute_upsert(con, table, col_names, indexes, records, dataframes)
 
@@ -533,7 +553,8 @@ def expand(msg: PubSubMsg):
     Given a message `msg` containing a topic string
     (e.g. `veneto/agordo/temperature`) and a regex value
     (e.g. `:regione/:loc/temperature`) extract the named parts from
-    `msg.topic` according to `msg.regex`and add them as new attributes to `msg`.
+    `msg.topic` according to `msg.regex` and add them as new attributes
+    to `msg`.
     """
     d = {}
     if msg.regex is not None:
@@ -576,7 +597,7 @@ def make_regex(pattern: str):
 
 def msg_table(router, msg: PubSubMsg):
     """
-    Given a router with defined tables and a message `msg` containing, this
+    Given a router with defined tables and a pubsub message `msg`, this
     function matches the topic against the router's table
     patterns and assigns the corresponding table name and pattern.
     If no pattern matches, the topic name itself is used as the table name and
@@ -586,6 +607,7 @@ def msg_table(router, msg: PubSubMsg):
 
     topic = msg.topic
     topic_tokens = topic.split("/")
+    msg.table = topic
     for schema_table in schema_tables:
         schema_topic = schema_table.topic
         schema_tokens = schema_topic.split("/")

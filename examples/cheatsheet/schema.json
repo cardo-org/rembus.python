@@ -1,0 +1,49 @@
+{
+    "tables": [
+        {
+            "table": "sensor",
+            "topic": ":site/:type/:dn/sensor",
+            "columns": [
+                {
+                    "col": "site",
+                    "type": "TEXT",
+                    "nullable": false
+                },
+                {
+                    "col": "type",
+                    "type": "TEXT",
+                    "nullable": false
+                },
+                {
+                    "col": "dn",
+                    "type": "TEXT"
+                }
+            ],
+            "keys": [
+                "dn"
+            ]
+        },
+        {
+            "table": "telemetry",
+            "topic": ":dn/telemetry",
+            "columns": [
+                {
+                    "col": "dn",
+                    "type": "TEXT"
+                },
+                {
+                    "col": "temperature",
+                    "type": "DOUBLE"
+                },
+                {
+                    "col": "pressure",
+                    "type": "DOUBLE"
+                }
+            ],
+            "extras": {
+                "recv_ts": "ts",
+                "slot": "time_bucket"
+            }
+        }
+    ]
+}

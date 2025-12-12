@@ -8,6 +8,7 @@ from tests.db.broker import start_broker
 def topic4(d):
     logging.info("[topic4] recv: %s", d)
 
+
 async def test_init_db():
     bro = await start_broker("schema.json")
     await asyncio.sleep(0.1)
@@ -38,14 +39,11 @@ async def test_init_db():
         "topic4", {"name": "name_a", "type": "type_a", "value": "value_a"}
     )
 
-    try:
-        await pub.publish(
-            "topic3",
-            "name_a",
-            -1.0,
-        )
-    except Exception as e:
-        print("Expected exception:", e)
+    await pub.publish(
+        "topic3",
+        "name_a",
+        -1.0,
+    )
 
     # this messages is not saved becaus it miss mandatory fields defined in
     # the schema.
@@ -70,15 +68,23 @@ async def test_init_db():
     topic3_df = db.execute("select * from topic3").pl()
     assert topic3_df.shape[0] == 1
 
+    df = await pub.rpc("query_topic3")
+    assert df.shape[0] == 1
+
+    df = await pub.rpc("query_topic3", {"where": "double>10"})
+    assert df.shape[0] == 0
+
     await pub.rpc(
-        "deletelake",
+        "delete_topic3",
         {
-            "table": "topic3",
-            "where": {"name": "name_a", "type": "type_default"},
+            "where": "name='name_a' and type='type_default'"
         },
     )
-    topic3_df = db.execute("select * from topic3").pl()
-    assert topic3_df.shape[0] == 0
+    df = db.execute("select * from topic3").pl()
+    assert df.shape[0] == 0
+
+    # no where condition
+    await pub.rpc("delete_topic3")
 
     # test errors
     with pytest.raises(rb.RembusError):
