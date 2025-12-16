@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 import rembus as rb
@@ -6,6 +7,7 @@ import rembus as rb
 def publish_something():
     fn = os.path.join(os.path.dirname(__file__), "schema.json")
     bro = rb.node(schema=fn)
+    logging.info("db attach string: %s", bro.db_attach)
     cli = rb.node("cli")
     cli.publish("mysite/type_1/myname/device")
     time.sleep(1)

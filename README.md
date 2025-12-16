@@ -12,7 +12,7 @@ There are few key concepts to get confident with Rembus:
 - A Broker dispatch messages between Components;
 - A Component expose RPC services and/or subscribe to Pub/Sub topics;
 - A Component make RPC requests and/or publish messages to Pub/Sub topics;
-- A schema may be associated to a broker for structuring data at rest;
+- A Schema may be associated to a broker for structuring data at rest;
 
 The Rembus python version supports only the WebSocket protocol.
 
@@ -61,17 +61,16 @@ The following `schema.json` will be used in the cheatsheet:
 
 ### Broker start
 
-A Rembus component has a name and connects to the broker. The `node` method is
+A Rembus Component has a name and connects to a Broker. The `node` method is
 for the sync version and the `component` method is for the async version.
 
-`node`/`component` without the `url` argument starts a broker
-component.
+`node`/`component` without the `url` argument starts a Broker:
 
 ```python
 import rembus as rb
 
 bro = rb.node() # equivalent to rb.node(port = 8000)
-bro.wait() # rembus loop, unnecessary if running in REPL interpreter 
+bro.wait() # rembus loop, unnecessary if running a REPL interpreter 
 ```
 
 ```python
@@ -96,8 +95,8 @@ await bro.wait()
 ### Connect to a Broker
 
 Component `myname` connects to a Broker listening on port `8000`
-on host `willy.acme.org`. Only one component with name `myname` may connect to
-the broker:
+on host `willy.acme.org`. Only one Component with name `myname` may connect to
+the Broker:
 
 ```python
 cli = await rb.component("ws://willy.acme.org:8000/myname")
@@ -110,7 +109,7 @@ on default host `127.0.0.1`:
 cli = await rb.component("myname")
 ```
 
-Anonymous component to a Broker listening on port `8000`
+Anonymous component connects to a Broker listening on port `8000`
 on host `willy.acme.org`. Any number of anonymous components may connect to
 the broker:
 
@@ -118,7 +117,7 @@ the broker:
 cli = await rb.component("ws://willy.acme.org:8000")
 ```
 
-Anonymous component connects to a Broker listening on default port `8000`
+Anonymous Component connects to a Broker listening on default port `8000`
 on default host `127.0.0.1`:
 
 ```python
@@ -126,7 +125,7 @@ cli = await rb.component("")
 ```
 
 > **WHY ASSIGN A NAME TO A COMPONENT?**
-If component is anonymous then a random identifier that changes at each
+If a component is anonymous then a random identifier that changes at each
 connection event is used as the component identifier. In this case the broker
 is unable to bind the component to a persistent twin and messages published
 when the component is offline get not broadcasted to the component when it gets

@@ -96,7 +96,7 @@ def domain(s: str) -> str:
     """
     dot_index = s.find(".")
     if dot_index != -1:
-        return s[dot_index + 1:]
+        return s[dot_index + 1 :]
     else:
         return "."
 
@@ -160,11 +160,7 @@ class RbURL:
             self.hasname = False
             self.id = "repl"
         else:
-            if (
-                isinstance(u.path, str)
-                and u.path
-                and u.path != "__noname__"
-            ):
+            if isinstance(u.path, str) and u.path and u.path != "__noname__":
                 self.hasname = True
                 self.id = u.path[1:] if u.path.startswith("/") else u.path
             else:
@@ -460,7 +456,6 @@ class Router(Supervised):
 
     def append_message(self, msg: rp.PubSubMsg):
         """Append a message to the message cache."""
-        topic = msg.topic
         rdb.msg_table(self, msg)
         self.msg_cache.append(msg)
         if msg.table in self.tables:
@@ -505,9 +500,7 @@ class Router(Supervised):
                 status = rp.STS_METHOD_EXCEPTION
                 output = f"{e}"
                 logger.debug("exception: %s", e)
-            outmsg = rp.ResMsg(id=msg.id,
-                               status=status,
-                               data=rp.df2tag(output))
+            outmsg = rp.ResMsg(id=msg.id, status=status, data=rp.df2tag(output))
             await msg.twin.send(outmsg)
         elif msg.topic in self.exposers:
             target_twin = self._select_twin(msg.topic)
@@ -798,6 +791,11 @@ class Twin(Supervised):
         return len(self.outreq) < len(other.outreq)
 
     @property
+    def db_attach(self):
+        """Return the DuckDB ATTACH directive."""
+        return self.router.config.db_attach
+
+    @property
     def db(self):
         """Return the database associated with this twin."""
         return self.router.db
@@ -921,8 +919,7 @@ class Twin(Supervised):
             logger.debug("[%s] twin_task: %s", self, msg)
             if msg == "reconnect":
                 if not self.reconnect_task:
-                    self.reconnect_task = asyncio.create_task(
-                        self._reconnect())
+                    self.reconnect_task = asyncio.create_task(self._reconnect())
             elif msg == "shutdown":
                 break
             elif isinstance(msg, rp.RpcReqMsg):
@@ -1363,7 +1360,9 @@ def top_router(router: Supervised) -> Router:
 
 
 def bottom_router(router: Supervised) -> Supervised:
-    """Return the router attached to the twins (the lowest router in the chain)."""
+    """
+    Return the router attached to the twins (the lowest router in the chain).
+    """
     r = router
     while r.upstream is not None:
         r = r.upstream

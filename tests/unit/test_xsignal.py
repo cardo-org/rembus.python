@@ -52,7 +52,9 @@ class TestReceiveSignal:
         manner.
         """
         mock_handle = Mock()
-        mock_handle.shutdown = AsyncMock(return_value=None)
+        # mock_handle.shutdown = AsyncMock(return_value=None)
+        mock_handle = Mock()
+        mock_handle.shutdown = lambda: None
 
         loop = asyncio.get_running_loop()
 

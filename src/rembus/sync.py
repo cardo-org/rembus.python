@@ -70,7 +70,7 @@ class node:  # pylint: disable=invalid-name
         policy: str = "first_up",
         schema: str | None = None,
         enc: int = CBOR,
-        keyspace: bool = True
+        keyspace: bool = True,
     ):
         self._runner = AsyncLoopRunner()
         self._rb = self._runner.run(
@@ -86,6 +86,11 @@ class node:  # pylint: disable=invalid-name
 
     def __repr__(self):
         return self._rb.uid.id
+
+    @property
+    def db_attach(self):
+        """Return the DuckDB ATTACH directive."""
+        return self._rb.db_attach
 
     @property
     def router(self):

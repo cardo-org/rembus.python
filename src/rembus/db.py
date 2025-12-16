@@ -129,17 +129,9 @@ def reset_db(broker_name):
 
 def init_db(router, schema):
     """Initialize the database for a given router."""
-    data_dir = os.path.join(rembus_dir(), router.id)
-    if "DUCKLAKE_URL" in os.environ:
-        db_name = os.environ["DUCKLAKE_URL"]
-    else:
-        db_name = f"{data_dir}.ducklake"
     db = duckdb.connect()
     db.sql("INSTALL ducklake")
-    logger.info(
-        "ATTACH 'ducklake:%s' AS rl (DATA_PATH '%s')", db_name, data_dir
-    )
-    db.sql(f"ATTACH 'ducklake:{db_name}' AS rl (DATA_PATH '{data_dir}')")
+    db.sql(router.config.db_attach)
     db.sql("USE rl")
 
     tables = [
@@ -218,10 +210,8 @@ def init_db(router, schema):
             logger.debug("creating table %s: %s", tname, sql)
             db.execute(sql)
             # Create the query and delete rpc topics.
-            router.handler[f"query_{tname}"] = partial(
-                query, router, tname)
-            router.handler[f"delete_{tname}"] = partial(
-                delete, router, tname)
+            router.handler[f"query_{tname}"] = partial(query, router, tname)
+            router.handler[f"delete_{tname}"] = partial(delete, router, tname)
 
     return db
 
@@ -371,8 +361,7 @@ def append(con: duckdb.DuckDBPyConnection, tabledef, msgs):
             set_default(msg, tabledef, obj, add_nullable=True)
             # Check required fields
             if not all(k in obj for k in tblfields):
-                logger.warning(
-                    "[%s] unsaved %s with missed fields", topic, obj)
+                logger.warning("[%s] unsaved %s with missed fields", topic, obj)
                 continue
             fields = [obj[f] for f in tblfields]
         # dataframe

@@ -29,6 +29,20 @@ class Config:
         self.ws_ping_interval = cfg.get("ws_ping_interval", None)
         self.start_anyway = cfg.get("start_anyway", False)
         self.send_retries = cfg.get("send_retries", 3)
+        self.db_attach = db_attach(name)
+
+
+def db_attach(router_id):
+    """Return the DuckDB ATTACH directive."""
+    data_dir = os.path.join(rembus_dir(), router_id)
+    if "DUCKLAKE_URL" in os.environ:
+        db_name = os.environ["DUCKLAKE_URL"]
+    else:
+        db_name = f"{data_dir}.ducklake"
+    logger.debug(
+        "ATTACH 'ducklake:%s' AS rl (DATA_PATH '%s')", db_name, data_dir
+    )
+    return f"ATTACH 'ducklake:{db_name}' AS rl (DATA_PATH '{data_dir}')"
 
 
 def rembus_dir():
