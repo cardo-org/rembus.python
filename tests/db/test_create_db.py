@@ -16,14 +16,14 @@ def publish_something():
 
 
 def test_create_sqlite():
-    os.environ["DUCKLAKE_URL"] = "sqlite:tmp/rembus/rembus_test.sqlite"
+    os.environ["DUCKLAKE_URL"] = "ducklake:sqlite:tmp/rembus/rembus_test.sqlite"
     rb.db.reset_db("broker")
     publish_something()
 
 
 def test_create_postgres():
     os.environ["DUCKLAKE_URL"] = (
-        "postgres:postgresql://admin:secret@localhost/rembus_test"
+        "ducklake:postgres:postgresql://admin:secret@localhost/rembus_test"
     )
     rb.db.reset_db("broker")
     publish_something()

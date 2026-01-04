@@ -38,11 +38,11 @@ def db_attach(router_id):
     if "DUCKLAKE_URL" in os.environ:
         db_name = os.environ["DUCKLAKE_URL"]
     else:
-        db_name = f"{data_dir}.ducklake"
+        db_name = f"ducklake:{data_dir}.ducklake"
     logger.debug(
-        "ATTACH 'ducklake:%s' AS rl (DATA_PATH '%s')", db_name, data_dir
+        "ATTACH '%s' AS rl (DATA_PATH '%s')", db_name, data_dir
     )
-    return f"ATTACH 'ducklake:{db_name}' AS rl (DATA_PATH '{data_dir}')"
+    return f"ATTACH '{db_name}' AS rl (DATA_PATH '{data_dir}')"
 
 
 def rembus_dir():

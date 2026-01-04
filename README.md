@@ -67,6 +67,7 @@ for the sync version and the `component` method is for the async version.
 `node`/`component` without the `url` argument starts a Broker:
 
 ```python
+# sync version
 import rembus as rb
 
 bro = rb.node() # equivalent to rb.node(port = 8000)
@@ -74,6 +75,7 @@ bro.wait() # rembus loop, unnecessary if running a REPL interpreter
 ```
 
 ```python
+# async version
 import rembus as rb
 
 bro = await rb.component()
@@ -234,11 +236,6 @@ def telemetry(topic, data):
 sub = rb.node("collector")
 sub.subscribe(telemetry, topic="*/telemetry")
 ```
-
-> **NOTE**: To cache messages for an offline component the broker needs to know that
-  such component has subscribed for a specific topic. This imply that messages 
-  published before the first subscribe happens will be lost. If you want all message
-  will be delivered subscribe first and publish after.  
 
 ### Expose a RPC service
 

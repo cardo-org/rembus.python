@@ -100,7 +100,7 @@ def create_table_sql(t: Table) -> str:
 def parse_dburl():
     raw = os.environ["DUCKLAKE_URL"]
     # remove prefix "postgres:"
-    _, url = raw.split(":", 1)
+    _, _, url = raw.split(":", 2)
     o = urlparse(url)
     return [o.username, o.password, o.hostname, o.path.lstrip("/")]
 
@@ -110,11 +110,11 @@ def reset_db(broker_name):
 
     if dl_url:
         _, _, _, db = parse_dburl()
-        if dl_url.startswith("postgres"):
+        if dl_url.startswith("ducklake:postgres"):
             subprocess.run(["dropdb", db, "--if-exists"], check=False)
             subprocess.run(["createdb", db], check=True)
 
-        elif dl_url.startswith("sqlite"):
+        elif dl_url.startswith("ducklake:sqlite"):
             logger.debug("removing db %s", db)
             Path(db).unlink(missing_ok=True)
     else:
@@ -361,7 +361,8 @@ def append(con: duckdb.DuckDBPyConnection, tabledef, msgs):
             set_default(msg, tabledef, obj, add_nullable=True)
             # Check required fields
             if not all(k in obj for k in tblfields):
-                logger.warning("[%s] unsaved %s with missed fields", topic, obj)
+                logger.warning(
+                    "[%s] unsaved %s with missed fields", topic, obj)
                 continue
             fields = [obj[f] for f in tblfields]
         # dataframe

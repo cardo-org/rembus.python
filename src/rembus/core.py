@@ -96,7 +96,7 @@ def domain(s: str) -> str:
     """
     dot_index = s.find(".")
     if dot_index != -1:
-        return s[dot_index + 1 :]
+        return s[dot_index + 1:]
     else:
         return "."
 
@@ -349,7 +349,8 @@ class Router(Supervised):
         self._builtins()
         if data_at_rest:
             self.db = rdb.init_db(self, schema)
-            self.save_task = asyncio.create_task(self._periodic_saver())
+            ival: float = float(os.getenv("REMBUS_ARCHIVER_INTERVAL", "1.0"))
+            self.save_task = asyncio.create_task(self._periodic_saver(ival))
         else:
             self.db = None
             self.save_task = None
@@ -500,7 +501,8 @@ class Router(Supervised):
                 status = rp.STS_METHOD_EXCEPTION
                 output = f"{e}"
                 logger.debug("exception: %s", e)
-            outmsg = rp.ResMsg(id=msg.id, status=status, data=rp.df2tag(output))
+            outmsg = rp.ResMsg(id=msg.id, status=status,
+                               data=rp.df2tag(output))
             await msg.twin.send(outmsg)
         elif msg.topic in self.exposers:
             target_twin = self._select_twin(msg.topic)
@@ -919,7 +921,8 @@ class Twin(Supervised):
             logger.debug("[%s] twin_task: %s", self, msg)
             if msg == "reconnect":
                 if not self.reconnect_task:
-                    self.reconnect_task = asyncio.create_task(self._reconnect())
+                    self.reconnect_task = asyncio.create_task(
+                        self._reconnect())
             elif msg == "shutdown":
                 break
             elif isinstance(msg, rp.RpcReqMsg):
