@@ -12,9 +12,11 @@ DEFAULT_BROKER = "broker"
 DEFAULT_PORT = 8000
 TENANTS_FILE = "tenants.json"
 
-def nowbucket(width:int = 900):
+
+def nowbucket(width: int = 900):
     """The start of current bucket expressed in seconds from epoch."""
     return (int(time.time()) // 900) * 900
+
 
 class Config:
     """Configuration values to modify the behavior of Rembus."""
@@ -43,9 +45,7 @@ def db_attach(router_id):
         db_name = os.environ["DUCKLAKE_URL"]
     else:
         db_name = f"ducklake:{data_dir}.ducklake"
-    logger.debug(
-        "ATTACH '%s' AS rl (DATA_PATH '%s')", db_name, data_dir
-    )
+    logger.debug("ATTACH '%s' AS rl (DATA_PATH '%s')", db_name, data_dir)
     return f"ATTACH '{db_name}' AS rl (DATA_PATH '{data_dir}')"
 
 
@@ -53,7 +53,10 @@ def rembus_dir():
     """The root directory for all rembus components."""
     rdir = os.getenv("REMBUS_DIR")
     if not rdir:
-        return user_config_dir("rembus", "Rembus")
+        rdir = user_config_dir("rembus", "Rembus")
+
+    if not os.path.isdir(rdir):
+        os.makedirs(rdir, exist_ok=True)
 
     return rdir
 

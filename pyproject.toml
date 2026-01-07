@@ -55,7 +55,7 @@ test = [
 "Bug Tracker" = "https://github.com/cardo-org/rembus.python/issues"
 
 [tool.bumpver]
-current_version = "0.5.0"
+current_version = "0.6.0"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "bump version {old_version} -> {new_version}"
 tag_message = "{new_version}"
@@ -70,9 +70,6 @@ push = true
 "pyproject.toml" = [
     'current_version = "{version}"',
     'version = "{version}"',
-]
-"src/rembus/__init__.py" = [
-    '__version__ = "{version}"',
 ]
 
 [tool.pytest.ini_options]
