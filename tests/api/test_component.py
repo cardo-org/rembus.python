@@ -182,7 +182,7 @@ async def test_publish_slot():
     )
     assert repr(cli.uid) == "ws://127.0.0.1:8007/cmp.net"
     assert rembus.core.domain(cli.rid) == "net"
-    await cli.publish("mytopic", slot=1234)
+    await cli.publish("mytopic", slot=rembus.nowbucket())
     await cli.publish("mytopic", slot=1234, qos=rp.QOS2)
     await cli.publish("mytopic", "log_warning", slot=1234, qos=rp.QOS1)
 

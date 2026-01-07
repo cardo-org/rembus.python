@@ -15,5 +15,5 @@ df = pl.DataFrame(
 )
 
 cli = rb.node(f"ws://:{args.port}/myclient")
-cli.publish("telemetry", df)
+cli.publish("telemetry", df, slot=rb.nowbucket())
 cli.close()

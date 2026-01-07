@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import time
 from platformdirs import user_config_dir
 
 logger = logging.getLogger(__name__)
@@ -11,6 +12,9 @@ DEFAULT_BROKER = "broker"
 DEFAULT_PORT = 8000
 TENANTS_FILE = "tenants.json"
 
+def nowbucket(width:int = 900):
+    """The start of current bucket expressed in seconds from epoch."""
+    return (int(time.time()) // 900) * 900
 
 class Config:
     """Configuration values to modify the behavior of Rembus."""

@@ -6,6 +6,7 @@ __version__ = version("rembus")
 from .core import add_plugin, RbURL  # noqa: F401
 from .component import component
 from .settings import (  # noqa: F401
+    nowbucket,
     rembus_dir,
     DEFAULT_BROKER,
     TENANTS_FILE,
