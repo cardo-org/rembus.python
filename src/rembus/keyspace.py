@@ -45,11 +45,17 @@ class KeySpaceRouter(rc.Supervised):
 
     def __str__(self):
         return f"keyspace::{rc.top_router(self)}"
+    
+    async def setup_twin(self, twin):
+        """Setup the twin subscriptions to keyspaces."""
+        for topic in self.broker.subscribers:
+            if twin in self.broker.subscribers[topic]:
+                logger.debug(
+                    "[ksrouter] subscribing twin %s to topic%s", twin, topic)
+                await self.subscribe_handler(twin, topic)
 
-    async def subscribe_handler(self, msg):
+    async def subscribe_handler(self, component, topic):
         """Setup the keyspace regular expression from the message topic"""
-        component = msg.twin
-        topic = msg.topic
         logger.info("[keyspace] registering %s", topic)
 
         if "*" in topic:
@@ -125,7 +131,7 @@ class KeySpaceRouter(rc.Supervised):
             logger.debug("[%s] recv: %s", self, msg)
             if isinstance(msg, rp.AdminMsg) and rp.COMMAND in msg.data:
                 if msg.data[rp.COMMAND] == rp.ADD_INTEREST:
-                    await self.subscribe_handler(msg)
+                    await self.subscribe_handler(msg.twin, msg.topic)
                 elif msg.data[rp.COMMAND] == rp.REMOVE_INTEREST:
                     await self.unsubscribe_handler(msg)
             elif isinstance(msg, rp.PubSubMsg):

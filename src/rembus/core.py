@@ -643,6 +643,8 @@ class Router(Supervised):
         self.id_twin[twin.twkey] = twin
         if twin.db is not None:
             load_twin(twin)
+            if twin.router.upstream:
+                await twin.router.upstream.setup_twin(twin)
 
     async def _verify_signature(self, msg: rp.AttestationMsg):
         """Verify the signature of the attestation message."""
@@ -1380,10 +1382,13 @@ def alltwins(router):
 
 async def add_plugin(twin: Twin, plugin: Supervised):
     """Add a plugin router in front of the current twin router."""
+    print(f"twin {twin} current plugin {type(plugin)}")
     router = twin.router
     router.upstream = plugin
     plugin.downstream = router
+    print(f"set twin router to {type(plugin)}")
     twin.router = plugin
+    print(f"twin {twin} set router: {type(twin.router)}, plugin: {type(plugin)}")
     await plugin.start()  # Make start async and await it
     logger.info("[%s] added plugin %s", twin, plugin)
     for tw in alltwins(router):
