@@ -1,7 +1,8 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
 import logging
-import rembus as rb
 import pytest
+import rembus as rb
 from tests.db.broker import start_broker
 
 
@@ -32,9 +33,14 @@ async def test_init_db():
         64,
     )
 
-    await pub.publish("topic2", "name", "wrong_number_of_fields")
+    # now_dt = datetime.now(timezone.utc)
+    now_dt = datetime.now()
 
+    await pub.publish("topic2", "name", "wrong_number_of_fields")
     await pub.publish("topic3", {"name": "name_a", "double": 3.0})
+    await asyncio.sleep(2)
+
+    await pub.publish("topic3", {"name": "name_a", "double": 4.0})
     await pub.publish(
         "topic4", {"name": "name_a", "type": "type_a", "value": "value_a"}
     )
@@ -66,9 +72,24 @@ async def test_init_db():
     logging.info(topic1_df)
 
     topic3_df = db.execute("select * from topic3").pl()
-    assert topic3_df.shape[0] == 1
+    assert topic3_df.shape[0] == 2
 
     df = await pub.rpc("query_topic3")
+    assert df.shape[0] == 2
+
+    timepoint = now_dt + timedelta(seconds=2)
+    df = await pub.rpc(
+        "query_topic3",
+        {"when": timepoint.strftime(
+            "%Y-%m-%d %H:%M:%S"), "where": "double=3.0"},
+    )
+    assert df.shape[0] == 1
+
+    # Using epoch seconds
+    df = await pub.rpc(
+        "query_topic3",
+        {"when": timepoint.timestamp(), "where": "double=3.0"},
+    )
     assert df.shape[0] == 1
 
     df = await pub.rpc("query_topic3", {"where": "double>10"})
@@ -89,17 +110,17 @@ async def test_init_db():
     # test errors
     with pytest.raises(rb.RembusError):
         await pub.rpc(
-            "deletelake",
+            "query_topic3",
             {
-                "where": {"name": "name_a", "type": "type_default"},
+                "no_where": {"name": "name_a", "type": "type_default"},
             },
         )
 
     with pytest.raises(rb.RembusError):
         await pub.rpc(
-            "deletelake",
+            "delete_topic3",
             {
-                "table": "topic3",
+                "no_where": {"name": "name_a", "type": "type_default"},
             },
         )
 

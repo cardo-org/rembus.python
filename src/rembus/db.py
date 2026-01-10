@@ -1,3 +1,4 @@
+from datetime import datetime
 from functools import partial
 import os
 import subprocess
@@ -220,6 +221,12 @@ def delete(router, table, obj=None, ctx=None, node=None):
     """Delete rows from `table` matching conditions in `obj["where"]`."""
     cond_str = None
     if obj is not None:
+        allowed = ("where", "when")
+        bad = [k for k in obj.keys() if k not in allowed]
+
+        if bad:
+            raise ValueError(f"invalid keys: {', '.join(bad)}")
+
         cond_str = obj.get("where", None)
 
     if cond_str:
@@ -232,15 +239,26 @@ def delete(router, table, obj=None, ctx=None, node=None):
 
 
 def query(router, table, obj=None, ctx=None, node=None):
-    """Select rows from `table` matching conditions in `obj["where"]`."""
-    cond_str = None
-    if obj is not None:
-        cond_str = obj.get("where", None)
-
-    if cond_str:
-        sql = f"SELECT * FROM {table} WHERE {cond_str}"
-    else:
+    """Select rows from `table` matching conditions in `obj`."""
+    if obj is None:
         sql = f"SELECT * FROM {table}"
+    else:
+        allowed = ("where", "when")
+        bad = [k for k in obj.keys() if k not in allowed]
+        if bad:
+            raise ValueError(f"invalid keys: {', '.join(bad)}")
+        where_cond = ""
+        if "where" in obj:
+            where_cond = " WHERE " + obj["where"]
+        at = ""
+        if "when" in obj:
+            if isinstance(obj["when"], (int, float)):
+                dt = datetime.fromtimestamp(obj["when"])
+                ts = dt.strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                ts = obj["when"]
+            at = f" AT (TIMESTAMP => CAST('{ts}' AS TIMESTAMP))"
+        sql = f"SELECT * FROM {table} {at} {where_cond}"
 
     logger.debug("db query: %s", sql)
     return router.db.execute(sql).pl()
