@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rembus"
-version = "0.7.0"
+version = "0.7.1"
 license = "AGPL-3.0-only"
 authors = [
   { name="Attilio Donà", email="attilio.dona@gmail.com" },
@@ -55,7 +55,7 @@ test = [
 "Bug Tracker" = "https://github.com/cardo-org/rembus.python/issues"
 
 [tool.bumpver]
-current_version = "0.7.0"
+current_version = "0.7.1"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "bump version {old_version} -> {new_version}"
 tag_message = "{new_version}"
