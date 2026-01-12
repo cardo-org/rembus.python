@@ -1382,15 +1382,12 @@ def alltwins(router):
 
 async def add_plugin(twin: Twin, plugin: Supervised):
     """Add a plugin router in front of the current twin router."""
-    print(f"twin {twin} current plugin {type(plugin)}")
     router = twin.router
     router.upstream = plugin
     plugin.downstream = router
-    print(f"set twin router to {type(plugin)}")
     twin.router = plugin
-    print(f"twin {twin} set router: {type(twin.router)}, plugin: {type(plugin)}")
-    await plugin.start()  # Make start async and await it
-    logger.info("[%s] added plugin %s", twin, plugin)
+    await plugin.start()
+    logger.debug("[%s] added plugin %s", twin, plugin)
     for tw in alltwins(router):
         tw.router = plugin
 
