@@ -81,6 +81,17 @@ class node:  # pylint: disable=invalid-name
             lambda snum, frame: receive_signal(self),
         )
 
+    def __enter__(self):
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> Optional[bool]:
+        self.close()
+
     def __str__(self):
         return f"{self._rb.uid.id}"
 
@@ -207,17 +218,6 @@ class node:  # pylint: disable=invalid-name
             self.exec(self._rb.close)
             self._runner.shutdown()
             self._runner = None
-
-    def __enter__(self):
-        return self
-
-    def __exit__(
-        self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
-    ) -> Optional[bool]:
-        self.close()
 
 
 def register(rid: str, pin: str, scheme: int = SIG_RSA, enc: int = CBOR):

@@ -1,14 +1,9 @@
-import asyncio
 from typing import List
-import signal
+from contextlib import asynccontextmanager
 from rembus.core import Twin, RbURL, init_router, add_plugin
 from rembus.settings import DEFAULT_BROKER, DEFAULT_PORT
 from rembus.protocol import CBOR
 from rembus.keyspace import KeySpaceRouter
-
-
-def receive_signal(handle, loop):
-    asyncio.run_coroutine_threadsafe(handle.shutdown(), loop)
 
 
 async def _component(
@@ -19,7 +14,7 @@ async def _component(
     policy: str = "first_up",
     schema: str | None = None,
     enc: int = CBOR,
-    keyspace: bool = True
+    keyspace: bool = True,
 ) -> Twin:
     """Return a Rembus component."""
     isserver = (url is None) or (port is not None)
@@ -61,13 +56,30 @@ async def component(
     policy: str = "first_up",
     schema: str | None = None,
     enc: int = CBOR,
-    keyspace: bool = True
+    keyspace: bool = True,
 ) -> Twin:
     handle = await _component(
         url, name, port, secure, policy, schema, enc, keyspace
     )
-    signal.signal(
-        signal.SIGINT,
-        lambda snum, frame: receive_signal(handle, asyncio.get_running_loop()),
-    )
     return handle
+
+
+@asynccontextmanager
+async def connect(
+    url: str | List[str] | None = None,
+    name: str | None = None,
+    port: int | None = None,
+    secure: bool = False,
+    policy: str = "first_up",
+    schema: str | None = None,
+    enc: int = CBOR,
+    keyspace: bool = True,
+):
+    """Initialize a component context."""
+    handle = await _component(
+        url, name, port, secure, policy, schema, enc, keyspace
+    )
+    try:
+        yield handle
+    finally:
+        await handle.close()

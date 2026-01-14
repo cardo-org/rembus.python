@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import argparse
+import signal
 import rembus as rb
 
 logging.basicConfig(encoding="utf-8", level=logging.DEBUG)
@@ -15,6 +16,8 @@ async def main():
     args = parser.parse_args()
 
     bro = await rb.component(schema=schema_file, port=args.port)
+
+    bro.register_shutdown()
 
     print(f"broker up and running at port {args.port}")
     await bro.wait()

@@ -1,4 +1,5 @@
 """Test cases for the node synchronous API."""
+
 import logging
 import pytest
 import rembus
@@ -8,22 +9,22 @@ import rembus.settings
 
 def myservice(x, y):
     """A simple service that adds two numbers."""
-    return x+y
+    return x + y
 
 
 def test_rpc(server):
     """Test the RPC related methods."""
     x = 2
     y = 3
-    rb = rembus.node("client")
 
+    rb = rembus.node("client")
     logging.debug("test __str__ for node %s", rb)
     repr(rb)
-    
+
     server.expose(myservice)
 
     result = rb.rpc("myservice", x, y)
-    assert result == x+y
+    assert result == x + y
 
     server.unexpose(myservice)
 
@@ -31,6 +32,21 @@ def test_rpc(server):
 
     with pytest.raises(rp.RembusConnectionClosed):
         rb.rpc("myservice", x, y)
+
+
+def test_context(server):
+    """Test the RPC related methods."""
+    x = 2
+    y = 3
+
+    with rembus.node("client") as rb:
+        logging.debug("test __str__ for node %s", rb)
+        repr(rb)
+
+        server.expose(myservice)
+
+        result = rb.rpc("myservice", x, y)
+        assert result == x + y
 
 
 def test_direct(server):
@@ -41,7 +57,7 @@ def test_direct(server):
     server.expose(myservice)
 
     result = rb.direct(rembus.settings.DEFAULT_BROKER, "myservice", x, y)
-    assert result == x+y
+    assert result == x + y
 
     server.unexpose(myservice)
 

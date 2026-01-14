@@ -13,6 +13,7 @@ import os
 import time
 import traceback
 from typing import Callable, Any, Optional, List, cast
+import signal
 import ssl
 from urllib.parse import urlparse
 import uuid
@@ -96,7 +97,7 @@ def domain(s: str) -> str:
     """
     dot_index = s.find(".")
     if dot_index != -1:
-        return s[dot_index + 1:]
+        return s[dot_index + 1 :]
     else:
         return "."
 
@@ -400,7 +401,7 @@ class Router(Supervised):
         return cmp
 
     async def _shutdown(self):
-        """Cleanup logic when shutting down the router."""
+        """Router cleanup logic when shutting down."""
         logger.debug("[%s] router shutdown", self)
         if self.server_instance:
             self.server_instance.close()
@@ -501,8 +502,7 @@ class Router(Supervised):
                 status = rp.STS_METHOD_EXCEPTION
                 output = f"{e}"
                 logger.debug("exception: %s", e)
-            outmsg = rp.ResMsg(id=msg.id, status=status,
-                               data=rp.df2tag(output))
+            outmsg = rp.ResMsg(id=msg.id, status=status, data=rp.df2tag(output))
             await msg.twin.send(outmsg)
         elif msg.topic in self.exposers:
             target_twin = self._select_twin(msg.topic)
@@ -754,8 +754,8 @@ def response_data(msg: rp.ResMsg):
 class Twin(Supervised):
     """
     A Twin represents a Rembus component, either as a client or server.
-    It handles the connection, message sending and receiving, and provides methods
-    for RPC, pub/sub, and other commands interactions.
+    It handles the connection, message sending and receiving, and provides
+    methods for RPC, pub/sub, and other commands interactions.
     """
 
     def __init__(
@@ -873,8 +873,18 @@ class Twin(Supervised):
                 logger.info("[%s] reconnect: %s", self, e)
                 await asyncio.sleep(2)
 
+    def register_shutdown(self):
+        """Register shutdown handler."""
+        loop = asyncio.get_running_loop()
+        loop.add_signal_handler(
+            signal.SIGINT, lambda: asyncio.create_task(self.close())
+        )
+        loop.add_signal_handler(
+            signal.SIGTERM, lambda: asyncio.create_task(self.close())
+        )
+
     async def _shutdown(self):
-        """Cleanup logic when shutting down the twin."""
+        """Twin cleanup logic when shutting down."""
         logger.debug("[%s] twin shutdown", self)
 
         if self.db is not None:
@@ -923,8 +933,7 @@ class Twin(Supervised):
             logger.debug("[%s] twin_task: %s", self, msg)
             if msg == "reconnect":
                 if not self.reconnect_task:
-                    self.reconnect_task = asyncio.create_task(
-                        self._reconnect())
+                    self.reconnect_task = asyncio.create_task(self._reconnect())
             elif msg == "shutdown":
                 break
             elif isinstance(msg, rp.RpcReqMsg):

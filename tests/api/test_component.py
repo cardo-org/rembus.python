@@ -30,15 +30,19 @@ async def start_server(port):
 async def test_wait():
     """Test the wait functionality of the rembus component."""
     server = await start_server(port=8001)
-    cli = await rembus.component("ws://:8001")
-    assert cli.broker_dir == rembus.settings.broker_dir(rembus.DEFAULT_BROKER)
+    server.register_shutdown()
 
-    rid = await cli.rpc("rid")
-    assert rid == "broker"
-    # schedule the shutdown
-    asyncio.create_task(shutdown(cli))
-    await cli.wait()
-    await cli.close()
+    async with rembus.connect("ws://:8001") as cli:
+        assert cli.broker_dir == rembus.settings.broker_dir(
+            rembus.DEFAULT_BROKER
+        )
+
+        rid = await cli.rpc("rid")
+        assert rid == "broker"
+        # schedule the shutdown
+        asyncio.create_task(shutdown(cli))
+        await cli.wait()
+
     await server.close()
 
 

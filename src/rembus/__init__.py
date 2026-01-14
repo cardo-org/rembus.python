@@ -4,7 +4,7 @@ __version__ = version("rembus")
 
 # import logging
 from .core import add_plugin, RbURL  # noqa: F401
-from .component import component
+from .component import component, connect
 from .settings import (  # noqa: F401
     nowbucket,
     rembus_dir,
@@ -29,6 +29,7 @@ from .keyspace import KeySpaceRouter
 
 __all__ = [
     "add_plugin",
+    "connect",
     "component",
     "node",
     "register",
