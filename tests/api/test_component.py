@@ -149,7 +149,7 @@ async def test_publish():
 
     assert cli.isrepl() is False
     assert isinstance(cli.router, rembus.core.Router)
-    assert "'cmp.net@ws://127.0.0.1:8000': cmp.net" in repr(server.router)
+    assert "cmp.net@ws://127.0.0.1:8000" in repr(server.router)
     assert repr(cli.uid) == "ws://127.0.0.1:8006/cmp.net"
     assert rembus.core.domain(cli.rid) == "net"
 
@@ -180,10 +180,7 @@ async def test_publish_slot():
     cli = await rembus.component("ws://:8007/cmp.net")
     assert cli.isrepl() is False
     assert isinstance(cli.router, rembus.core.Router)
-    assert (
-        repr(server.router)
-        == "broker: {'cmp.net@ws://127.0.0.1:8000': cmp.net}"
-    )
+    assert repr(server.router) == "broker: {'cmp.net@ws://127.0.0.1:8000'}"
     assert repr(cli.uid) == "ws://127.0.0.1:8007/cmp.net"
     assert rembus.core.domain(cli.rid) == "net"
     await cli.publish("mytopic", slot=rembus.nowbucket())

@@ -45,13 +45,14 @@ class KeySpaceRouter(rc.Supervised):
 
     def __str__(self):
         return f"keyspace::{rc.top_router(self)}"
-    
+
     async def setup_twin(self, twin):
         """Setup the twin subscriptions to keyspaces."""
         for topic in self.broker.subscribers:
             if twin in self.broker.subscribers[topic]:
                 logger.debug(
-                    "[ksrouter] subscribing twin %s to topic%s", twin, topic)
+                    "[ksrouter] subscribing twin %s to topic%s", twin, topic
+                )
                 await self.subscribe_handler(twin, topic)
 
     async def subscribe_handler(self, component, topic):
@@ -66,10 +67,8 @@ class KeySpaceRouter(rc.Supervised):
 
             self.spaces[retopic].add(SpaceTwin(topic, component.twkey))
 
-    async def unsubscribe_handler(self, msg):
+    async def unsubscribe_handler(self, component, topic):
         """Remove the keyspace subscription for message topic"""
-        component = msg.twin
-        topic = msg.topic
         logger.info("[keyspace] unregistering %s", topic)
 
         if "*" in topic:
@@ -85,20 +84,26 @@ class KeySpaceRouter(rc.Supervised):
         to_remove = []
         for space_twin in space_twins:
             pattern = space_twin.space
+            # the first argument is the originating topic
+            datas = [topic] + msg.data
             logger.debug(
-                "[keyspace] publish to %s: %s, %s",
-                pattern,
-                topic,
-                msg.data,
+                "[keyspace] publish to %s: %s, %s", pattern, topic, datas
             )
             twid = space_twin.twid
-            if twid in self.broker.id_twin:
+
+            # Evaluate local subscribers
+            if pattern in self.broker.handler:
+                await self.broker.evaluate(space_twin, pattern, datas)
+
+            # if twid in self.broker.id_twin:
+            if twid in self.broker.twins:
                 tw = self.broker.id_twin[twid]
                 if tw.isopen():
-                    await tw.publish(pattern, topic, *msg.data)
-            else:
-                # cleanup, the twin has gone
-                to_remove.append(space_twin)
+                    await tw.publish(pattern, topic, datas)
+                else:
+                    # cleanup, the twin has gone
+                    to_remove.append(space_twin)
+
         for el in to_remove:
             space_twins.remove(el)
 
@@ -121,7 +126,6 @@ class KeySpaceRouter(rc.Supervised):
                     if unsealed:
                         await self.broadcast(topic, msg, space_twins)
 
-
     async def _task_impl(self) -> None:
         """Override in subclasses for supervised task impl."""
         logger.debug("[keyspace] started")
@@ -133,7 +137,7 @@ class KeySpaceRouter(rc.Supervised):
                 if msg.data[rp.COMMAND] == rp.ADD_INTEREST:
                     await self.subscribe_handler(msg.twin, msg.topic)
                 elif msg.data[rp.COMMAND] == rp.REMOVE_INTEREST:
-                    await self.unsubscribe_handler(msg)
+                    await self.unsubscribe_handler(msg.twin, msg.topic)
             elif isinstance(msg, rp.PubSubMsg):
                 await self.publish_interceptor(msg)
 

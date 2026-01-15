@@ -54,10 +54,6 @@ class AsyncLoopRunner:
                 )
 
 
-def receive_signal(handle):
-    handle.close()
-
-
 class node:  # pylint: disable=invalid-name
     """The synchronous Rembus twin."""
 
@@ -75,10 +71,6 @@ class node:  # pylint: disable=invalid-name
         self._runner = AsyncLoopRunner()
         self._rb = self._runner.run(
             _component(url, name, port, secure, policy, schema, enc, keyspace)
-        )
-        signal.signal(
-            signal.SIGINT,
-            lambda snum, frame: receive_signal(self),
         )
 
     def __enter__(self):
@@ -211,6 +203,18 @@ class node:  # pylint: disable=invalid-name
         Start the twin event loop that wait for rembus messages.
         """
         return self.exec(self._rb.wait, timeout)
+
+    def register_shutdown(self):
+        """Register shutdown handler."""
+
+        signal.signal(
+            signal.SIGINT,
+            lambda snum, frame: self.close(),
+        )
+        signal.signal(
+            signal.SIGTERM,
+            lambda snum, frame: self.close(),
+        )
 
     def close(self):
         """Close the connection and clean up resources."""

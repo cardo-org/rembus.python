@@ -20,6 +20,8 @@ def server(port=8000):
     The server will be available to tests that request this fixture.
     """
     rb = rembus.node(port=port)
+    rb.register_shutdown()
+
     time.sleep(1)  # Give the server a moment to start
     logging.info("starting test rembus server")
     yield rb

@@ -8,6 +8,7 @@ import asyncio
 from contextlib import suppress
 import base64
 from enum import Enum
+from functools import partial
 import logging
 import os
 import time
@@ -27,6 +28,7 @@ import websockets
 import rembus.protocol as rp
 import rembus.settings as rs
 import rembus.db as rdb
+import rembus.builtins as builtins
 from . import __version__
 from .admin import admin_command
 
@@ -205,7 +207,7 @@ class RbURL:
     @property
     def twkey(self):
         """Return the twin key"""
-        return f"{self.id}@{self.netlink}"
+        return self.id if self.id == "repl" else f"{self.id}@{self.netlink}"
 
 
 async def shutdown_message(obj) -> None:
@@ -360,7 +362,13 @@ class Router(Supervised):
         return f"{self.id}"
 
     def __repr__(self):
-        return f"{self.id}: {self.id_twin}"
+        twins = {t for t in self.id_twin if t != "repl"}
+        return f"{self.id}: {twins}"
+
+    @property
+    def twins(self):
+        """Return the twins connected to."""
+        return {k: v for (k, v) in self.id_twin.items() if k != "repl"}
 
     def isconnected(self, rid: str) -> bool:
         """Check if a component with the given rid is connected."""
@@ -378,6 +386,18 @@ class Router(Supervised):
         self.handler["rid"] = lambda *_: self.id
         self.handler["version"] = lambda *_: __version__
         self.handler["uptime"] = lambda *_: self.uptime()
+        self.handler["python_service_install"] = partial(
+            builtins.add_callback, self, "services"
+        )
+        self.handler["python_service_uninstall"] = partial(
+            builtins.remove_callback, self, "services"
+        )
+        self.handler["python_subscriber_install"] = partial(
+            builtins.add_callback, self, "subscribers"
+        )
+        self.handler["python_subscriber_uninstall"] = partial(
+            builtins.remove_callback, self, "subscribers"
+        )
 
     async def init_twin(self, uid: RbURL, enc: int, isserver: bool):
         """
@@ -385,12 +405,12 @@ class Router(Supervised):
         """
         cmp = Twin(uid, bottom_router(self), not isserver, enc)
         await cmp.start()
-        if not uid.isrepl():
-            self.id_twin[uid.twkey] = cmp
+        self.id_twin[uid.twkey] = cmp
 
         try:
-            # if not isserver:
-            if not cmp.isrepl():
+            if cmp.isrepl():
+                await builtins.load_callbacks(cmp)
+            else:
                 if self.config.start_anyway:
                     await cmp.inbox.put("reconnect")
                 else:
@@ -467,7 +487,7 @@ class Router(Supervised):
 
     async def send_message(self, msg):
         """Send message to remote node using a twin from the pool of twins"""
-        for t in self.id_twin.values():
+        for t in self.twins.values():
             if t.isopen():
                 try:
                     futreq = t.send_task(msg)
@@ -783,7 +803,7 @@ class Twin(Supervised):
         # self.start()
 
     def __str__(self):
-        return f"{self.uid.id}"
+        return self.__repr__()
 
     def __repr__(self):
         return self.uid.id
@@ -845,7 +865,7 @@ class Twin(Supervised):
     def isopen(self) -> bool:
         """Check if the connection is open."""
         if self.isrepl():
-            return any([t.isopen() for t in self.router.id_twin.values()])
+            return any([t.isopen() for t in self.router.twins.values()])
         else:
             return (
                 self.socket is not None
@@ -1305,7 +1325,11 @@ class Twin(Supervised):
         if topic is None:
             topic = fn.__name__
 
-        await self.setting(topic, rp.ADD_INTEREST, {"msg_from": msgfrom})
+        if self.isrepl():
+            await self._router.subscribe_handler(self, topic)
+        else:
+            await self.setting(topic, rp.ADD_INTEREST, {"msg_from": msgfrom})
+
         self.router.handler[topic] = fn
         return self
 
@@ -1318,7 +1342,11 @@ class Twin(Supervised):
         else:
             topic = fn.__name__
 
-        await self.setting(topic, rp.REMOVE_INTEREST)
+        if self.isrepl():
+            await self._router.unsubscribe_handler(self, topic)
+        else:
+            await self.setting(topic, rp.REMOVE_INTEREST)
+
         self.router.handler.pop(topic, None)
         return self
 
