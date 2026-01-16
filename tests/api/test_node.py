@@ -12,6 +12,14 @@ def myservice(x, y):
     return x + y
 
 
+def test_anonym(server):
+    """Connect anonymously."""
+    node = rembus.node(rembus.anonym(host="127.0.0.1", port=8000))
+    rid = node.rpc("rid")
+    assert rid == "broker"
+    node.close()
+
+
 def test_rpc(server):
     """Test the RPC related methods."""
     x = 2

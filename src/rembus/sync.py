@@ -59,7 +59,7 @@ class node:  # pylint: disable=invalid-name
 
     def __init__(
         self,
-        url: str | List[str] | None = None,
+        url: RbURL | str | List[str] | None = None,
         name: str | None = None,
         port: int | None = None,
         secure: bool = False,

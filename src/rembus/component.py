@@ -6,8 +6,19 @@ from rembus.protocol import CBOR
 from rembus.keyspace import KeySpaceRouter
 
 
+def anonym(host=None, port=None):
+    """Return an url representing an anonymous component."""
+    url = RbURL()
+    if host:
+        url.hostname = host
+    if port:
+        url.port = port
+
+    return url
+
+
 async def _component(
-    url: str | List[str] | None = None,
+    url: RbURL | str | List[str] | None = None,
     name: str | None = None,
     port: int | None = None,
     secure: bool = False,
@@ -24,7 +35,8 @@ async def _component(
 
     if isinstance(url, str):
         uid = RbURL(url)
-
+    elif isinstance(url, RbURL):
+        uid = url
     else:
         uid = RbURL("repl://")
 
@@ -49,7 +61,7 @@ async def _component(
 
 
 async def component(
-    url: str | List[str] | None = None,
+    url: RbURL | str | List[str] | None = None,
     name: str | None = None,
     port: int | None = None,
     secure: bool = False,
@@ -58,6 +70,7 @@ async def component(
     enc: int = CBOR,
     keyspace: bool = True,
 ) -> Twin:
+    """Initialize a rembus component."""
     handle = await _component(
         url, name, port, secure, policy, schema, enc, keyspace
     )

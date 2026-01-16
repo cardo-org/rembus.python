@@ -9,17 +9,26 @@ def myservice(x, y):
     return x + y
 
 
+def broker_service(x, y):
+    return x * y
+
+
 def test_broker():
     """Test reconnecting to a rembus broker."""
     x = 1
     y = 2
     server = rembus.node(port=8801)
+    server.expose(broker_service)
+
     srv = rembus.node("ws://:8801/srv")
     srv.expose(myservice)
 
     cli = rembus.node("ws://:8801/cli")
     z = cli.rpc("myservice", x, y)
     assert z == x + y
+
+    z = cli.rpc("broker_service", x, y)
+    assert z == x * y
 
     srv.unexpose(myservice)
 

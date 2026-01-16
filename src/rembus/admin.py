@@ -66,7 +66,7 @@ async def admin_command(msg: rp.AdminMsg):
         logger.warning(
             "admin error: expected cmd property (got: %s)", msg.data)
         await twin.response(rp.STS_ERROR, msg)
-        return
+        return None
 
     router = twin.router
     cmd = msg.data[rp.COMMAND]
@@ -80,4 +80,5 @@ async def admin_command(msg: rp.AdminMsg):
         remove_subscriber(router, twin, topic)
     elif cmd == rp.REACTIVE_CMD:
         await reactive(router, twin, msg.data[rp.STATUS])
+
     await twin.response(rp.STS_OK, msg)

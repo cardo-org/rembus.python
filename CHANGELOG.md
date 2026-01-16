@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Code distribution impl started.
 
+- `rembus.anonym()` api for anonymous component creation.
+
 ## Fixed
 
 - Manage space topics subscribed by broker/server components.

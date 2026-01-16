@@ -1,0 +1,1 @@
+export DUCKLAKE_URL="ducklake:duckdb:$HOME/.config/rembus/rembus.ducklake"

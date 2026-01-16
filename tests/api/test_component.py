@@ -46,6 +46,24 @@ async def test_wait():
     await server.close()
 
 
+@pytest.mark.asyncio
+async def test_builtin_with_ctx():
+    """Test the rid builtin with a ctx."""
+    server = await start_server(port=8001)
+    server.register_shutdown()
+    ctx = {}
+    server.inject(ctx)
+
+    async with rembus.connect("ws://:8001") as cli:
+        rid = await cli.rpc("rid")
+        assert rid == "broker"
+        # schedule the shutdown
+        asyncio.create_task(shutdown(cli))
+        await cli.wait()
+
+    await server.close()
+
+
 async def myservice(x, y):
     """A simple service that adds two numbers."""
     return x + y

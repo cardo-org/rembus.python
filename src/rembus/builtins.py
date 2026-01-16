@@ -37,11 +37,8 @@ async def eval_file(twin, name, path):
     spec.loader.exec_module(mod)
 
     # Get the service function
-    # (assuming it's named 'service' or same as module name)
-    # Adjust this based on your naming convention
-    if hasattr(mod, "service"):
-        service_fn = mod.service
-    elif hasattr(mod, name):
+    # (assuming it's named as module name)
+    if hasattr(mod, name):
         service_fn = getattr(mod, name)
     else:
         # Get the first callable that's not a built-in
@@ -53,7 +50,9 @@ async def eval_file(twin, name, path):
                     service_fn = attr
                     break
         if service_fn is None:
-            raise ValueError(f"No service function found in {path}")
+            # remove invalid file
+            path.unlink(missing_ok=True)
+            raise ValueError(f"no callback found in {path}")
 
     await twin.expose(service_fn, name)
     return service_fn
@@ -83,7 +82,7 @@ async def add_callback(router, cbtype, name, content):
 
     # Get the twin and evaluate the file
     twin = router.id_twin["repl"]
-    await eval_file(twin, name, str(file_path))
+    await eval_file(twin, name, file_path)
 
 
 async def remove_callback(router, cbtype, name):

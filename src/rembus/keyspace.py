@@ -81,15 +81,15 @@ class KeySpaceRouter(rc.Supervised):
 
     async def broadcast(self, topic, msg, space_twins):
         """Brodcast the message to all subscribed spaces."""
-        to_remove = []
         for space_twin in space_twins:
             pattern = space_twin.space
             # the first argument is the originating topic
             datas = [topic] + msg.data
-            logger.debug(
-                "[keyspace] publish to %s: %s, %s", pattern, topic, datas
-            )
             twid = space_twin.twid
+            logger.debug(
+                "[keyspace] publish to %s topic and data:%s %s",
+                twid, pattern, datas
+            )
 
             # Evaluate local subscribers
             if pattern in self.broker.handler:
@@ -99,13 +99,7 @@ class KeySpaceRouter(rc.Supervised):
             if twid in self.broker.twins:
                 tw = self.broker.id_twin[twid]
                 if tw.isopen():
-                    await tw.publish(pattern, topic, datas)
-                else:
-                    # cleanup, the twin has gone
-                    to_remove.append(space_twin)
-
-        for el in to_remove:
-            space_twins.remove(el)
+                    await tw.publish(pattern, *datas)
 
     async def publish_interceptor(self, msg):
         """Parse the topic and dispatch to all twins subscribed to spaces

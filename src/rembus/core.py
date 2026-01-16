@@ -383,9 +383,9 @@ class Router(Supervised):
         return f"up for {int(time.time() - self.start_ts)} seconds"
 
     def _builtins(self):
-        self.handler["rid"] = lambda *_: self.id
-        self.handler["version"] = lambda *_: __version__
-        self.handler["uptime"] = lambda *_: self.uptime()
+        self.handler["rid"] = lambda *_, **__: self.id
+        self.handler["version"] = lambda *_, **__: __version__
+        self.handler["uptime"] = lambda *_, **__: self.uptime()
         self.handler["python_service_install"] = partial(
             builtins.add_callback, self, "services"
         )
@@ -522,7 +522,8 @@ class Router(Supervised):
                 status = rp.STS_METHOD_EXCEPTION
                 output = f"{e}"
                 logger.debug("exception: %s", e)
-            outmsg = rp.ResMsg(id=msg.id, status=status, data=rp.df2tag(output))
+            outmsg = rp.ResMsg(id=msg.id, status=status,
+                               data=rp.df2tag(output))
             await msg.twin.send(outmsg)
         elif msg.topic in self.exposers:
             target_twin = self._select_twin(msg.topic)
@@ -953,7 +954,8 @@ class Twin(Supervised):
             logger.debug("[%s] twin_task: %s", self, msg)
             if msg == "reconnect":
                 if not self.reconnect_task:
-                    self.reconnect_task = asyncio.create_task(self._reconnect())
+                    self.reconnect_task = asyncio.create_task(
+                        self._reconnect())
             elif msg == "shutdown":
                 break
             elif isinstance(msg, rp.RpcReqMsg):
