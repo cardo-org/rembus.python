@@ -269,8 +269,6 @@ def get_format(msg):
     data = msg.data
 
     fmt = "sequence"
-    if msg.regex is not None:
-        fmt = "key_value"
 
     if len(data) == 1:
         obj = data[0]
@@ -278,6 +276,10 @@ def get_format(msg):
             return "key_value"
         elif isinstance(obj, cbor2.CBORTag):
             return "dataframe"
+
+    # a hierarchy topic requires a dictionary or a dataframe as payload
+    if msg.regex is not None and fmt == "sequence":
+        return "invalid_format" if data else "key_value"
 
     return fmt
 

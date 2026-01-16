@@ -21,6 +21,13 @@ def test_create_sqlite():
     publish_something()
 
 
+def test_create_sqlite_ignore_data_path():
+    os.environ["DUCKLAKE_URL"] = "ducklake:sqlite:tmp/rembus/rembus_test.sqlite"
+    os.environ["DUCKDB_IGNORE_DATA_PATH"] = "1"
+    publish_something()
+    os.environ.pop("DUCKDB_IGNORE_DATA_PATH")
+
+
 def test_create_postgres():
     os.environ["DUCKLAKE_URL"] = (
         "ducklake:postgres:postgresql://admin:secret@localhost/rembus_test"

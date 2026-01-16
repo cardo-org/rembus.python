@@ -45,9 +45,12 @@ def db_attach(router_id):
         db_name = os.environ["DUCKLAKE_URL"]
     else:
         db_name = f"ducklake:{data_dir}.ducklake"
-    logger.debug("ATTACH '%s' AS rl (DATA_PATH '%s')", db_name, data_dir)
-    return f"ATTACH '{db_name}' AS rl (DATA_PATH '{data_dir}')"
 
+    if "DUCKDB_IGNORE_DATA_PATH" not in os.environ:
+        logger.debug("ATTACH '%s' AS rl (DATA_PATH '%s')", db_name, data_dir)
+        return f"ATTACH '{db_name}' AS rl (DATA_PATH '{data_dir}')"
+    else:
+        return f"ATTACH '{db_name}' AS rl"
 
 def rembus_dir():
     """The root directory for all rembus components."""
