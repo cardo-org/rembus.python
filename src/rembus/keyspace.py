@@ -22,13 +22,39 @@ class SpaceTwin:
     twid: str
 
 
-def build_space_re(topic):
-    """Create a regex from a topic pattern."""
-    s = topic
-    s = s.replace("/**/", "(.*)")
-    s = s.replace("**", "(.*)")
-    s = s.replace("*", "([^/]+)")
+def build_space_re(topic: str) -> re.Pattern:
+    """Create a regex from a topic pattern with wildcards.
+
+    Supports:
+    - * → matches one path segment
+    - ** → matches zero or more segments
+    """
+    # Escape all regex special chars first
+    s = re.escape(topic)
+
+    # Replace escaped wildcards with regex
+    s = s.replace(r"\*\*", "(.*)")  # ** → match any path
+    logger.info("AAA [keyspace] build regex %s from topic %s", s, topic)
+    s = s.replace(r"\*", "([^/]+)")  # * → match single segment
+
+    logger.info("[keyspace] build regex %s from topic %s", s, topic)
+
+    # Add start/end anchors
     return re.compile(f"^{s}$")
+
+
+# def build_space_re(topic):
+#    """Create a regex from a topic pattern."""
+#    s = topic
+#    s = s.replace("/**/", "(.*)")
+#    s = s.replace("**", "(.*)")
+#    logger.info("AAA [keyspace] build regex %s from topic %s", s, topic)
+#    s = s.replace("*", "([^/]+)")
+#    logger.info("[keyspace] build regex %s from topic %s", s, topic)
+#    return re.compile(f"^{s}$")
+
+
+GLOB_STAR = re.compile("^(.*)$")
 
 
 class KeySpaceRouter(rc.Supervised):
@@ -40,6 +66,7 @@ class KeySpaceRouter(rc.Supervised):
 
     def __init__(self):
         super().__init__()
+        self.has_glob_star = False
         self.spaces = {}
         self.inbox: asyncio.Queue[Any] = asyncio.Queue()
 
@@ -62,6 +89,10 @@ class KeySpaceRouter(rc.Supervised):
         if "*" in topic:
             retopic = build_space_re(topic)
 
+            if retopic == GLOB_STAR:
+                self.has_glob_star = True
+
+            logger.info("[keyspace] compiled regex %s", retopic)
             if retopic not in self.spaces:
                 self.spaces[retopic] = set()
 
@@ -82,13 +113,16 @@ class KeySpaceRouter(rc.Supervised):
     async def broadcast(self, topic, msg, space_twins):
         """Brodcast the message to all subscribed spaces."""
         for space_twin in space_twins:
+            logging.info("[keyspace] matched space: %s", space_twin.space)
             pattern = space_twin.space
             # the first argument is the originating topic
             datas = [topic] + msg.data
             twid = space_twin.twid
-            logger.debug(
+            logger.info(
                 "[keyspace] publish to %s topic and data:%s %s",
-                twid, pattern, datas
+                twid,
+                pattern,
+                datas,
             )
 
             # Evaluate local subscribers
@@ -99,14 +133,24 @@ class KeySpaceRouter(rc.Supervised):
             if twid in self.broker.twins:
                 tw = self.broker.id_twin[twid]
                 if tw.isopen():
-                    await tw.publish(pattern, *datas)
+                    if tw.ismqtt:
+                        await tw.publish(topic, *msg.data)
+                    else:
+                        await tw.publish(pattern, *datas)
+                    # await tw.publish(*datas)
 
     async def publish_interceptor(self, msg):
         """Parse the topic and dispatch to all twins subscribed to spaces
         with regex matching the topic"""
+        logger.info("[keyspace] intercept publish to %s", msg.topic)
         topic = msg.topic
-        if "/" in topic:
+        if "/" in topic or self.has_glob_star:
             for space_regex, space_twins in self.spaces.items():
+                logger.info(
+                    "[keyspace] twins %s, space_regex %s",
+                    space_twins,
+                    space_regex,
+                )
                 m = space_regex.match(topic)
                 if m is not None:
                     unsealed = True
@@ -118,6 +162,7 @@ class KeySpaceRouter(rc.Supervised):
                             break
 
                     if unsealed:
+                        logger.info("[keyspace] topic %s matched", topic)
                         await self.broadcast(topic, msg, space_twins)
 
     async def _task_impl(self) -> None:
@@ -126,7 +171,7 @@ class KeySpaceRouter(rc.Supervised):
         self.broker = rc.top_router(self)
         while True:
             msg = await self.inbox.get()
-            logger.debug("[%s] recv: %s", self, msg)
+            logger.info("[%s] recv: %s", self, msg)
             if isinstance(msg, rp.AdminMsg) and rp.COMMAND in msg.data:
                 if msg.data[rp.COMMAND] == rp.ADD_INTEREST:
                     await self.subscribe_handler(msg.twin, msg.topic)

@@ -26,6 +26,7 @@ async def _component(
     schema: str | None = None,
     enc: int = CBOR,
     keyspace: bool = True,
+    mqtt: str | None = None,
 ) -> Twin:
     """Return a Rembus component."""
     isserver = (url is None) or (port is not None)
@@ -57,6 +58,10 @@ async def _component(
         kspace = KeySpaceRouter()
         await add_plugin(handle, kspace)
 
+    if mqtt:
+        mqtt_twin = await router.init_twin(RbURL(mqtt), enc, False)
+        await kspace.subscribe_handler(mqtt_twin, "**")
+
     return handle
 
 
@@ -69,10 +74,11 @@ async def component(
     schema: str | None = None,
     enc: int = CBOR,
     keyspace: bool = True,
+    mqtt: str | None = None,
 ) -> Twin:
     """Initialize a rembus component."""
     handle = await _component(
-        url, name, port, secure, policy, schema, enc, keyspace
+        url, name, port, secure, policy, schema, enc, keyspace, mqtt
     )
     return handle
 

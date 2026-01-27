@@ -67,10 +67,13 @@ class node:  # pylint: disable=invalid-name
         schema: str | None = None,
         enc: int = CBOR,
         keyspace: bool = True,
+        mqtt: str | None = None,
     ):
         self._runner = AsyncLoopRunner()
         self._rb = self._runner.run(
-            _component(url, name, port, secure, policy, schema, enc, keyspace)
+            _component(
+                url, name, port, secure, policy, schema, enc, keyspace, mqtt
+            )
         )
 
     def __enter__(self):

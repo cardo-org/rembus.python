@@ -9,6 +9,7 @@ from contextlib import suppress
 import base64
 from enum import Enum
 from functools import partial
+import json
 import logging
 import os
 import time
@@ -25,6 +26,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa, ec
 import polars as pl
 import websockets
+from gmqtt import Client as MQTTClient
 import rembus.protocol as rp
 import rembus.settings as rs
 import rembus.db as rdb
@@ -33,6 +35,16 @@ from . import __version__
 from .admin import admin_command
 
 logger = logging.getLogger(__name__)
+
+
+def get_ssl_context():
+    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ca_crt = os.getenv("HTTP_CA_BUNDLE", rs.rembus_ca())
+    if os.path.isfile(ca_crt):
+        ssl_context.load_verify_locations(ca_crt)
+    else:
+        logger.warning("CA file not found: %s", ca_crt)
+    return ssl_context
 
 
 class Policy(Enum):
@@ -148,7 +160,8 @@ def getargs(data):
 class RbURL:
     """
     A class to parse and manage Rembus URLs.
-    It supports the 'repl' scheme and the standard 'ws'/'wss' schemes.
+    It supports the 'repl' scheme, the standard 'ws'/'wss' and
+    'mqtt/mqtts' schemes.
     """
 
     def __init__(self, url: str | None = None) -> None:
@@ -422,7 +435,6 @@ class Router(Supervised):
 
     async def _shutdown(self):
         """Router cleanup logic when shutting down."""
-        logger.debug("[%s] router shutdown", self)
         if self.server_instance:
             self.server_instance.close()
             self._shutdown_event.set()
@@ -432,6 +444,7 @@ class Router(Supervised):
             self.save_task.cancel()
 
         if self.db is not None:
+            self.db.execute("DETACH DATABASE __ducklake_metadata_rl")
             self.db.close()
 
     async def _broadcast(self, msg):
@@ -522,8 +535,7 @@ class Router(Supervised):
                 status = rp.STS_METHOD_EXCEPTION
                 output = f"{e}"
                 logger.debug("exception: %s", e)
-            outmsg = rp.ResMsg(id=msg.id, status=status,
-                               data=rp.df2tag(output))
+            outmsg = rp.ResMsg(id=msg.id, status=status, data=rp.df2tag(output))
             await msg.twin.send(outmsg)
         elif msg.topic in self.exposers:
             target_twin = self._select_twin(msg.topic)
@@ -790,7 +802,8 @@ class Twin(Supervised):
         self.isclient = isclient
         self.enc = enc
         self._router = router
-        self.socket: websockets.ClientConnection | None = None
+        # websockets.ClientConnection | MQTTClient | None
+        self.socket: Any = None
         self.receiver = None
         self.uid = uid
         self.handler: dict[str, Callable[..., Any]] = {}
@@ -863,15 +876,26 @@ class Twin(Supervised):
         """Check if twin is a REPL"""
         return self.uid.protocol == "repl"
 
+    @property
+    def isws(self) -> bool:
+        """Check if twin is a WebSocket connection"""
+        return self.uid.protocol in ["ws", "wss"]
+
+    @property
+    def ismqtt(self) -> bool:
+        """Check if twin is a MQTT connection"""
+        return self.uid.protocol in ["mqtt", "mqtts"]
+
     def isopen(self) -> bool:
         """Check if the connection is open."""
         if self.isrepl():
             return any([t.isopen() for t in self.router.twins.values()])
+        elif self.socket is None:
+            return False
+        elif self.isws:
+            return self.socket.state == websockets.State.OPEN
         else:
-            return (
-                self.socket is not None
-                and self.socket.state == websockets.State.OPEN
-            )
+            return self.socket.is_connected
 
     async def response(self, status: int, msg: Any, data: Any = None):
         """Send a response to the client."""
@@ -911,6 +935,9 @@ class Twin(Supervised):
         if self.db is not None:
             save_twin(self)
 
+        if self.uid.isrepl():
+            await self._shutdown_twins()
+
         if self.isclient or self.uid.isrepl():
             await self._shutdown_router()
 
@@ -918,16 +945,18 @@ class Twin(Supervised):
         await self._cancel_task("receiver")
         await self._cancel_task("reconnect_task")
 
-        if self.uid.isrepl():
-            await self._shutdown_twins()
-
     async def _shutdown_router(self):
         if self.router:
             await self.router.shutdown()
 
     async def _close_socket(self):
         if self.socket:
-            await self.socket.close()
+            if self.isws:
+                await self.socket.close()
+            else:
+                # MQTT
+                await self.socket.disconnect()
+
             self.socket = None
 
     async def _cancel_task(self, name: str):
@@ -954,8 +983,7 @@ class Twin(Supervised):
             logger.debug("[%s] twin_task: %s", self, msg)
             if msg == "reconnect":
                 if not self.reconnect_task:
-                    self.reconnect_task = asyncio.create_task(
-                        self._reconnect())
+                    self.reconnect_task = asyncio.create_task(self._reconnect())
             elif msg == "shutdown":
                 break
             elif isinstance(msg, rp.RpcReqMsg):
@@ -1053,15 +1081,48 @@ class Twin(Supervised):
 
     async def connect(self):
         """Connect to the broker."""
+        if self.uid.protocol in ["ws", "wss"]:
+            await self.wsconnect()
+        elif self.uid.protocol in ["mqtt", "mqtts"]:
+            await self.mqttconnect()
+
+    async def on_message(self, client, topic, payload, qos, properties):
+        """Route incoming mqtt messages to the router inbox."""
+        logger.debug("[MQTT] (QOS=%s) %s: %s", qos, topic, payload)
+
+        data = json.loads(payload)
+
+        msg = rp.PubSubMsg(
+            topic=topic,
+            data=data if isinstance(data, list) else [data],
+            flags=qos,
+        )
+        logger.debug("[%s] mqtt msg: %s", self, msg)
+        await self._router.inbox.put(msg)
+
+    async def mqttconnect(self):
+        """Connect to an mqtt endpoint."""
+        client = MQTTClient(self.uid.id)
+        ssl_context = False
+        if self.uid.protocol == "mqtts":
+            ssl_context = True
+            # pylint: disable=protected-access
+            client._ssl_context = get_ssl_context()
+
+        await client.connect(
+            self.uid.hostname, self.uid.port or 1883, ssl=ssl_context
+        )
+
+        client.on_message = self.on_message
+        client.subscribe("#", qos=1, no_local=True)
+        self.socket = client
+
+    async def wsconnect(self):
+        """Connect to a ws endpoint."""
         broker_url = self.uid.connection_url()
         ssl_context = None
         if self.uid.protocol == "wss":
-            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            ca_crt = os.getenv("HTTP_CA_BUNDLE", rs.rembus_ca())
-            if os.path.isfile(ca_crt):
-                ssl_context.load_verify_locations(ca_crt)
-            else:
-                logger.warning("CA file not found: %s", ca_crt)
+            ssl_context = get_ssl_context()
 
         self.socket = await websockets.connect(
             broker_url,
@@ -1084,8 +1145,15 @@ class Twin(Supervised):
 
     async def send(self, msg: rp.RembusMsg):
         """Send a rembus message"""
-        pkt = msg.to_payload(self.enc)
-        await self._send(pkt)
+        if self.isws:
+            pkt = msg.to_payload(self.enc)
+            await self._send(pkt)
+
+        else:
+            # MQTT publish
+            if isinstance(msg, rp.PubSubMsg):
+                data = msg.data if len(msg.data) > 1 else msg.data[0]
+                self.socket.publish(msg.topic, json.dumps(data))
 
     async def _send(self, payload: bytes | str) -> Any:
         if self.socket is not None:
@@ -1172,6 +1240,7 @@ class Twin(Supervised):
         slot = kwargs.get("slot", None)
         qos = kwargs.get("qos", rp.QOS0) & rp.QOS2
         if qos == rp.QOS0:
+            logger.info("topic=%s data=%s", topic, data)
             msg = rp.PubSubMsg(topic=topic, data=data, slot=slot)
             msg.twin = self
             if self.isrepl() and self.isopen():
