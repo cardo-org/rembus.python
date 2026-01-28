@@ -41,7 +41,7 @@ jobs:
           - 1883:1883
           - 8883:8883 # for mqtts
         volumes:
-          - ${{ github.workspace }}/tests/data/mosquitto.conf:/mosquitto/config/mosquitto.conf
+          - ${{ github.workspace }}/tests/data/mosquitto:/mosquitto/config
           - ${{ github.workspace }}/tests/data:/mosquitto/certs
         options: >-
           --health-cmd="mosquitto_pub -h mqtt -t 'healthcheck' -m 'ok' || exit 1"
