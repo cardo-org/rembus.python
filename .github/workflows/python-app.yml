@@ -34,25 +34,38 @@ jobs:
           --health-interval=5s
           --health-timeout=5s
           --health-retries=5
+      # Optional MQTT broker container for testing
+      mqtt:
+        image: eclipse-mosquitto:2.0
+        ports:
+          - 1883:1883
+          - 8883:8883 # for mqtts
+        options: >-
+          --health-cmd="mosquitto_pub -h localhost -t 'healthcheck' -m 'ok' || exit 1"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=5
 
     steps:
     - uses: actions/checkout@v4
+
     - name: Set up Python 3.x
       uses: actions/setup-python@v4
       with:
         python-version: "3.x"
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install flake8
         pip install .
         pip install .[test]
+
     - name: Lint with flake8
       run: |
-        # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
     - name: Test with pytest
       env:
         PYTHONPATH: ${{ github.workspace }}/src
@@ -60,29 +73,36 @@ jobs:
         PGPORT: 5432
         PGUSER: admin
         PGPASSWORD: secret
+        MQTT_HOST: 127.0.0.1
+        MQTT_PORT: 1883
+        MQTTS_PORT: 8883
       run: |
-        pytest
+        # Run all pytest tests including mqtt/mqtts tests
+        pytest tests --asyncio-mode=auto
+
     - name: Upload coverage to Codecov
-      if: github.event_name == 'push' # Only upload coverage on push to avoid duplicate uploads from PRs
+      if: github.event_name == 'push'
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
+
     - name: Build distribution
       run: |
         pip install build
         python -m build
+
     - name: Upload dist as artifact
       uses: actions/upload-artifact@v4
       with:
         name: dist
         path: dist/
-        
+
   publish-to-pypi:
     name: >-
       Publish Python 🐍 distribution 📦 to PyPI
     if: startsWith(github.ref, 'refs/tags/')
     needs:
-    - build
+      - build
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -91,7 +111,7 @@ jobs:
     - uses: actions/download-artifact@v4
       with:
         name: dist
-        path: dist     
+        path: dist
     - name: Publish package to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
