@@ -54,11 +54,17 @@ jobs:
           -keyout tests/cfg/rembus.key \
           -out tests/cfg/rembus.csr
 
+        # Create SAN config file
+        cat > tests/cfg/san.cnf <<EOF
+        [v3_req]
+        subjectAltName = DNS:localhost,IP:127.0.0.1
+        EOF
+
         # Sign broker cert
         openssl x509 -req -in tests/cfg/rembus.csr \
           -CA tests/cfg/rembus-ca.crt -CAkey tests/cfg/rembus-ca.key \
           -CAcreateserial -out tests/cfg/rembus.crt -days 1 \
-          -extensions v3_req -extfile <(printf "[v3_req]\nsubjectAltName=DNS:localhost,IP:127.0.0.1")
+          -extfile tests/cfg/san.cnf -extensions v3_req
 
     # Start Mosquitto locally with TLS enabled
     - name: Start local Mosquitto
@@ -102,7 +108,7 @@ jobs:
         PGPORT: 5432
         PGUSER: admin
         PGPASSWORD: secret
-        MQTT_HOST: localhost
+        MQTT_HOST: 127.0.0.1
         MQTT_PORT: 1883
         MQTTS_PORT: 8883
         MQTT_CA_CERT: ${{ github.workspace }}/tests/cfg/rembus-ca.crt
