@@ -87,7 +87,7 @@ jobs:
         EOF
 
         # Start in background
-        mosquitto -c tests/cfg/mosquitto.conf &
+        mosquitto -d -c tests/cfg/mosquitto.conf
         sleep 2
 
     # Set up Python
