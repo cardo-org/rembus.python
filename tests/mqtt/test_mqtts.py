@@ -62,7 +62,10 @@ def mosquitto_tls():
     Start a Mosquitto broker configured with rembus TLS materials.
     """
     if os.getenv("CI") == "true":
+        os.environ["HTTP_CA_BUNDLE"] = os.path.join(
+            "tests", "cfg", "rembus-ca.crt")
         yield
+        os.environ.pop("HTTP_CA_BUNDLE")
     else:
         configure_tls_material()
         ca_dir = os.path.join(rembus.rembus_dir(), "ca")
