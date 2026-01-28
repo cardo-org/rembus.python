@@ -44,7 +44,7 @@ jobs:
       with:
         postgresql version: 16
         postgresql db: rembus_test
-        postgresql username: admin
+        postgresql user: admin
         postgresql password: secret
 
     # ----------------------------
@@ -60,6 +60,9 @@ jobs:
           eclipse-mosquitto:2.0
         echo "Waiting for Mosquitto to start..."
         sleep 3
+
+    - name: Install Mosquitto client tools
+      run: sudo apt-get update && sudo apt-get install -y mosquitto-clients
 
     - name: Check Mosquitto health
       run: |
