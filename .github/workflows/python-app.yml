@@ -52,6 +52,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Fix MQTT TLS key permissions
+      run: chmod 644 tests/data/rembus.key
+    
     - name: Set up Python 3.x
       uses: actions/setup-python@v4
       with:
@@ -61,13 +64,12 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install flake8
-        pip install .
         pip install .[test]
 
     - name: Lint with flake8
       run: |
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=80 --statistics
 
     - name: Test with pytest
       env:
