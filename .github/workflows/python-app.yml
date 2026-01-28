@@ -86,6 +86,8 @@ jobs:
         allow_anonymous true
         EOF
         
+        chmod 644 tests/cfg/rembus.key
+        
         ls -l $(pwd)/tests/cfg
         test -r $(pwd)/tests/cfg/rembus-ca.crt
         test -r $(pwd)/tests/cfg/rembus.crt
