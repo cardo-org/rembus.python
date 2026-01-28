@@ -15,7 +15,7 @@ def config_secure():
     This function sets up the necessary directories and copies
     the required certificate and key files for secure communication.
     """
-    data_dir = os.path.join("tests", "data")
+    data_dir = os.path.join("tests", "cfg")
     ca_dir = os.path.join(rembus.rembus_dir(), "ca")
     keystore_dir = rembus.settings.keystore_dir()
     if not os.path.exists(keystore_dir):

@@ -22,9 +22,62 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Fix MQTT TLS key permissions
-      run: chmod 644 tests/data/rembus.key
+    # Install system dependencies: Mosquitto + Postgres + OpenSSL
+    - name: Install system packages
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y mosquitto mosquitto-clients postgresql postgresql-contrib openssl
 
+    # Initialize local Postgres
+    - name: Start Postgres
+      run: |
+        sudo service postgresql start
+        psql -c "CREATE USER admin WITH PASSWORD 'secret';"
+        psql -c "CREATE DATABASE rembus_test OWNER admin;"
+
+    # Generate temporary MQTT TLS certs for local Mosquitto
+    - name: Generate temporary MQTT TLS certificates
+      run: |
+        mkdir -p tests/cfg
+
+        # CA
+        openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+          -subj "/CN=Rembus-Test-CA/C=IT/L=Trento" \
+          -keyout tests/cfg/rembus-ca.key \
+          -out tests/cfg/rembus-ca.crt \
+          -addext "keyUsage = critical, keyCertSign, cRLSign" \
+          -addext "basicConstraints = critical, CA:TRUE"
+
+        # Broker key + CSR
+        openssl req -nodes -newkey rsa:2048 \
+          -subj "/CN=localhost" \
+          -keyout tests/cfg/rembus.key \
+          -out tests/cfg/rembus.csr
+
+        # Sign broker cert
+        openssl x509 -req -in tests/cfg/rembus.csr \
+          -CA tests/cfg/rembus-ca.crt -CAkey tests/cfg/rembus-ca.key \
+          -CAcreateserial -out tests/cfg/rembus.crt -days 1
+
+    # Start Mosquitto locally with TLS enabled
+    - name: Start local Mosquitto
+      run: |
+        cat > tests/cfg/mosquitto.conf <<EOF
+        listener 1883
+        allow_anonymous true
+
+        listener 8883
+        cafile $(pwd)/tests/cfg/rembus-ca.crt
+        certfile $(pwd)/tests/cfg/rembus.crt
+        keyfile $(pwd)/tests/cfg/rembus.key
+        allow_anonymous true
+        EOF
+
+        # Start in background
+        mosquitto -c tests/cfg/mosquitto.conf &
+        sleep 2
+
+    # Set up Python
     - name: Set up Python 3.x
       uses: actions/setup-python@v4
       with:
@@ -36,50 +89,12 @@ jobs:
         pip install flake8
         pip install .[test]
 
-    # ----------------------------
-    # Start PostgreSQL as a service
-    # ----------------------------
-    - name: Start PostgreSQL
-      uses: Harmon758/postgresql-action@v1
-      with:
-        postgresql version: 16
-        postgresql db: rembus_test
-        postgresql user: admin
-        postgresql password: secret
-
-    # ----------------------------
-    # Start Mosquitto with TLS for MQTT & MQTTS
-    # ----------------------------
-    - name: Start Mosquitto broker
-      run: |
-        docker run -d --name mosquitto-ci \
-          -p 1883:1883 \
-          -p 8883:8883 \
-          -v ${{ github.workspace }}/tests/data/mosquitto:/mosquitto/config:ro \
-          -v ${{ github.workspace }}/tests/data:/mosquitto/certs:ro \
-          eclipse-mosquitto:2.0
-        echo "Waiting for Mosquitto to start..."
-        sleep 3
-
-    - name: Install Mosquitto client tools
-      run: sudo apt-get update && sudo apt-get install -y mosquitto-clients
-
-    - name: Check Mosquitto health
-      run: |
-        mosquitto_pub -h localhost -p 1883 -t healthcheck -m ok
-
-    # ----------------------------
-    # Lint Python code
-    # ----------------------------
     - name: Lint with flake8
       run: |
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=80 --statistics
 
-    # ----------------------------
-    # Run pytest (including MQTT/MQTTS tests)
-    # ----------------------------
-    - name: Test with pytest
+    - name: Run tests with pytest
       env:
         PYTHONPATH: ${{ github.workspace }}/src
         PGHOST: localhost
@@ -89,20 +104,18 @@ jobs:
         MQTT_HOST: 127.0.0.1
         MQTT_PORT: 1883
         MQTTS_PORT: 8883
-      run: pytest tests --asyncio-mode=auto
+        MQTT_CA_CERT: ${{ github.workspace }}/tests/cfg/rembus-ca.crt
+        MQTT_CERT: ${{ github.workspace }}/tests/cfg/rembus.crt
+        MQTT_KEY: ${{ github.workspace }}/tests/cfg/rembus.key
+      run: |
+        pytest tests --asyncio-mode=auto
 
-    # ----------------------------
-    # Upload coverage
-    # ----------------------------
     - name: Upload coverage to Codecov
       if: github.event_name == 'push'
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
 
-    # ----------------------------
-    # Build Python package
-    # ----------------------------
     - name: Build distribution
       run: |
         pip install build

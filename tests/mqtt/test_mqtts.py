@@ -35,7 +35,7 @@ def configure_tls_material():
     """
     Install CA + cert + key into the standard rembus locations.
     """
-    data_dir = os.path.join("tests", "data")
+    data_dir = os.path.join("tests", "cfg")
     ca_dir = os.path.join(rembus.rembus_dir(), "ca")
     keystore_dir = rembus.settings.keystore_dir()
 
@@ -101,7 +101,7 @@ def mqtt_ssl_context():
     It is the context used by Rembus.
     """
     ctx = ssl.create_default_context(
-        cafile=os.path.join("tests", "data", "rembus-ca.crt")
+        cafile=os.path.join("tests", "cfg", "rembus-ca.crt")
     )
     return ctx
 
