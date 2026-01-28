@@ -1,6 +1,8 @@
 from typing import List
 from contextlib import asynccontextmanager
-from rembus.core import Twin, RbURL, init_router, add_plugin
+from rembus.core import RbURL
+from rembus.twin import Twin, init_twin
+from rembus.router import init_router, add_plugin
 from rembus.settings import DEFAULT_BROKER, DEFAULT_PORT
 from rembus.protocol import CBOR
 from rembus.keyspace import KeySpaceRouter
@@ -49,17 +51,17 @@ async def _component(
     router = await init_router(
         router_name, policy, uid, port, secure, isserver, schema
     )
-    handle = await router.init_twin(uid, enc, isserver)
+    handle = await init_twin(router, uid, enc, isserver)
     if isinstance(url, list):
         for netlink in url:
-            await router.init_twin(RbURL(netlink), enc, isserver)
+            await init_twin(router, RbURL(netlink), enc, isserver)
 
     if keyspace:
         kspace = KeySpaceRouter()
         await add_plugin(handle, kspace)
 
     if mqtt:
-        mqtt_twin = await router.init_twin(RbURL(mqtt), enc, False)
+        mqtt_twin = await init_twin(router, RbURL(mqtt), enc, False)
         await kspace.subscribe_handler(mqtt_twin, "**")
 
     return handle

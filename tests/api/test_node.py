@@ -105,7 +105,7 @@ def test_publish(server):
     rb.reactive()
     rb.unreactive()
 
-    assert isinstance(rb.router, rembus.core.Router)
+    assert isinstance(rb.router, rembus.router.Router)
     assert rembus.core.domain(rb.rid) == "net"
 
     rb.publish("mytopic")

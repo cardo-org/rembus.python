@@ -1,4 +1,5 @@
 """Tests for WebSocket Secure (WSS) connections in rembus."""
+
 import os
 import shutil
 import ssl
@@ -90,4 +91,4 @@ def test_wss_ca_notfound():
         rembus.node("wss://127.0.0.1:8900/mycomponent")
 
     server.close()
-    time.sleep(2)
+    os.environ.pop("HTTP_CA_BUNDLE")

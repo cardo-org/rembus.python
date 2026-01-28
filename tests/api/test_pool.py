@@ -1,4 +1,5 @@
 """Test cases for the node synchronous API."""
+
 import logging
 import time
 import pytest
@@ -8,7 +9,7 @@ import rembus.protocol as rp
 
 def myservice(x, y):
     """A simple service that adds two numbers."""
-    return x+y
+    return x + y
 
 
 def slowservice():
@@ -27,7 +28,7 @@ def test_rpc(server):
     server.expose(slowservice)
 
     result = rb.rpc("myservice", x, y)
-    assert result == x+y
+    assert result == x + y
 
     rb._rb.router.config.request_timeout = 0.5
     with pytest.raises(rp.RembusTimeout):
@@ -51,7 +52,7 @@ def test_direct(server):
     server.expose(myservice)
 
     result = rb.direct(rembus.settings.DEFAULT_BROKER, "myservice", x, y)
-    assert result == x+y
+    assert result == x + y
 
     server.unexpose(myservice)
     rb.close()
@@ -83,7 +84,7 @@ def test_publish(server):
     # implemented but without meaning in this rembus version
     rb.reactive()
     rb.unreactive()
-    assert isinstance(rb.router, rembus.core.Router)
+    assert isinstance(rb.router, rembus.router.Router)
     assert rembus.core.domain(rb.rid) == "."
 
     rb.publish("mytopic")

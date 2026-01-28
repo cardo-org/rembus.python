@@ -4,6 +4,8 @@ import logging
 import pytest
 import rembus.protocol as rp
 import rembus.core as rc
+from rembus.router import Router
+from rembus.twin import WsTwin
 
 
 class WrongMsg(rp.RembusMsg):
@@ -46,9 +48,9 @@ def test_types_str():
 
 async def test_rembus_messages():
     """Test the string representation of rembus protocol messages."""
-    router = rc.Router("broker")
+    router = Router("broker")
     await router.start()
-    twin = rc.Twin(rc.RbURL("twin"), router)
+    twin = WsTwin(rc.RbURL("twin"), router)
     await twin.start()
     for msg in [
         rp.AttestationMsg(id=1, cid="cid", signature=b"signature"),
