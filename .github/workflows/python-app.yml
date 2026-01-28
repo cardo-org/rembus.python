@@ -31,9 +31,9 @@ jobs:
     # Initialize local Postgres
     - name: Start Postgres
       run: |
-        sudo service postgresql start
-        psql -c "CREATE USER admin WITH PASSWORD 'secret';"
-        psql -c "CREATE DATABASE rembus_test OWNER admin;"
+          sudo service postgresql start
+          sudo -u postgres psql -c "CREATE USER admin WITH PASSWORD 'secret';"
+          sudo -u postgres psql -c "CREATE DATABASE rembus_test OWNER admin;"
 
     # Generate temporary MQTT TLS certs for local Mosquitto
     - name: Generate temporary MQTT TLS certificates
