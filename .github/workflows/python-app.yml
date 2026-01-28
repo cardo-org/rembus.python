@@ -40,8 +40,11 @@ jobs:
         ports:
           - 1883:1883
           - 8883:8883 # for mqtts
+        volumes:
+          - ${{ github.workspace }}/tests/data/mosquitto.conf:/mosquitto/config/mosquitto.conf
+          - ${{ github.workspace }}/tests/data:/mosquitto/certs
         options: >-
-          --health-cmd="mosquitto_pub -h localhost -t 'healthcheck' -m 'ok' || exit 1"
+          --health-cmd="mosquitto_pub -h mqtt -t 'healthcheck' -m 'ok' || exit 1"
           --health-interval=5s
           --health-timeout=5s
           --health-retries=5
@@ -73,7 +76,7 @@ jobs:
         PGPORT: 5432
         PGUSER: admin
         PGPASSWORD: secret
-        MQTT_HOST: 127.0.0.1
+        MQTT_HOST: mqtt
         MQTT_PORT: 1883
         MQTTS_PORT: 8883
       run: |

@@ -1,9 +1,28 @@
 import asyncio
-from gmqtt import Client as MQTTClient
 import json
 import logging
+import os
 import pytest
+import socket
+import time
+from gmqtt import Client as MQTTClient
 import rembus as rb
+
+mqtt_host = os.environ.get("MQTT_HOST", "localhost")
+mqtt_port = int(os.environ.get("MQTT_PORT", "1883"))
+
+
+def wait_for_broker(port):
+    """Wait until the MQTT broker accepts connections."""
+
+    for _ in range(20):
+        try:
+            s = socket.create_connection((mqtt_host, port), timeout=1)
+            s.close()
+            return
+        except OSError:
+            time.sleep(0.5)
+    raise RuntimeError(f"MQTT broker {mqtt_host}:{port} not ready")
 
 
 async def publish_mqtt_message(topic, payload):
@@ -30,14 +49,15 @@ async def publish_wrong_payload():
 
 
 def test_mqtt_subscribe():
-    # RECEIVED.clear()
     received = asyncio.Event()
 
     def mqtt_topic(message):
         logging.debug("Received MQTT message: %s", message)
         received.set()
 
-    bro = rb.node(mqtt="mqtt://localhost:1883", port=8000)
+    wait_for_broker(mqtt_port)
+
+    bro = rb.node(mqtt=f"mqtt://{mqtt_host}:{mqtt_port}", port=8000)
 
     cli = rb.node("mysubscriber")
     cli.subscribe(mqtt_topic)
@@ -65,7 +85,7 @@ def test_mqtt_space_subscribe():
         logging.debug("consume_alarms %s with data: %s", topic, data)
         received.set()
 
-    bro = rb.node(mqtt="mqtt://localhost:1883", port=8000)
+    bro = rb.node(mqtt=f"mqtt://{mqtt_host}:{mqtt_port}", port=8000)
 
     cli = rb.node("mysubscriber")
     cli.subscribe(consume_alarms, topic="*/alarm")
@@ -98,7 +118,7 @@ async def test_mqtt_publish():
         received_payload["data"] = json.loads(payload.decode())
         received.set()
 
-    bro = await rb.component(mqtt="mqtt://localhost:1883", port=8000)
+    bro = await rb.component(mqtt=f"mqtt://{mqtt_host}:{mqtt_port}", port=8000)
 
     # --- MQTT subscriber
     sub = MQTTClient("mqtt-subscriber")
