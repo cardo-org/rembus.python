@@ -16,7 +16,7 @@ import rembus
 import rembus.settings
 
 mqtt_host = os.environ.get("MQTT_HOST", "127.0.0.1")
-mqtt_port = int(os.environ.get("MQTT_PORT", "8883"))
+mqtt_port = int(os.environ.get("MQTTS_PORT", "8883"))
 
 
 def wait_for_port(port, timeout=5):
