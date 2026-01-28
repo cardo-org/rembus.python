@@ -8,7 +8,7 @@ import time
 from gmqtt import Client as MQTTClient
 import rembus as rb
 
-mqtt_host = os.environ.get("MQTT_HOST", "localhost")
+mqtt_host = os.environ.get("MQTT_HOST", "127.0.0.1")
 mqtt_port = int(os.environ.get("MQTT_PORT", "1883"))
 
 

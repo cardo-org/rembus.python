@@ -17,37 +17,7 @@ permissions:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:16
-        ports:
-          - 5432:5432
-        env:
-          POSTGRES_USER: admin
-          POSTGRES_PASSWORD: secret
-          POSTGRES_DB: rembus_test
-        options: >-
-          --health-cmd="pg_isready -U postgres"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=5
-      # Optional MQTT broker container for testing
-      mqtt:
-        image: eclipse-mosquitto:2.0
-        ports:
-          - 1883:1883
-          - 8883:8883 # for mqtts
-        volumes:
-          - ${{ github.workspace }}/tests/data/mosquitto:/mosquitto/config
-          - ${{ github.workspace }}/tests/data:/mosquitto/certs
-        options: >-
-          --health-cmd="mosquitto_pub -h mqtt -t 'healthcheck' -m 'ok' || exit 1"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=5
 
     steps:
     - uses: actions/checkout@v4
@@ -55,12 +25,6 @@ jobs:
     - name: Fix MQTT TLS key permissions
       run: chmod 644 tests/data/rembus.key
 
-    - name: Debug Mosquitto container logs
-      run: |
-        echo "Mosquitto service logs:"
-        docker ps -a
-        docker logs $(docker ps -q --filter ancestor=eclipse-mosquitto:2.0)    
-    
     - name: Set up Python 3.x
       uses: actions/setup-python@v4
       with:
@@ -72,11 +36,46 @@ jobs:
         pip install flake8
         pip install .[test]
 
+    # ----------------------------
+    # Start PostgreSQL as a service
+    # ----------------------------
+    - name: Start PostgreSQL
+      uses: Harmon758/postgresql-action@v1
+      with:
+        postgresql version: 16
+        postgresql db: rembus_test
+        postgresql username: admin
+        postgresql password: secret
+
+    # ----------------------------
+    # Start Mosquitto with TLS for MQTT & MQTTS
+    # ----------------------------
+    - name: Start Mosquitto broker
+      run: |
+        docker run -d --name mosquitto-ci \
+          -p 1883:1883 \
+          -p 8883:8883 \
+          -v ${{ github.workspace }}/tests/data/mosquitto:/mosquitto/config:ro \
+          -v ${{ github.workspace }}/tests/data:/mosquitto/certs:ro \
+          eclipse-mosquitto:2.0
+        echo "Waiting for Mosquitto to start..."
+        sleep 3
+
+    - name: Check Mosquitto health
+      run: |
+        mosquitto_pub -h localhost -p 1883 -t healthcheck -m ok
+
+    # ----------------------------
+    # Lint Python code
+    # ----------------------------
     - name: Lint with flake8
       run: |
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=80 --statistics
-  
+
+    # ----------------------------
+    # Run pytest (including MQTT/MQTTS tests)
+    # ----------------------------
     - name: Test with pytest
       env:
         PYTHONPATH: ${{ github.workspace }}/src
@@ -84,19 +83,23 @@ jobs:
         PGPORT: 5432
         PGUSER: admin
         PGPASSWORD: secret
-        MQTT_HOST: mqtt
+        MQTT_HOST: 127.0.0.1
         MQTT_PORT: 1883
         MQTTS_PORT: 8883
-      run: |
-        # Run all pytest tests including mqtt/mqtts tests
-        pytest tests --asyncio-mode=auto
+      run: pytest tests --asyncio-mode=auto
 
+    # ----------------------------
+    # Upload coverage
+    # ----------------------------
     - name: Upload coverage to Codecov
       if: github.event_name == 'push'
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
 
+    # ----------------------------
+    # Build Python package
+    # ----------------------------
     - name: Build distribution
       run: |
         pip install build
@@ -109,21 +112,19 @@ jobs:
         path: dist/
 
   publish-to-pypi:
-    name: >-
-      Publish Python 🐍 distribution 📦 to PyPI
+    name: Publish Python 🐍 distribution 📦 to PyPI
     if: startsWith(github.ref, 'refs/tags/')
-    needs:
-      - build
+    needs: build
     runs-on: ubuntu-latest
     environment:
       name: pypi
       url: https://pypi.org/p/rembus
     steps:
-    - uses: actions/download-artifact@v4
-      with:
-        name: dist
-        path: dist
-    - name: Publish package to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        attestations: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          attestations: true
