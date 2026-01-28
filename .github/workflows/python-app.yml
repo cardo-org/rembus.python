@@ -57,7 +57,8 @@ jobs:
         # Sign broker cert
         openssl x509 -req -in tests/cfg/rembus.csr \
           -CA tests/cfg/rembus-ca.crt -CAkey tests/cfg/rembus-ca.key \
-          -CAcreateserial -out tests/cfg/rembus.crt -days 1
+          -CAcreateserial -out tests/cfg/rembus.crt -days 1 \
+          -extensions v3_req -extfile <(printf "[v3_req]\nsubjectAltName=DNS:localhost,IP:127.0.0.1")
 
     # Start Mosquitto locally with TLS enabled
     - name: Start local Mosquitto
