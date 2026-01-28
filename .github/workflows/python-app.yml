@@ -102,7 +102,7 @@ jobs:
         PGPORT: 5432
         PGUSER: admin
         PGPASSWORD: secret
-        MQTT_HOST: 127.0.0.1
+        MQTT_HOST: localhost
         MQTT_PORT: 1883
         MQTTS_PORT: 8883
         MQTT_CA_CERT: ${{ github.workspace }}/tests/cfg/rembus-ca.crt
