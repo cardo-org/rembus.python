@@ -61,22 +61,15 @@ def mosquitto_tls():
     """
     Start a Mosquitto broker configured with rembus TLS materials.
     """
-    if os.getenv("CI") == "true":
-        os.environ["HTTP_CA_BUNDLE"] = os.path.join(
-            "tests", "cfg", "rembus-ca.crt")
-        yield
-        os.environ.pop("HTTP_CA_BUNDLE")
-    else:
-        configure_tls_material()
-        ca_dir = os.path.join(rembus.rembus_dir(), "ca")
-        keystore_dir = rembus.settings.keystore_dir()
-        ca = os.path.join(ca_dir, "rembus-ca.crt")
-        cert = os.path.join(keystore_dir, "rembus.crt")
-        key = os.path.join(keystore_dir, "rembus.key")
-
-        conf = os.path.join(rembus.rembus_dir(), "mosquitto-tls.conf")
-        with open(conf, "w", encoding="utf-8") as f:
-            f.write(f"""
+    configure_tls_material()
+    ca_dir = os.path.join(rembus.rembus_dir(), "ca")
+    keystore_dir = rembus.settings.keystore_dir()
+    ca = os.path.join(ca_dir, "rembus-ca.crt")
+    cert = os.path.join(keystore_dir, "rembus.crt")
+    key = os.path.join(keystore_dir, "rembus.key")
+    conf = os.path.join(rembus.rembus_dir(), "mosquitto-tls.conf")
+    with open(conf, "w", encoding="utf-8") as f:
+        f.write(f"""
 listener 8883
 protocol mqtt
 cafile {ca}
@@ -85,16 +78,15 @@ keyfile {key}
 allow_anonymous true
 """)
 
-        proc = subprocess.Popen(
-            ["mosquitto", "-c", conf, "-v"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-
-        wait_for_port(mqtt_port)
-        yield
-        proc.terminate()
-        proc.wait(timeout=5)
+    proc = subprocess.Popen(
+        ["mosquitto", "-c", conf, "-v"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    wait_for_port(mqtt_port)
+    yield
+    proc.terminate()
+    proc.wait(timeout=5)
 
 
 @pytest.fixture

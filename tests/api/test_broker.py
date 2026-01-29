@@ -1,6 +1,7 @@
 """Test the rembus broker feature."""
 
 import logging
+import os
 import rembus
 import rembus.protocol as rp
 
@@ -17,6 +18,9 @@ def test_broker():
     """Test reconnecting to a rembus broker."""
     x = 1
     y = 2
+
+    logging.info(
+        f"HOME: {os.environ['HOME']}, rembus_dir:{rembus.rembus_dir()}")
     server = rembus.node(port=8801)
     server.expose(broker_service)
 
