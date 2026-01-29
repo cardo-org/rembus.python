@@ -3,6 +3,7 @@
 lcov.info
 .vscode
 uv.lock
+tests/cfg
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

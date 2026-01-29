@@ -85,20 +85,6 @@ jobs:
         keyfile $(pwd)/tests/cfg/rembus.key
         allow_anonymous true
         EOF
-        
-        chmod 644 tests/cfg/rembus.key
-
-        ls -l $(pwd)/tests/cfg
-        test -r $(pwd)/tests/cfg/rembus-ca.crt
-        test -r $(pwd)/tests/cfg/rembus.crt
-        test -r $(pwd)/tests/cfg/rembus.key
-
-        # Start in background
-        mosquitto -d -c tests/cfg/mosquitto.conf
-        sleep 2
-
-        #ss -ltnp | grep 8883
-
 
     # Set up Python
     - name: Set up Python 3.x
