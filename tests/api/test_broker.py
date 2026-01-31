@@ -19,8 +19,6 @@ def test_broker():
     x = 1
     y = 2
 
-    logging.info(
-        f"HOME: {os.environ['HOME']}, rembus_dir:{rembus.rembus_dir()}")
     server = rembus.node(port=8801)
     server.expose(broker_service)
 

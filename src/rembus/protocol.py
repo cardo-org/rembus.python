@@ -86,6 +86,7 @@ retcode = {
 }
 
 BROKER_CONFIG = "__config__"
+CID = "cid"
 COMMAND = "cmd"
 MSG_FROM = "msg_from"
 ADD_INTEREST = "subscribe"
@@ -93,6 +94,10 @@ REMOVE_INTEREST = "unsubscribe"
 ADD_IMPL = "expose"
 REMOVE_IMPL = "unexpose"
 REACTIVE_CMD = "reactive"
+PRIVATE_TOPIC = "private_topic"
+PUBLIC_TOPIC = "public_topic"
+AUTHORIZE = "authorize"
+UNAUTHORIZE = "unauthorize"
 STATUS = "status"
 
 def timestamp():

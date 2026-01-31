@@ -111,11 +111,3 @@ def key_file(broker_name: str, cid: str):
     raise FileNotFoundError(f"key file not found: {basename}")
 
 
-def load_tenants(router):
-    """Load the tenants settings."""
-    fn = os.path.join(broker_dir(router.id), TENANTS_FILE)
-    cfg = {}
-    if os.path.isfile(fn):
-        with open(fn, "r", encoding="utf-8") as f:
-            cfg = json.load(f)
-    return cfg

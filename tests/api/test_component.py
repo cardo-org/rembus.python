@@ -128,8 +128,8 @@ async def test_direct():
 @pytest.mark.asyncio
 async def test_unreactive():
     """Test the unreactive method of the rembus component."""
-    server = await start_server(port=8005)
-    cli = await rembus.component("ws://:8005")
+    server = await start_server(port=8006)
+    cli = await rembus.component("ws://:8006")
     await cli.unreactive()
     await cli.close()
     await server.close()

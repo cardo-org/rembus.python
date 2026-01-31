@@ -10,6 +10,7 @@ import os
 from typing import Callable, Any, Optional, List
 import signal
 import ssl
+import sys
 import async_timeout
 import cbor2
 from cryptography.hazmat.primitives import hashes
@@ -260,6 +261,9 @@ class Twin(Supervised):
         """Check if twin speaks MQTT."""
         return False
 
+    def isadmin(self):
+        return self.rid in self.router.admins
+
     def isrepl(self) -> bool:
         """Check if twin is a REPL"""
         return False
@@ -291,13 +295,14 @@ class Twin(Supervised):
 
     def register_shutdown(self):
         """Register shutdown handler."""
-        loop = asyncio.get_running_loop()
-        loop.add_signal_handler(
-            signal.SIGINT, lambda: asyncio.create_task(self.close())
-        )
-        loop.add_signal_handler(
-            signal.SIGTERM, lambda: asyncio.create_task(self.close())
-        )
+        if sys.platform != 'win32':
+            loop = asyncio.get_running_loop()
+            loop.add_signal_handler(
+                signal.SIGINT, lambda: asyncio.create_task(self.close())
+            )
+            loop.add_signal_handler(
+                signal.SIGTERM, lambda: asyncio.create_task(self.close())
+            )
 
     async def _shutdown(self):
         """Twin cleanup logic when shutting down."""
@@ -679,6 +684,38 @@ class Twin(Supervised):
         """
         await self.broker_setting("reactive", {"status": False})
         return self
+
+    async def private_topic(self, topic:str):
+        """
+        Set the specified `topic` to private.
+
+        The component must have the admin role to change the privacy level.
+        """
+        await self.setting(topic, rp.PRIVATE_TOPIC)
+
+    async def public_topic(self, topic:str):
+        """
+        Set the specified `topic` to public.
+
+        The component must have the admin role to change the privacy level.
+        """
+        await self.setting(topic, rp.PUBLIC_TOPIC)
+
+    async def authorize(self, component:str, topic:str):
+        """
+        Authorize the `component` to private `topic`.
+
+        `self` must have the admin role for granting topic accessibility.
+        """
+        await self.setting(topic, rp.AUTHORIZE, {rp.CID: component})
+
+    async def unauthorize(self, component:str, topic:str):
+        """
+        Unauthorize the `component` to private `topic`.
+
+        `self` must have the admin role for removing topic accessibility.
+        """
+        await self.setting(topic, rp.UNAUTHORIZE, {rp.CID: component})
 
     async def subscribe(
         self,

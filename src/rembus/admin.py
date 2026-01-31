@@ -57,6 +57,28 @@ async def reactive(router, twin, status: bool):
     if status:
         await router.inbox.put(rp.SendDataAtRest(twin))
 
+def set_private_topic(twin, topic):
+    logger.debug("[%s] set private topic [%s]", twin, topic)
+    router = twin.router
+    if topic not in router.private_topics:
+        router.private_topics[topic] = {}
+
+def set_public_topic(twin, topic):
+    logger.debug("[%s] set public topic [%s]", twin, topic)
+    router = twin.router
+    router.private_topics.pop(topic, None)
+
+def authorize(twin, cid, topic):
+    router = twin.router
+    if topic not in router.private_topics:
+        set_private_topic(twin, topic)
+
+    router.private_topics[topic][cid] = True 
+
+def unauthorize(twin, cid, topic):
+    router = twin.router
+    if topic in router.private_topics:
+        router.private_topics[topic].pop(cid, None)
 
 async def admin_command(msg: rp.AdminMsg):
     """Handle admin commands"""
@@ -80,5 +102,51 @@ async def admin_command(msg: rp.AdminMsg):
         remove_subscriber(router, twin, topic)
     elif cmd == rp.REACTIVE_CMD:
         await reactive(router, twin, msg.data[rp.STATUS])
+    elif cmd == rp.PRIVATE_TOPIC:
+        if twin.isadmin():
+            logger.debug("[%s] set private topic [%s]", twin, topic)
+            set_private_topic(twin, topic)
+        else:
+            logger.error(
+                "[%s] is not admin: unable to elevate [%s] to private",
+                twin,
+                topic
+            )
+            return await twin.response(rp.STS_ERROR, msg)
+    elif cmd == rp.PUBLIC_TOPIC:
+        if twin.isadmin():
+            logger.debug("[%s] set public topic [%s]", twin, topic)
+            set_public_topic(twin, topic)
+        else:
+            logger.error(
+                "[%s] is not admin: unable to lower [%s] to public",
+                twin,
+                topic
+            )
+            return await twin.response(rp.STS_ERROR, msg)
+    elif cmd == rp.AUTHORIZE:
+        cid = msg.data[rp.CID]
+        if twin.isadmin():
+            authorize(twin, cid, topic)
+        else:
+            logger.error(
+                "[%s] is not admin: unable to authorize [%s] to [%s]",
+                twin,
+                cid,
+                topic
+            )
+            return await twin.response(rp.STS_ERROR, msg)
+    elif cmd == rp.UNAUTHORIZE:
+        cid = msg.data[rp.CID]
+        if twin.isadmin():
+            unauthorize(twin, cid, topic)
+        else:
+            logger.error(
+                "[%s] is not admin: unable to unauthorize [%s] to [%s]",
+                twin,
+                cid,
+                topic
+            )
+            return await twin.response(rp.STS_ERROR, msg)
 
     await twin.response(rp.STS_OK, msg)

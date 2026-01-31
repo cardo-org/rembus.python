@@ -26,11 +26,13 @@ from .protocol import (  # noqa: F401
 from .router import add_plugin
 from .sync import node, register
 from .keyspace import KeySpaceRouter
+from .db import connect_db
 
 __all__ = [
     "add_plugin",
     "anonym",
     "connect",
+    "connect_db",
     "component",
     "node",
     "register",

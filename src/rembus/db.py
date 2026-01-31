@@ -15,7 +15,7 @@ import pandas as pd
 import polars as pl
 import pyarrow as pa
 from pydantic import BaseModel, Field, model_validator
-from rembus.settings import broker_dir, rembus_dir
+from rembus.settings import broker_dir, rembus_dir, db_attach
 from rembus.protocol import tag2df, df2tag, timestamp, PubSubMsg
 
 logger = logging.getLogger(__name__)
@@ -128,12 +128,15 @@ def reset_db(broker_name):
         shutil.rmtree(broker_folder)
 
 
+def connect_db(router_name:str = "broker"):
+    db = duckdb.connect()
+    db.sql(db_attach(router_name))
+    db.sql("USE rl")
+    return db
+
 def init_db(router, schema):
     """Initialize the database for a given router."""
-    db = duckdb.connect()
-    db.sql("INSTALL ducklake")
-    db.sql(router.config.db_attach)
-    db.sql("USE rl")
+    db = connect_db(router.id)
 
     tables = [
         """

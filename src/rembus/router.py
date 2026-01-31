@@ -116,6 +116,9 @@ async def init_router(router_name, policy, uid, port, secure, isserver, schema):
     logger.debug("component %s created, port: %s", uid.id, port)
     # start a websocket server
     if port:
+        load_admins(router)
+        load_tenants(router)
+
         router.serve_task = asyncio.create_task(router.serve_ws(port, secure))
         done, _ = await asyncio.wait([router.serve_task], timeout=0.1)
         if router.serve_task in done:
@@ -147,10 +150,12 @@ class Router(Supervised):
     ):
         super().__init__()
         self.id = name
+        self.admins: dict = {}
         self.id_twin: dict = {}
         self.handler: dict[str, Callable[..., Any]] = {}
         self.exposers: dict = {}
         self.subscribers: dict = {}
+        self.private_topics: dict = {}
         self.last_invoked: dict[str, int] = {}
         self.shared: Any = None
         self.serve_task: Optional[asyncio.Task[None]] = None
@@ -158,7 +163,7 @@ class Router(Supervised):
         self._shutdown_event = asyncio.Event()  # For controlled shutdown
         self.config = rs.Config(name)
         self.policy = Policy(policy)
-        self.owners = rs.load_tenants(self)
+        self.tenants: dict = {}
         self.start_ts = rp.timestamp()
         self.msg_cache: list[rp.PubSubMsg] = []
         self.msg_topic_cache: dict[str, List[rp.PubSubMsg]] = {}
@@ -518,7 +523,7 @@ class Router(Supervised):
 
     def _get_token(self, tenant, secret: str):
         """Get the token embedded into the message id."""
-        pin = self.owners.get(tenant)
+        pin = self.tenants.get(tenant)
         if secret != pin:
             logger.info("tenant %s: invalid token %s", tenant, secret)
             return None
@@ -592,6 +597,25 @@ async def add_plugin(twin, plugin: Supervised):
     logger.debug("[%s] added plugin %s", twin, plugin)
     for tw in alltwins(router):
         tw.router = plugin
+
+
+def load_admins(router):
+    """
+    Load admin components.
+    """
+    db = router.db
+    result = db.sql("SELECT twin FROM admin WHERE name = ?", params=[router.id])
+    router.admins = result.df()["twin"].to_list()
+    logger.info("[%s] admins: %s", router, router.admins)
+
+
+def load_tenants(router):
+    """Load the tenants."""
+    db = router.db
+    result = db.sql(
+        "SELECT twin, secret FROM tenant WHERE name = ?", params=[router.id]
+    )
+    router.tenants = {row[0]: row[1] for row in result.fetchall()}
 
 
 def load_twin(twin):

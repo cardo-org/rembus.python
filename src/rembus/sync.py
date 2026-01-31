@@ -201,6 +201,38 @@ class node:  # pylint: disable=invalid-name
         """
         return self.exec(self._rb.unreactive)
 
+    def private_topic(self, topic:str):
+        """
+        Set the specified `topic` to private.
+
+        The component must have the admin role to change the privacy level.
+        """
+        return self.exec(self._rb.private_topic, topic)
+
+    def public_topic(self, topic:str):
+        """
+        Set the specified `topic` to public.
+
+        The component must have the admin role to change the privacy level.
+        """
+        return self.exec(self._rb.public_topic, topic)
+
+    def authorize(self, component:str, topic:str):
+        """
+        Authorize the `component` to private `topic`.
+
+        `self` must have the admin role for granting topic accessibility.
+        """
+        return self.exec(self._rb.authorize, component, topic)
+
+    def unauthorize(self, component:str, topic:str):
+        """
+        Unauthorize the `component` to private `topic`.
+
+        `self` must have the admin role for removing topic accessibility.
+        """
+        return self.exec(self._rb.unauthorize, component, topic)
+
     def wait(self, timeout: float | None = None):
         """
         Start the twin event loop that wait for rembus messages.
