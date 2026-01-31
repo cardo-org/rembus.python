@@ -275,6 +275,7 @@ class Twin(Supervised):
     async def response(self, status: int, msg: Any, data: Any = None):
         """Send a response to the client."""
         outmsg: Any = rp.ResMsg(id=msg.id, status=status, data=data)
+        logger.info(f"SENDING {outmsg}")
         await self.send(outmsg)
 
     def inject(self, data: Any):
@@ -616,7 +617,7 @@ class Twin(Supervised):
                 lambda id: rp.AdminMsg(id=id, topic=topic, data=data)
             )
             response = await self.wait_response(futreq)
-            return response.data
+            return response_data(response)
 
     async def rpc(self, topic: str, *args: Any):
         """Send a RPC request."""

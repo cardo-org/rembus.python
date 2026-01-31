@@ -15,9 +15,9 @@ def add_admin(name:str, broker_name:str = "broker"):
             twin TEXT)
         """)
         
-        db.execute("""
-        DELETE FROM admin WHERE name=? and twin=?)
-        """, (broker_name, name))
+        db.execute(
+        "DELETE FROM admin WHERE name=? and twin=?",
+        (broker_name, name))
 
         db.execute("""
         INSERT INTO admin (name, twin)
