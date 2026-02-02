@@ -2,7 +2,6 @@ from importlib.metadata import version
 
 __version__ = version("rembus")
 
-# import logging
 from .core import RbURL  # noqa: F401
 from .component import anonym, component, connect
 from .settings import (  # noqa: F401
@@ -31,6 +30,7 @@ from .db import connect_db
 __all__ = [
     "add_plugin",
     "anonym",
+    "nowbucket",
     "connect",
     "connect_db",
     "component",

@@ -12,19 +12,25 @@ def add_tenant(tenant: str, secret: str, broker_name: str = "broker"):
         db.execute("""
         CREATE TABLE IF NOT EXISTS tenant (
             name TEXT NOT NULL,
-            twin TEXT NOT NULL,
+            tenant TEXT NOT NULL,
             secret TEXT NOT NULL)
         """)
 
-        db.execute("""
+        db.execute(
+            """
             DELETE FROM tenant
-            WHERE name = ? AND twin = ?
-        """, (broker_name, tenant))
+            WHERE name = ? AND tenant = ?
+        """,
+            (broker_name, tenant),
+        )
 
-        db.execute("""
-        INSERT INTO tenant (name, twin, secret)
+        db.execute(
+            """
+        INSERT INTO tenant (name, tenant, secret)
         VALUES (?, ?, ?)
-        """, (broker_name, tenant, secret))
+        """,
+            (broker_name, tenant, secret),
+        )
     except Exception as e:
         print(f"Add tenant [{tenant}] failed: {e}")
     finally:
@@ -36,9 +42,12 @@ def remove_tenant(tenant: str, broker_name: str = "broker"):
     db = rb.connect_db(broker_name)
 
     try:
-        db.execute("""
-        DELETE FROM tenant WHERE name=? and twin=?)
-        """, (broker_name, tenant))
+        db.execute(
+            """
+        DELETE FROM tenant WHERE name=? and tenant=?)
+        """,
+            (broker_name, tenant),
+        )
     except Exception as e:
         print(f"Remove tenant [{tenant}] failed: {e}")
     finally:
@@ -48,15 +57,11 @@ def remove_tenant(tenant: str, broker_name: str = "broker"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Manage Rembus tenants")
 
-    parser.add_argument(
-        "tenant", help="tenant name"
-    )
+    parser.add_argument("tenant", help="tenant name")
     parser.add_argument(
         "-d", "--delete", action="store_true", help="remove tenant"
     )
-    parser.add_argument(
-        "-s", "--secret", help="tenant secret"
-    )
+    parser.add_argument("-s", "--secret", help="tenant secret")
     parser.add_argument(
         "--broker", default="broker", help="broker name (default: broker)"
     )

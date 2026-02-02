@@ -99,14 +99,16 @@ def create_table_sql(t: Table) -> str:
 
 
 def parse_dburl():
+    """Extract database connection tokens."""
     raw = os.environ["DUCKLAKE_URL"]
-    # remove prefix "postgres:"
+    # remove prefix, for example "postgres:"
     _, _, url = raw.split(":", 2)
     o = urlparse(url)
     return [o.username, o.password, o.hostname, o.path.lstrip("/")]
 
 
 def reset_db(broker_name):
+    """Create an empy database."""
     dl_url = os.environ.get("DUCKLAKE_URL")
 
     if dl_url:
@@ -128,11 +130,13 @@ def reset_db(broker_name):
         shutil.rmtree(broker_folder)
 
 
-def connect_db(router_name:str = "broker"):
+def connect_db(router_name: str = "broker"):
+    """Open and return an handle to the database."""
     db = duckdb.connect()
     db.sql(db_attach(router_name))
     db.sql("USE rl")
     return db
+
 
 def init_db(router, schema):
     """Initialize the database for a given router."""
@@ -182,7 +186,7 @@ def init_db(router, schema):
         """
         CREATE TABLE IF NOT EXISTS tenant (
             name TEXT NOT NULL,
-            twin TEXT NOT NULL,
+            tenant TEXT NOT NULL,
             secret TEXT NOT NULL
         )""",
         """
@@ -384,8 +388,7 @@ def append(con: duckdb.DuckDBPyConnection, tabledef, msgs):
             set_default(msg, tabledef, obj, add_nullable=True)
             # Check required fields
             if not all(k in obj for k in tblfields):
-                logger.warning(
-                    "[%s] unsaved %s with missed fields", topic, obj)
+                logger.warning("[%s] unsaved %s with missed fields", topic, obj)
                 continue
             fields = [obj[f] for f in tblfields]
         # dataframe

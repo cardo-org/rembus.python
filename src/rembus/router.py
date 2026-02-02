@@ -630,7 +630,7 @@ def load_tenants(router):
     """Load the tenants."""
     db = router.db
     result = db.sql(
-        "SELECT twin, secret FROM tenant WHERE name = ?", params=[router.id]
+        "SELECT tenant, secret FROM tenant WHERE name = ?", params=[router.id]
     )
     router.tenants = {row[0]: row[1] for row in result.fetchall()}
 
