@@ -1,7 +1,6 @@
 """Test configuration and setup for rembus tests."""
 
 import asyncio
-import json
 import logging
 import os
 import time
@@ -57,11 +56,6 @@ def setup_before(request):  # pylint: disable=unused-argument
 
     rembus.db.reset_db(rembus.DEFAULT_BROKER)
     os.makedirs(broker_dir)
-
-    # Setup tenant settings
-    fn = os.path.join(broker_dir, rembus.TENANTS_FILE)
-    with open(fn, "w", encoding="utf-8") as f:
-        f.write(json.dumps({".": "11223344"}))
 
     yield
 

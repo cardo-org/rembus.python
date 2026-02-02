@@ -15,8 +15,7 @@ def upsert_twin(lst, twin):
 
 
 def add_exposer(router, twin, topic):
-    logger.debug("[%s] adding [%s] exposer for topic [%s]",
-                 router, twin, topic)
+    logger.debug("[%s] adding [%s] exposer for topic [%s]", router, twin, topic)
     if topic not in router.exposers:
         router.exposers[topic] = []
     upsert_twin(router.exposers[topic], twin)
@@ -57,36 +56,40 @@ async def reactive(router, twin, status: bool):
     if status:
         await router.inbox.put(rp.SendDataAtRest(twin))
 
+
 def set_private_topic(twin, topic):
     logger.debug("[%s] set private topic [%s]", twin, topic)
     router = twin.router
     if topic not in router.private_topics:
         router.private_topics[topic] = {}
 
+
 def set_public_topic(twin, topic):
     logger.debug("[%s] set public topic [%s]", twin, topic)
     router = twin.router
     router.private_topics.pop(topic, None)
+
 
 def authorize(twin, cid, topic):
     router = twin.router
     if topic not in router.private_topics:
         set_private_topic(twin, topic)
 
-    router.private_topics[topic][cid] = True 
+    router.private_topics[topic][cid] = True
+
 
 def unauthorize(twin, cid, topic):
     router = twin.router
     if topic in router.private_topics:
         router.private_topics[topic].pop(cid, None)
 
+
 async def admin_command(msg: rp.AdminMsg):
     """Handle admin commands"""
     twin = msg.twin
     topic = msg.topic
     if not isinstance(msg.data, dict) or rp.COMMAND not in msg.data:
-        logger.warning(
-            "admin error: expected cmd property (got: %s)", msg.data)
+        logger.warning("admin error: expected cmd property (got: %s)", msg.data)
         await twin.response(rp.STS_ERROR, msg)
         return None
 
@@ -110,7 +113,7 @@ async def admin_command(msg: rp.AdminMsg):
             logger.error(
                 "[%s] is not admin: unable to elevate [%s] to private",
                 twin,
-                topic
+                topic,
             )
             return await twin.response(rp.STS_ERROR, msg)
     elif cmd == rp.PUBLIC_TOPIC:
@@ -119,9 +122,7 @@ async def admin_command(msg: rp.AdminMsg):
             set_public_topic(twin, topic)
         else:
             logger.error(
-                "[%s] is not admin: unable to lower [%s] to public",
-                twin,
-                topic
+                "[%s] is not admin: unable to lower [%s] to public", twin, topic
             )
             return await twin.response(rp.STS_ERROR, msg)
     elif cmd == rp.AUTHORIZE:
@@ -133,7 +134,7 @@ async def admin_command(msg: rp.AdminMsg):
                 "[%s] is not admin: unable to authorize [%s] to [%s]",
                 twin,
                 cid,
-                topic
+                topic,
             )
             return await twin.response(rp.STS_ERROR, msg)
     elif cmd == rp.UNAUTHORIZE:
@@ -145,7 +146,7 @@ async def admin_command(msg: rp.AdminMsg):
                 "[%s] is not admin: unable to unauthorize [%s] to [%s]",
                 twin,
                 cid,
-                topic
+                topic,
             )
             return await twin.response(rp.STS_ERROR, msg)
 

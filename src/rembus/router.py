@@ -235,13 +235,14 @@ class Router(Supervised):
     async def _broadcast(self, msg):
         twin = msg.twin
         data = rp.tag2df(msg.data)
+        topic = msg.topic
         try:
-            if msg.topic in self.handler:
-                await self.evaluate(msg.twin, msg.topic, data)
+            if topic in self.handler and self.isauthorized(topic, twin):
+                await self.evaluate(twin, topic, data)
 
-            subs = self.subscribers.get(msg.topic, [])
+            subs = self.subscribers.get(topic, [])
             for t in subs:
-                if t != twin:
+                if t != twin and self.isauthorized(topic, t):
                     # Do not send back to publisher.
                     await t.send(msg)
                     t.mark = msg.recvts
@@ -252,26 +253,29 @@ class Router(Supervised):
 
     async def _pubsub_msg(self, msg: rp.PubSubMsg):
         twin = msg.twin
-        ts = rp.timestamp()
-        msg.recvts = ts
-        qos = msg.flags & rp.QOS2
-        if qos > rp.QOS0 and msg.id:
-            if twin.socket:
-                await twin.send(rp.AckMsg(id=msg.id))
 
-            if qos == rp.QOS2:
-                if msg.id in twin.ackdf:
-                    # Already received, skip the message.
-                    return
-                else:
-                    # Save the message id to guarantee exactly one delivery.
-                    twin.ackdf[msg.id] = rp.timestamp()
+        # Check if publisher is authorized to
+        if self.isauthorized(msg.topic, twin):
+            ts = rp.timestamp()
+            msg.recvts = ts
+            qos = msg.flags & rp.QOS2
+            if qos > rp.QOS0 and msg.id:
+                if twin.socket:
+                    await twin.send(rp.AckMsg(id=msg.id))
 
-        if self.db is not None:
-            # Save the message into msg_cache
-            self.append_message(msg)
+                if qos == rp.QOS2:
+                    if msg.id in twin.ackdf:
+                        # Already received, skip the message.
+                        return
+                    else:
+                        # Save the message id to guarantee exactly one delivery.
+                        twin.ackdf[msg.id] = rp.timestamp()
 
-        await self._broadcast(msg)
+            if self.db is not None:
+                # Save the message into msg_cache
+                self.append_message(msg)
+
+            await self._broadcast(msg)
 
     def append_message(self, msg: rp.PubSubMsg):
         """Append a message to the message cache."""
@@ -305,28 +309,41 @@ class Router(Supervised):
         elif self.policy == Policy.LESS_BUSY:
             return less_busy(domain(topic), twins)
 
+    def isauthorized(self, topic: str, twin):
+        """Check if the component is authorized.
+        If the topic is public the component is always authorized.
+        """
+        if topic in self.private_topics:
+            if twin.rid in self.private_topics[topic]:
+                return True
+            else:
+                return False
+
+        return True
+
     async def _rpcreq_msg(self, msg: rp.RpcReqMsg):
         """Handle an RPC request."""
         data = rp.tag2df(msg.data)
         logger.debug("[%s] rpc: %s", self, msg)
+        topic = msg.topic
         if msg.twin.isrepl():
             await self.send_message(msg)
-        elif msg.topic in self.handler:
+        elif topic in self.handler and self.isauthorized(topic, msg.twin):
             status = rp.STS_OK
             try:
-                output = await self.evaluate(msg.twin, msg.topic, data)
+                output = await self.evaluate(msg.twin, topic, data)
             except Exception as e:  # pylint: disable=broad-exception-caught
                 status = rp.STS_METHOD_EXCEPTION
                 output = f"{e}"
                 logger.debug("exception: %s", e)
             outmsg = rp.ResMsg(id=msg.id, status=status, data=rp.df2tag(output))
             await msg.twin.send(outmsg)
-        elif msg.topic in self.exposers:
-            target_twin = self._select_twin(msg.topic)
+        elif topic in self.exposers and self.isauthorized(topic, msg.twin):
+            target_twin = self._select_twin(topic)
             logger.debug("[%s] target twin: %s", self, target_twin)
             if target_twin is None:
                 outmsg = rp.ResMsg(
-                    id=msg.id, status=rp.STS_METHOD_UNAVAILABLE, data=msg.topic
+                    id=msg.id, status=rp.STS_METHOD_UNAVAILABLE, data=topic
                 )
                 await msg.twin.send(outmsg)
             else:
@@ -335,7 +352,7 @@ class Router(Supervised):
                 await target_twin.inbox.put(msg)
         else:
             outmsg = rp.ResMsg(
-                id=msg.id, status=rp.STS_METHOD_NOT_FOUND, data=msg.topic
+                id=msg.id, status=rp.STS_METHOD_NOT_FOUND, data=topic
             )
             await msg.twin.send(outmsg)
         return

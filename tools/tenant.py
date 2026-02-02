@@ -1,10 +1,10 @@
-
 #!/usr/bin/env python3
 
 import argparse
 import rembus as rb
 
-def add_tenant(tenant:str, secret:str, broker_name:str = "broker"):
+
+def add_tenant(tenant: str, secret: str, broker_name: str = "broker"):
     print(f"Adding tenant [{tenant}]")
     db = rb.connect_db(broker_name)
 
@@ -30,7 +30,8 @@ def add_tenant(tenant:str, secret:str, broker_name:str = "broker"):
     finally:
         db.close()
 
-def remove_tenant(tenant:str, broker_name:str = "broker"):
+
+def remove_tenant(tenant: str, broker_name: str = "broker"):
     print(f"Removing tenant [{tenant}]")
     db = rb.connect_db(broker_name)
 
@@ -46,7 +47,7 @@ def remove_tenant(tenant:str, broker_name:str = "broker"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Manage Rembus tenants")
-    
+
     parser.add_argument(
         "tenant", help="tenant name"
     )

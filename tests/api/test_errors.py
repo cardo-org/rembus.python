@@ -7,18 +7,22 @@ import cbor2
 import rembus
 import rembus.protocol as rp
 import rembus.settings as rs
+from tools.tenant import add_tenant
+
+
+def test_add_tenant():
+    # Setup tenant settings
+    add_tenant(".", "11223344")
 
 
 def test_register_error(server):
     """Test the error condition that should restart the router task."""
     cid = "myname"
     rembus.register(cid, "11223344")
-
     key_dir = rs.keys_dir(server.router.id)
     curr_mode = os.stat(key_dir).st_mode
     os.chmod(key_dir, curr_mode & ~(
         stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
-
     try:
         myname = rembus.node(cid)
         myname.unregister()
@@ -28,7 +32,6 @@ def test_register_error(server):
     finally:
         # restore permissions
         os.chmod(key_dir, curr_mode)
-
     myname.unregister()
     myname.close()
 

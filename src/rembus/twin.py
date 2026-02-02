@@ -264,14 +264,6 @@ class Twin(Supervised):
     def isadmin(self):
         return self.rid in self.router.admins
 
-    def isrepl(self) -> bool:
-        """Check if twin is a REPL"""
-        return False
-
-    def isopen(self) -> bool:
-        """Check if the connection is open."""
-        return False
-
     async def response(self, status: int, msg: Any, data: Any = None):
         """Send a response to the client."""
         outmsg: Any = rp.ResMsg(id=msg.id, status=status, data=data)
@@ -296,7 +288,7 @@ class Twin(Supervised):
 
     def register_shutdown(self):
         """Register shutdown handler."""
-        if sys.platform != 'win32':
+        if sys.platform != "win32":
             loop = asyncio.get_running_loop()
             loop.add_signal_handler(
                 signal.SIGINT, lambda: asyncio.create_task(self.close())
@@ -448,10 +440,6 @@ class Twin(Supervised):
             await self._ack2_msg(msg)
         else:
             self._router.inbox.put_nowait(msg)
-
-    async def connect(self):
-        """Connect to the broker."""
-        raise NotImplementedError
 
     async def send(self, msg: rp.RembusMsg):
         """Send a rembus message"""
@@ -686,7 +674,7 @@ class Twin(Supervised):
         await self.broker_setting("reactive", {"status": False})
         return self
 
-    async def private_topic(self, topic:str):
+    async def private_topic(self, topic: str):
         """
         Set the specified `topic` to private.
 
@@ -694,7 +682,7 @@ class Twin(Supervised):
         """
         await self.setting(topic, rp.PRIVATE_TOPIC)
 
-    async def public_topic(self, topic:str):
+    async def public_topic(self, topic: str):
         """
         Set the specified `topic` to public.
 
@@ -702,7 +690,7 @@ class Twin(Supervised):
         """
         await self.setting(topic, rp.PUBLIC_TOPIC)
 
-    async def authorize(self, component:str, topic:str):
+    async def authorize(self, component: str, topic: str):
         """
         Authorize the `component` to private `topic`.
 
@@ -710,7 +698,7 @@ class Twin(Supervised):
         """
         await self.setting(topic, rp.AUTHORIZE, {rp.CID: component})
 
-    async def unauthorize(self, component:str, topic:str):
+    async def unauthorize(self, component: str, topic: str):
         """
         Unauthorize the `component` to private `topic`.
 
@@ -960,10 +948,10 @@ class MqttTwin(Twin):
 
     def isopen(self) -> bool:
         """Check if the connection is open."""
-        if self.socket is None:
-            return False
-
-        return self.socket.is_connected
+        sts = False
+        if self.socket is not None and self.socket.is_connected:
+            sts = True
+        return sts
 
     async def _close_socket(self):
         if self.socket:
