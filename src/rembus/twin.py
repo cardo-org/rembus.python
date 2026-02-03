@@ -264,10 +264,18 @@ class Twin(Supervised):
     def isadmin(self):
         return self.rid in self.router.admins
 
+    def isrepl(self):
+        """True if it is a server/broker handle."""
+
+    def isopen(self):
+        """True if the socket is connected."""
+
+    async def connect(self):
+        """Connection request."""
+
     async def response(self, status: int, msg: Any, data: Any = None):
         """Send a response to the client."""
         outmsg: Any = rp.ResMsg(id=msg.id, status=status, data=data)
-        logger.info(f"SENDING {outmsg}")
         await self.send(outmsg)
 
     def inject(self, data: Any):
@@ -530,7 +538,6 @@ class Twin(Supervised):
         slot = kwargs.get("slot", None)
         qos = kwargs.get("qos", rp.QOS0) & rp.QOS2
         if qos == rp.QOS0:
-            logger.info("topic=%s data=%s", topic, data)
             msg = rp.PubSubMsg(topic=topic, data=data, slot=slot)
             msg.twin = self
             if self.isrepl() and self.isopen():
@@ -873,8 +880,11 @@ class WsTwin(Twin):
 
     async def send(self, msg: rp.RembusMsg):
         """Send a rembus message"""
-        pkt = msg.to_payload(self.enc)
-        await self._send(pkt)
+        try:
+            pkt = msg.to_payload(self.enc)
+            await self._send(pkt)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("message send failed: %s", e)
 
     async def _close_socket(self):
         if self.socket:

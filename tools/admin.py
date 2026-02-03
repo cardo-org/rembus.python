@@ -1,10 +1,10 @@
-
 #!/usr/bin/env python3
 
 import argparse
 import rembus as rb
 
-def add_admin(name:str, broker_name:str = "broker"):
+
+def add_admin(name: str, broker_name: str = "broker"):
     print(f"Adding [{name}] as admin")
     db = rb.connect_db(broker_name)
 
@@ -14,28 +14,35 @@ def add_admin(name:str, broker_name:str = "broker"):
             name TEXT NOT NULL,
             twin TEXT)
         """)
-        
-        db.execute(
-        "DELETE FROM admin WHERE name=? and twin=?",
-        (broker_name, name))
 
-        db.execute("""
+        db.execute(
+            "DELETE FROM admin WHERE name=? and twin=?", (broker_name, name)
+        )
+
+        db.execute(
+            """
         INSERT INTO admin (name, twin)
         VALUES (?, ?)
-        """, (broker_name, name))
+        """,
+            (broker_name, name),
+        )
     except Exception as e:
         print(f"Add admin [{name}] failed: {e}")
     finally:
         db.close()
 
-def remove_admin(name:str, broker_name:str = "broker"):
+
+def remove_admin(name: str, broker_name: str = "broker"):
     print(f"Removing [{name}] as admin")
     db = rb.connect_db(broker_name)
 
     try:
-        db.execute("""
+        db.execute(
+            """
         DELETE FROM admin WHERE name=? and twin=?)
-        """, (broker_name, name))
+        """,
+            (broker_name, name),
+        )
     except Exception as e:
         print(f"Remove admin [{name}] failed: {e}")
     finally:
@@ -44,10 +51,8 @@ def remove_admin(name:str, broker_name:str = "broker"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Manage Rembus admins")
-    
-    parser.add_argument(
-        "admin_name", help="admin name"
-    )
+
+    parser.add_argument("admin_name", help="admin name")
     parser.add_argument(
         "-d", "--delete", action="store_true", help="remove admin"
     )

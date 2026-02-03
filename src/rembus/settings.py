@@ -31,7 +31,7 @@ class Config:
         except json.decoder.JSONDecodeError as e:
             raise (RuntimeError(f"{fn}: {e}")) from e
 
-        self.request_timeout = cfg.get("request_timeout", 5)
+        self.request_timeout = cfg.get("request_timeout", 10)
         self.ws_ping_interval = cfg.get("ws_ping_interval", None)
         self.start_anyway = cfg.get("start_anyway", False)
         self.send_retries = cfg.get("send_retries", 3)
@@ -51,6 +51,7 @@ def db_attach(router_id):
         return f"ATTACH '{db_name}' AS rl (DATA_PATH '{data_dir}')"
     else:
         return f"ATTACH '{db_name}' AS rl"
+
 
 def rembus_dir():
     """The root directory for all rembus components."""
@@ -109,5 +110,3 @@ def key_file(broker_name: str, cid: str):
                 return fn
 
     raise FileNotFoundError(f"key file not found: {basename}")
-
-

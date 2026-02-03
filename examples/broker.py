@@ -1,22 +1,20 @@
 import asyncio
 import logging
-import os
 import argparse
-import signal
 import rembus as rb
 
-logging.basicConfig(encoding="utf-8", level=logging.DEBUG)
+logging.basicConfig(encoding="utf-8", level=logging.INFO)
 logging.getLogger("websockets").setLevel(logging.WARNING)
 
 
 async def main():
-    schema_file = os.path.join(os.path.dirname(__file__), "schema.json")
     parser = argparse.ArgumentParser(description="rembus broker")
     parser.add_argument("-p", "--port", default=8000, help="broker port")
     args = parser.parse_args()
 
-    bro = await rb.component(schema=schema_file, port=args.port)
+    bro = await rb.component(port=args.port)
 
+    # Add SIGINT and SIGTERM signal handlers for controlled shutdown.
     bro.register_shutdown()
 
     print(f"broker up and running at port {args.port}")

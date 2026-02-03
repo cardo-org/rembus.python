@@ -464,6 +464,7 @@ class Router(Supervised):
             port,
             ssl=ssl_context,
             ping_interval=self.config.ws_ping_interval,
+            max_size=rp.WS_FRAME_MAXSIZE,
         ) as server:
             self.server_instance = server
             await self._shutdown_event.wait()
@@ -542,7 +543,7 @@ class Router(Supervised):
         """Get the token embedded into the message id."""
         pin = self.tenants.get(tenant)
         if secret != pin:
-            logger.info("tenant %s: invalid token %s", tenant, secret)
+            logger.warning("tenant %s: invalid token %s", tenant, secret)
             return None
         else:
             logger.debug("tenant %s: token is valid", tenant)
@@ -623,7 +624,7 @@ def load_admins(router):
     db = router.db
     result = db.sql("SELECT twin FROM admin WHERE name = ?", params=[router.id])
     router.admins = result.df()["twin"].to_list()
-    logger.info("[%s] admins: %s", router, router.admins)
+    logger.debug("[%s] admins: %s", router, router.admins)
 
 
 def load_tenants(router):
