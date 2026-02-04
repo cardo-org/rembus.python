@@ -56,7 +56,7 @@ async def _component(
         for netlink in url:
             await init_twin(router, RbURL(netlink), enc, isserver)
 
-    if keyspace:
+    if keyspace and isserver:
         kspace = KeySpaceRouter()
         await add_plugin(handle, kspace)
 

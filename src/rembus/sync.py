@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import signal
+import sys
 import threading
 from types import TracebackType
 from typing import Any, Callable, Coroutine, Optional, Type, List
@@ -201,7 +202,7 @@ class node:  # pylint: disable=invalid-name
         """
         return self.exec(self._rb.unreactive)
 
-    def private_topic(self, topic:str):
+    def private_topic(self, topic: str):
         """
         Set the specified `topic` to private.
 
@@ -209,7 +210,7 @@ class node:  # pylint: disable=invalid-name
         """
         return self.exec(self._rb.private_topic, topic)
 
-    def public_topic(self, topic:str):
+    def public_topic(self, topic: str):
         """
         Set the specified `topic` to public.
 
@@ -217,7 +218,7 @@ class node:  # pylint: disable=invalid-name
         """
         return self.exec(self._rb.public_topic, topic)
 
-    def authorize(self, component:str, topic:str):
+    def authorize(self, component: str, topic: str):
         """
         Authorize the `component` to private `topic`.
 
@@ -225,7 +226,7 @@ class node:  # pylint: disable=invalid-name
         """
         return self.exec(self._rb.authorize, component, topic)
 
-    def unauthorize(self, component:str, topic:str):
+    def unauthorize(self, component: str, topic: str):
         """
         Unauthorize the `component` to private `topic`.
 
@@ -233,23 +234,26 @@ class node:  # pylint: disable=invalid-name
         """
         return self.exec(self._rb.unauthorize, component, topic)
 
-    def wait(self, timeout: float | None = None):
+    def wait(self, timeout: float | None = None, signal_handler: bool = True):
         """
         Start the twin event loop that wait for rembus messages.
         """
-        return self.exec(self._rb.wait, timeout)
+        if signal_handler:
+            self.register_shutdown()
+
+        return self.exec(self._rb.wait, timeout, False)
 
     def register_shutdown(self):
         """Register shutdown handler."""
-
-        signal.signal(
-            signal.SIGINT,
-            lambda snum, frame: self.close(),
-        )
-        signal.signal(
-            signal.SIGTERM,
-            lambda snum, frame: self.close(),
-        )
+        if sys.platform != "win32":
+            signal.signal(
+                signal.SIGINT,
+                lambda snum, frame: self.close(),
+            )
+            signal.signal(
+                signal.SIGTERM,
+                lambda snum, frame: self.close(),
+            )
 
     def close(self):
         """Close the connection and clean up resources."""

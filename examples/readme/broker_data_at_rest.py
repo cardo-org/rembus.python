@@ -4,7 +4,7 @@ import os
 import argparse
 import rembus as rb
 
-logging.basicConfig(encoding="utf-8", level=logging.DEBUG)
+logging.basicConfig(encoding="utf-8", level=logging.INFO)
 logging.getLogger("websockets").setLevel(logging.WARNING)
 
 
@@ -15,9 +15,6 @@ async def main():
     args = parser.parse_args()
 
     bro = await rb.component(schema=schema_file, port=args.port)
-
-    # Add SIGINT and SIGTERM signal handlers for controlled shutdown.
-    bro.register_shutdown()
 
     print(f"broker up and running at port {args.port}")
     await bro.wait()

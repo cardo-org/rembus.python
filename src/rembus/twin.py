@@ -782,7 +782,9 @@ class Twin(Supervised):
         await self.shutdown()
         await asyncio.sleep(0)  # let loop drain tasks
 
-    async def wait(self, timeout: float | None = None):
+    async def wait(
+        self, timeout: float | None = None, signal_handler: bool = True
+    ):
         """
         Start the twin event loop that wait for rembus messages.
         """
@@ -790,6 +792,8 @@ class Twin(Supervised):
             await self.reactive()
         if self._supervisor_task is not None:
             try:
+                if signal_handler:
+                    self.register_shutdown()
                 await asyncio.wait([self._supervisor_task], timeout=timeout)
             finally:
                 await self.shutdown()
