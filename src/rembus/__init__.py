@@ -25,14 +25,14 @@ from .protocol import (  # noqa: F401
 from .router import add_plugin
 from .sync import node, register
 from .keyspace import KeySpaceRouter
-from .db import connect_db
+from .db import dbconnect
 
 __all__ = [
     "add_plugin",
     "anonym",
     "nowbucket",
     "connect",
-    "connect_db",
+    "dbconnect",
     "component",
     "node",
     "register",

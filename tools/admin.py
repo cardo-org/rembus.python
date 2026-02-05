@@ -6,7 +6,7 @@ import rembus as rb
 
 def add_admin(name: str, broker_name: str = "broker"):
     print(f"Adding [{name}] as admin")
-    db = rb.connect_db(broker_name)
+    db = rb.dbconnect(broker_name)
 
     try:
         db.execute("""
@@ -34,7 +34,7 @@ def add_admin(name: str, broker_name: str = "broker"):
 
 def remove_admin(name: str, broker_name: str = "broker"):
     print(f"Removing [{name}] as admin")
-    db = rb.connect_db(broker_name)
+    db = rb.dbconnect(broker_name)
 
     try:
         db.execute(

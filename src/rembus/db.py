@@ -130,7 +130,7 @@ def reset_db(broker_name):
         shutil.rmtree(broker_folder)
 
 
-def connect_db(router_name: str = "broker"):
+def dbconnect(router_name: str = "broker"):
     """Open and return an handle to the database."""
     db = duckdb.connect()
     db.sql(db_attach(router_name))
@@ -140,7 +140,7 @@ def connect_db(router_name: str = "broker"):
 
 def init_db(router, schema):
     """Initialize the database for a given router."""
-    db = connect_db(router.id)
+    db = dbconnect(router.id)
 
     tables = [
         """

@@ -6,7 +6,7 @@ import rembus as rb
 
 def add_tenant(tenant: str, secret: str, broker_name: str = "broker"):
     print(f"Adding tenant [{tenant}]")
-    db = rb.connect_db(broker_name)
+    db = rb.dbconnect(broker_name)
 
     try:
         db.execute("""
@@ -39,7 +39,7 @@ def add_tenant(tenant: str, secret: str, broker_name: str = "broker"):
 
 def remove_tenant(tenant: str, broker_name: str = "broker"):
     print(f"Removing tenant [{tenant}]")
-    db = rb.connect_db(broker_name)
+    db = rb.dbconnect(broker_name)
 
     try:
         db.execute(
