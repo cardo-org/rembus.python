@@ -31,10 +31,24 @@ class Config:
         except json.decoder.JSONDecodeError as e:
             raise (RuntimeError(f"{fn}: {e}")) from e
 
-        self.request_timeout = cfg.get("request_timeout", 10)
-        self.ws_ping_interval = cfg.get("ws_ping_interval", None)
+        def_timeout = float(os.environ.get("REMBUS_TIMEOUT", 10))
+        def_ack_timeout = float(os.environ.get("REMBUS_ACK_TIMEOUT", 2))
+        def_ws_ping_interval = float(
+            os.environ.get("REMBUS_WS_PING_INTERVAL", 30)
+        )
+        def_send_retries = int(os.environ.get("REMBUS_SEND_RETRIES", 10))
+        self.request_timeout = cfg.get("request_timeout", def_timeout)
+        self.ws_ping_interval = cfg.get(
+            "ws_ping_interval", def_ws_ping_interval
+        )
         self.start_anyway = cfg.get("start_anyway", False)
-        self.send_retries = cfg.get("send_retries", 3)
+
+        # Max numbers of QOS1 and QOS2 Pub/Sub retrasmissions
+        self.send_retries = cfg.get("send_retries", def_send_retries)
+
+        # Pub/Sub message timeout
+        self.ack_timeout = cfg.get("ack_timeout", def_ack_timeout)
+
         self.db_attach = db_attach(name)
 
 

@@ -580,7 +580,7 @@ class Twin(Supervised):
                     ),
                 )
                 async with async_timeout.timeout(
-                    self.router.config.request_timeout
+                    self.router.config.ack_timeout
                 ):
                     done = await futreq.future
                 if done:
@@ -720,7 +720,20 @@ class Twin(Supervised):
         topic: Optional[str] = None,
     ):
         """
-        Subscribe the function to the corresponding topic.
+        Subscribe a callback function to a topic.
+
+        Parameters
+        ----------
+        fn
+            The function to be invoked for each received message.
+        msgfrom
+            A timestamp in nanoseconds that specifies the earliest message to
+            receive when the subscription is created. The special value `rp.Now`
+            means “start from the moment of subscription”, i.e. do not replay any
+            messages published before the subscription was established.
+        topic
+            The topic to subscribe to. If None, the function name (`fn.__name__`)
+            is used as the topic.
         """
         if topic is None:
             topic = fn.__name__
