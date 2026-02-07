@@ -328,20 +328,34 @@ def set_default(msg: PubSubMsg, tabledef: Table, d: dict, add_nullable=True):
             continue
 
 
+def move_ts_to_end(df, times):
+    """
+    Column-ordering invariant, independent of whether the columns
+    were just added or already existed.
+    """
+    tail = [c for c in times if c in df.columns]
+    head = [c for c in df.columns if c not in tail]
+    return df.select(head + tail)
+
+
 def df_extras(tabledef, df, msg):
     """Add extra columns (recvts, slot) to the end of df."""
     exprs = []
     extras_cols = []
-
+    times = []
     if "recv_ts" in tabledef.extras:
         cname = tabledef.extras["recv_ts"]
-        exprs.append(pl.lit(msg.recvts).cast(pl.UInt64).alias(cname))
-        extras_cols.append(cname)
+        times.append(cname)
+        if cname not in df.columns:
+            exprs.append(pl.lit(msg.recvts).cast(pl.UInt64).alias(cname))
+            extras_cols.append(cname)
 
     if "slot" in tabledef.extras:
         cname = tabledef.extras["slot"]
-        exprs.append(pl.lit(msg.slot).cast(pl.UInt32).alias(cname))
-        extras_cols.append(cname)
+        times.append(cname)
+        if cname not in df.columns:
+            exprs.append(pl.lit(msg.slot).cast(pl.UInt32).alias(cname))
+            extras_cols.append(cname)
 
     # If no extras, return early
     if not exprs:
@@ -353,8 +367,7 @@ def df_extras(tabledef, df, msg):
     # Reorder so new columns appear at the end
     current = [c for c in df.columns if c not in extras_cols]
     df = df.select(current + extras_cols)
-
-    return df
+    return move_ts_to_end(df, times)
 
 
 def extras(tabledef, msg):
@@ -394,7 +407,8 @@ def append(con: duckdb.DuckDBPyConnection, tabledef, msgs):
         # dataframe
         elif fmt == "dataframe":
             df = tag2df(values[0])
-            if list(df.columns) != tblfields:
+            missing = set(tblfields) - set(df.columns)
+            if missing:
                 logger.warning(
                     "[%s] unsaved df with mismatched fields [%s]",
                     topic,
