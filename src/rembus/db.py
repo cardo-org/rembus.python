@@ -328,31 +328,18 @@ def set_default(msg: PubSubMsg, tabledef: Table, d: dict, add_nullable=True):
             continue
 
 
-def move_ts_to_end(df, times):
-    """
-    Column-ordering invariant, independent of whether the columns
-    were just added or already existed.
-    """
-    tail = [c for c in times if c in df.columns]
-    head = [c for c in df.columns if c not in tail]
-    return df.select(head + tail)
-
-
 def df_extras(tabledef, df, msg):
     """Add extra columns (recvts, slot) to the end of df."""
     exprs = []
     extras_cols = []
-    times = []
     if "recv_ts" in tabledef.extras:
         cname = tabledef.extras["recv_ts"]
-        times.append(cname)
         if cname not in df.columns:
             exprs.append(pl.lit(msg.recvts).cast(pl.UInt64).alias(cname))
             extras_cols.append(cname)
 
     if "slot" in tabledef.extras:
         cname = tabledef.extras["slot"]
-        times.append(cname)
         if cname not in df.columns:
             exprs.append(pl.lit(msg.slot).cast(pl.UInt32).alias(cname))
             extras_cols.append(cname)
@@ -364,10 +351,7 @@ def df_extras(tabledef, df, msg):
     # Add all extra columns in a single pass
     df = df.with_columns(exprs)
 
-    # Reorder so new columns appear at the end
-    current = [c for c in df.columns if c not in extras_cols]
-    df = df.select(current + extras_cols)
-    return move_ts_to_end(df, times)
+    return df
 
 
 def extras(tabledef, msg):
@@ -383,6 +367,13 @@ def extras(tabledef, msg):
 
 def columns(table):
     return [t.col for t in table.columns]
+
+
+def allcolumns(table):
+    cols = columns(table)
+    for col in table.extras.values():
+        cols.append(col)
+    return cols
 
 
 def append(con: duckdb.DuckDBPyConnection, tabledef, msgs):
@@ -416,8 +407,9 @@ def append(con: duckdb.DuckDBPyConnection, tabledef, msgs):
                 )
                 continue
             df = df_extras(tabledef, df, msg)
+            allcols = ",".join(allcolumns(tabledef))
             con.register("df_view", df)
-            con.execute(f"INSERT INTO {topic} SELECT * FROM df_view")
+            con.execute(f"INSERT INTO {topic} SELECT {allcols} FROM df_view")
             con.unregister("df_view")
             continue
         # default format
