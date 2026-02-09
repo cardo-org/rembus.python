@@ -5,20 +5,57 @@
 
 Rembus is a Pub/Sub and RPC middleware.
 
-There are few key concepts to get confident with Rembus:
+## Features
 
-- A Component is a node of a distributed system that communicate with Pub/Sub or RPC styles;
-- A Component connect to a Broker;
-- A Broker dispatch messages between Components;
-- A Component expose RPC services and/or subscribe to Pub/Sub topics;
-- A Component make RPC requests and/or publish messages to Pub/Sub topics;
-- A Schema may be associated to a broker for structuring data at rest;
+* Binary message encoding using [CBOR](https://cbor.io/).
 
-The Rembus python version supports only the WebSocket protocol.
+* Native support for exchanging DataFrames.
+
+* Persistent storage via [DuckDB DuckLake](https://ducklake.select/).
+
+* Pub/Sub QOS0, QOS1 and QOS2.
+
+* Hierarchical topic routing with wildcards (`*/*/temperature`).
+
+* MQTT integration.
+
+* WebSocket transport.
 
 See [Rembus.jl](https://cardo-org.github.io/Rembus.python/stable/) broker
 for a full fledged broker that supports WebSocket, ZMQ and plain tcp protocols
-and more features like private topics, multi tenancy and more.
+and more features like private topics, multi-tenancy and more.
+
+## Concepts
+
+* **Component**: an addressable node in a distributed system. A component
+connects to a broker and communicates using Pub/Sub and/or RPC semantics.
+
+* **Broker**: a specialized component responsible for routing Pub/Sub messages
+and dispatching RPC calls between components.
+A broker may also persist messages and expose services.
+
+* **Topic**: a "logical channel" string identifier used for Pub/Sub message
+routing (e.g. `alarm_topic`).
+
+* **Topic space**: a set of topics defined by wildcard patterns
+(e.g. `*/telemetry`) used for bulk subscription..
+
+* **Subscription**: a callback bound to a topic or topic space; invoked
+automatically with the message payload when a Pub/Sub message is published.
+Supports wildcard topics and optional delivery of messages sent while the
+subscriber was offline (`msgfrom=rb.LastReceived`).
+
+* **RPC Service**: a named function exposed by a component and registered at
+the broker for remote invocation.
+
+* **RPC Call**: a synchronous or asynchronous request issued by a component
+to invoke a remote RPC service.
+
+* **Schema**: an optional declarative mapping between topic patterns and
+persistent storage tables, used to structure and persist messages at rest.
+
+* **Data at Rest**: broker capability to persist published messages into DuckDB
+tables defined by a schema, enabling historical queries and analytics.
 
 ## Getting Started
 
@@ -30,34 +67,32 @@ pip install rembus
 
 ### Broker
 
-A Rembus Component has a name and connects to a Broker. The `node` method is
-for the sync version and the `component` method is for the async version.
-
-`node`/`component` without the `url` argument starts a Broker:
+Start a broker (sync or async):
 
 ```python
+import rembus as rb
+
 # sync version
-import rembus as rb
-
 bro = rb.node() # equivalent to rb.node(port = 8000)
-bro.wait() # rembus loop, unnecessary if running a REPL interpreter 
-```
+bro.wait() # run broker loop, unnecessary if running interpreter
 
-```python
+
 # async version
-import rembus as rb
-
 bro = await rb.component()
 await bro.wait() 
 ```
 
-### Broker with Data at Rest
+### Broker with persistent storage
 
-A Rembus Broker may be associated with a data schema for persisting published
-messages into a [DuckDB](https://duckdb.org/) database using the
+A Rembus broker can be configured with a **schema** to persist published
+messages into a [DuckDB](https://duckdb.org/) database via the
 [DataLake](https://ducklake.select/) extension.
 
-The following `schema.json` file will be used as reference:
+A schema declaratively maps **Pub/Sub topic patterns** to **relational tables**.
+Topics variables are extracted from the topic path and mapped to table columns;
+message payload fields are mapped to the remaining columns.
+
+Example `schema.json`:
 
 ```json
 {
@@ -80,35 +115,54 @@ The following `schema.json` file will be used as reference:
                 {"col": "temperature", "type": "DOUBLE"},
                 {"col": "pressure", "type": "DOUBLE"}
             ],
-            "extras": {"recv_ts": "ts", "slot": "time_bucket"}
+            "extras": {
+                "recv_ts": "ts",
+                "slot": "time_bucket"
+            }
         }
     ]
 }
 ```
 
-The schema defines two tables: `sensor` and `telemetry` with their
-corresponding pub/sub topics and db columns.
+### Schema semantics
 
-The `sensor` table persists messages published to topics matching the pattern
-`:site/:type/:dn/sensor` where `:site`, `:type` and `:dn` are variables that
-get mapped to the corresponding columns of the table:
+* Each entry in `tables` defines a **topic-to-table binding**.
 
-* `site` is the sensor location;
-* `type` is the sensor type;
-* `dn` is the sensor unique distinguish name.
+* Topic segments prefixed with `:` are variables extracted from the topic
+path and written to the corresponding columns.
 
-The `telemetry` table persists metrics values published to topics matching 
-the pattern `:dn/telemetry`. The table has the columns:
+* Message payload fields are mapped positionally or by name to remaining columns.
 
-* `dn` is the sensor unique distinguish name;
-* `temperature` is the temperature value;
-* `pressure` is the pressure value.
+* `keys` define logical primary keys.
 
-With a data schema the DataLake tables are created if they not exist and
-published messages are persisted into.  
+* `extras` specify broker-generated metadata (e.g. receive timestamp, time
+bucketing).
 
-When the `schema.json` filename is passed to the `node`/`component` method
-the broker is started with data at rest capabilities:
+### Example mappings
+
+* Messages published to `:site/:type/:dn/sensor` are persisted in the `sensor`
+table, with `site`, `type`, and `dn` derived from the topic path.
+
+* Messages published to `:dn/telemetry` are persisted in the `telemetry` table,
+with metric values extracted from the message payload.
+
+If a schema is provided, DuckLake tables are created automatically if they
+do not already exist, and all matching publications are persisted.
+
+For each table two special topics are automatically created:
+
+* `query_<table>` retrieve records;
+* `delete_<table>` remove records;
+
+RPC calls to `query_*` topics return a Polars DataFrame.
+
+For example:
+
+```python
+cli.rpc("query_sensor", {"where": "type='HVAC'"})
+```
+
+### Starting a broker with storage enabled
 
 ```python
 import rembus as rb
@@ -117,202 +171,75 @@ bro = await rb.component(schema="schema.json")
 await bro.wait() 
 ```
 
-### Component
+### Components
 
-Component `myname` connects to a Broker listening on port `8000`
-on host `willy.acme.org`. Only one Component with name `myname` may connect to
-the Broker:
+Connect to a Broker:
 
 ```python
-cli = await rb.component("ws://willy.acme.org:8000/myname")
-```
+# named component
+cli = await rb.component("ws://host:8000/myname")
 
-Component `myname` connects to a Broker listening on default port `8000`
-on default host `127.0.0.1`:
-
-```python
+# default host/port
 cli = await rb.component("myname")
+
+# anonymous
+cli = await rb.component(rb.anonym(host="host", port=8000))
 ```
 
-Anonymous component are allowed.
+### Why named components
 
-To connects anonymously to a Broker listening on port `8000`
-on host `willy.acme.org`:
+* Enables authentication (RSA/ECDSA/shared secret).
 
-```python
-cli = await rb.component(rb.anonym(host="willy.acme.org", port=8000))
-```
+* Allows persistent twin mapping; offline messages are buffered.
+A Component connects to a Broker using a URL-like formatted string that
+identifies the broker address and declare the name of the Component.
 
-Anonymous Component connected on default port `8000`
-on default host `127.0.0.1`:
+## Pub/Sub
 
-```python
-cli = await rb.component(rb.anonym())
-```
-
-### Why assign a name to a component?
-
-These are two reasons to assign a name to a component:
-
-1. A component without a name cannot authenticate its identity to the broker with
-a signature based on RSA, ECDSA or a shared secret.
-
-1. If a component is anonymous then a random identifier that changes at each
-connection event is used as the component identifier. In this case the broker
-is unable to bind the component to a persistent twin and messages published
-when the component is offline get not broadcasted to the component when it gets
-online again.
-
-### Publish a single message
-
-The component `myclient` publish to topic `sensor` a single message with an
-empty payload because all the sensor fields are defined in the topic:
+### Publish
 
 ```python
-# sync version
-import rembus as rb
+# Single message
+await cli.publish("site/type/dn/sensor")
+await cli.publish("dn/telemetry", {'temperature': 21.6, 'pressure': 980})
 
-site = mysite
-type = "HVAC"
-dn = "mysite.sensor1"
-cli = rb.node("myclient")
-cli.publish(f"{site}/{type}/{dn}/sensor")
-```
-
-```python
-# async version
-import rembus as rb
-
-site = mysite
-type = "HVAC"
-dn = "mysite.sensor1"
-
-async def main():
-    cli = await rb.component("myclient")
-    await cli.publish(f"{site}/{type}/{dn}/sensor")
-```
-
-Publish a telemetry message to topic `mysite.sensor1/telemetry` using a
-dictionary as payload:
-
-```python
-# sync version
-cli.publish(f"{dn}/telemetry", {'temperature': 21.6, 'pressure': 980})
-```
-
-```python
-# async version
-await cli.publish(f"{dn}/telemetry", {'temperature': 21.6, 'pressure': 980})
-```
-
-### Publish a DataFrame
-
-The component `myclient` publish to topic `sensor` a bunch of messages using a
-DataFrame as payload `:
-
-```python
-# sync version
+# DataFrame
 import polars as pl
-import rembus as rb
-
-df = pl.DataFrame(
-    {
-        "site": ["mysite", "mysite"],
-        "dn":["mysite.sensor1", "mysite.sensor2"],
-        "type": ["HVAC", "HVAC"]
-    }
-)
-
-cli = rb.node("myclient")
-cli.publish("sensor", df)
+df = pl.DataFrame({"dn":["s1","s2"], "temperature":[15,18.8]})
+await cli.publish("telemetry", df)
 ```
 
-Publish to topic `telemetry` a bunch of metrics messages using a
-DataFrame as payload `:
-
+### Subscribe
 
 ```python
-#async version
-import polars as pl
-import rembus as rb
-
-df = pl.DataFrame(
-    {
-        "dn":["mysite.sensor1", "mysite.sensor2"],
-        "temperature": [15.0, 18.8],
-        "pressure": [900, 1020],
-    }
-)
-
-async  def main():
-    cli = await rb.component("myclient")
-    await cli.publish("telemetry", df)
-```
-
-```python
-import rembus as rb
-
-slogan = "mydevice: battery very low"
-severity = "CRITICAL"
-
-dev = rb.node("mydevice")
-dev.publish("alarm", slogan, severity)
-```
-
-### Subscribe to a topic
-
-Soppose that the `alarm` topic conveys alarm messages with two fields:
-`slogan` and `severity`. 
-
-On the alarm producer side:
-
-```python
-slogan = "mydevice: battery very low"
-severity = "CRITICAL"
-cli.publish("alarm", slogan, severity)
-```
-
-The component `monitor` subscribes to the `alarm` topic:
-
-```python
-import rembus as rb
-
+# Single topic
 def alarm(slogan, severity):
-    print(f"{slogan}: {descr}")
+    print(f"{slogan}: {severity}")
 
-sub = rb.node("monitor", msgfrom=rb.LastReceived)
-sub.subscribe(alarm)
+sub = rb.node("monitor")
+sub.subscribe(alarm, topic="alarm") # equivalent to sub.subscribe(alarm)
+
+# Topic space
+def telemetry(topic, data):
+    print(f"{topic}: {data}")
+
+sub.subscribe(telemetry, topic="**/telemetry", msgfrom=rb.LastReceived)
 ```
 
-The subscribed function gets called with the using the message payload:
-`slogan` as first argument and `severity` as second argument.
+The subscribed `alarm` function gets called with the using the message payload:
+`slogan` as first argument and `severity` as second argument:
+
+```python
+cli.publish("alarm", "mydevice: battery very low", "CRITICAL")
+```
 
 The option `msgfrom` is for receiving published messages when the component
 was not subscribed to the topic, for example because it was not connected when
 the messages was published.
 
+## RPC
 
-### Subscribe to a topic space
-
-You can subscribe to set of topics (a topic space) using a 'regular expression':
-then all topics matching the pattern are subscribed.
-
-The subscribed function gets called with the originating topic as
-first argument followed by the pubsub message payload arguments. 
-
-```python
-import rembus as rb
-
-def telemetry(topic, data):
-    print(f"from {topic}: do something with {data}")
-
-sub = rb.node("collector")
-sub.subscribe(telemetry, topic="*/telemetry")
-```
-
-### Expose a RPC service
-
-A RPC service is implemented with a function named as the exposed service.
+### Expose
 
 ```python
 import rembus as rb
@@ -321,13 +248,11 @@ def add(x,y):
     return x+y
 
 handle = rb.node('calculator')
-
 handle.expose(add)
+handle.wait()
 ```
 
-### Call a RPC service
-
-The `calculator` component exposes the `add` service, the RPC client will invoke as:
+### Call
 
 ```python
 import rembus as rb
@@ -335,4 +260,3 @@ import rembus as rb
 handle = rb.node("myclient")
 result = handle.rpc('add', 1, 2)
 ```
-
