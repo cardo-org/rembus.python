@@ -76,7 +76,7 @@ import rembus as rb
 
 # sync version
 bro = rb.node() # equivalent to rb.node(port = 8000)
-bro.wait() # run broker loop, unnecessary if running interpreter
+bro.wait() # event loop, not needed in interactive interpreter
 
 
 # async version
