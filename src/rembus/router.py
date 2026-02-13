@@ -26,6 +26,8 @@ from .core import Supervised, RbURL, domain, bytes_to_b64
 
 logger = logging.getLogger(__name__)
 
+__all__ = ["bottom_router", "top_router", "Router"]
+
 
 class Policy(Enum):
     """Load balancing policies for selecting twins."""
@@ -137,8 +139,8 @@ async def init_router(router_name, policy, uid, port, secure, isserver, schema):
 
 class Router(Supervised):
     """
-    A Router is a central component that manages connections and interactions
-    between Rembus components(Twins).
+    The core Router routes messages between components, each represented
+    by a :class:`~rembus.twin.Twin` instance.
     """
 
     def __init__(
@@ -326,7 +328,7 @@ class Router(Supervised):
         data = rp.tag2df(msg.data)
         logger.debug("[%s] rpc: %s", self, msg)
         topic = msg.topic
-        if msg.twin.isrepl():
+        if msg.twin.isbroker():
             await self.send_message(msg)
         elif topic in self.handler and self.isauthorized(topic, msg.twin):
             status = rp.STS_OK
@@ -374,7 +376,7 @@ class Router(Supervised):
 
     async def _handle_admin(self, msg: rp.AdminMsg) -> None:
         logger.debug("[%s] admin: %s", self, msg)
-        if msg.twin.isrepl():
+        if msg.twin.isbroker():
             await self.send_message(msg)
         else:
             await admin_command(msg)
@@ -591,7 +593,7 @@ def top_router(router: Supervised) -> Router:
 
 def bottom_router(router: Supervised) -> Supervised:
     """
-    Return the router attached to the twins (the lowest router in the chain).
+    Return the router attached to the twin (the lowest router in the chain).
     """
     r = router
     while r.upstream is not None:

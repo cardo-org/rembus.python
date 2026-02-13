@@ -48,7 +48,7 @@ async def test_publish(mocker, ws_mock):
 
     rb = await rembus.component("foo")
     mocked_connect.assert_called_once()
-    assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000/foo"
+    assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000"
 
     assert rb.uid.id == "foo"
 

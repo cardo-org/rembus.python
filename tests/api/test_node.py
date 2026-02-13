@@ -98,7 +98,7 @@ def test_publish(server):
 
     rb = rembus.node("cmp.net")
     assert repr(rb.uid) == "ws://127.0.0.1:8000/cmp.net"
-    assert rb.isrepl() is False
+    assert rb.isbroker() is False
     assert rb.isopen()
 
     # implemented but without meaning in this rembus version

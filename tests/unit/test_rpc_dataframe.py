@@ -42,7 +42,7 @@ async def test_rpc(mocker, ws_mock):
 
     rb = await rembus.component("bar")
     mocked_connect.assert_called_once()
-    assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000/bar"
+    assert mocked_connect.call_args[0][0] == "ws://127.0.0.1:8000"
     await rb.expose(echo_service)
 
     # for payload in [df, df_list]:

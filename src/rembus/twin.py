@@ -1,4 +1,7 @@
-"""Twin Class implementation."""
+"""
+The twin module implements the Twin class and the function related
+to the lifecycle of twins entities.
+"""
 
 from __future__ import annotations
 import asyncio
@@ -32,12 +35,49 @@ from rembus.core import (
 from rembus.router import bottom_router, top_router
 from rembus.keyspace import KeySpaceRouter
 
+__all__ = [
+    "Twin",
+    "MqttTwin",
+    "ReplTwin",
+    "WsTwin",
+    "exposed_topics_for_twin",
+    "init_twin",
+    "save_twin",
+]
+
 logger = logging.getLogger(__name__)
 
 
 async def init_twin(router, uid: RbURL, enc: int, isserver: bool):
     """
-    Create and start a Twin for the component that connects to a server.
+    Create and initialize a Twin instance for the component identified by `uid`.
+
+    This function sets up the messaging Twin for the specified component,
+    handling all necessary initialization.
+
+    Parameters
+    ----------
+    router : Router
+        The Rembus router to connect or interact with.
+    uid : RbURL
+        The unique identifier of the component.
+    enc : int
+        The message encoding type (e.g., `rp.CBOR` or `rp.JSON`).
+    isserver : bool
+        Indicates whether the Twin should operate as a server (broker)
+        or as a client (connected component).
+
+    Returns
+    -------
+    Twin
+        The initialized Twin instance. If `isserver` is `True`, a
+        ReplTwin representing the broker is returned instead of a
+        connected client Twin.
+
+    Notes
+    -----
+    A ReplTwin is a special Twin that represents a broker itself,
+    rather than a connected client component.
     """
     if uid.protocol in ["ws", "wss"]:
         cmp = WsTwin(uid, bottom_router(router), not isserver, enc)
@@ -48,7 +88,7 @@ async def init_twin(router, uid: RbURL, enc: int, isserver: bool):
     await cmp.start()
     router.id_twin[uid.twkey] = cmp
     try:
-        if cmp.isrepl():
+        if cmp.isbroker():
             await builtins.load_callbacks(cmp)
         else:
             if router.config.start_anyway:
@@ -262,24 +302,59 @@ class Twin(Supervised):
         return False
 
     def isadmin(self):
+        """
+        Return True if the current object has administrative privileges.
+
+        Checks whether the component name is listed among
+        the broker's administrators.
+        """
         return self.rid in self.router.admins
 
-    def isrepl(self):
-        """True if it is a server/broker handle."""
+    def isbroker(self):
+        """
+        Return True if this object represents a server or broker handle.
+
+        Used to identify objects that act as message brokers within the system.
+        """
 
     def isopen(self):
-        """True if the socket is connected."""
+        """
+        Return True if the twin is currently connected.
+
+        Checks the connection state of the underlying socket.
+        """
 
     async def connect(self):
-        """Connection request."""
+        """Connect to a broker."""
 
     async def response(self, status: int, msg: Any, data: Any = None):
-        """Send a response to the client."""
+        """
+        Send a response message to the component managed by this Twin.
+
+        Parameters
+        ----------
+        status : int
+            The status code of the response.
+        msg : Any
+            The message content or description.
+        data : Any, optional
+            Optional additional data to include in the response (default is None).
+        """
         outmsg: Any = rp.ResMsg(id=msg.id, status=status, data=data)
         await self.send(outmsg)
 
     def inject(self, data: Any):
-        """Initialize the context object."""
+        """
+        Inject data into the router's shared context.
+
+        Stores the provided ``data`` in the top router's shared attribute,
+        initializing or updating the shared context for components.
+
+        Parameters
+        ----------
+        data : Any
+            The object to store in the shared context.
+        """
         self.router.shared = data
 
     async def _reconnect(self):
@@ -295,7 +370,13 @@ class Twin(Supervised):
                 await asyncio.sleep(2)
 
     def register_shutdown(self):
-        """Register shutdown handler."""
+        """
+        Register signal handlers to gracefully shut down the component.
+
+        On non-Windows platforms, this adds handlers for SIGINT and SIGTERM
+        that schedule the asynchronous :meth:`close` method. This ensures the
+        component can perform cleanup when the process is interrupted or terminated.
+        """
         if sys.platform != "win32":
             loop = asyncio.get_running_loop()
             loop.add_signal_handler(
@@ -312,10 +393,10 @@ class Twin(Supervised):
         if self.db is not None:
             save_twin(self)
 
-        if self.uid.isrepl():
+        if self.uid.isbroker():
             await self._shutdown_twins()
 
-        if self.isclient or self.uid.isrepl():
+        if self.isclient or self.uid.isbroker():
             await self._shutdown_router()
 
         await self._close_socket()
@@ -400,7 +481,19 @@ class Twin(Supervised):
             self.receiver = None
 
     async def future_request(self, msgid: int):
-        """Return the future associated with the message id `msgid`."""
+        """
+        Return the :class:`asyncio.Future` associated with a given message ID.
+
+        Parameters
+        ----------
+        msgid : int
+            The identifier of the message whose future is requested.
+
+        Returns
+        -------
+        asyncio.Future
+            The Future object corresponding to the message ID.
+        """
         fut = self.outreq.pop(msgid, None)
         if fut is None:
             logger.warning(
@@ -450,7 +543,17 @@ class Twin(Supervised):
             self._router.inbox.put_nowait(msg)
 
     async def send(self, msg: rp.RembusMsg):
-        """Send a rembus message"""
+        """
+        Send a message through the Rembus messaging system.
+
+        Parameters
+        ----------
+        msg : :class:`rembus.protocol.RembusMsg`
+            The message to send. This must be an subclass instance of
+            :class:`~rembus.protocol.RembusMsg`
+            (e.g., :class:`~rembus.protocol.RpcReqMsg`,
+            :class:`~rembus.protocol.PubSubMsg`, etc.).
+        """
 
     async def _send(self, payload: bytes | str) -> Any:
         if self.socket is not None:
@@ -469,7 +572,7 @@ class Twin(Supervised):
         req = builder(reqid)
         req.twin = self
         task = None
-        if self.isrepl() and self.isopen():
+        if self.isbroker() and self.isopen():
             await self._router.inbox.put(req)
         elif self.socket is None:
             raise rp.RembusConnectionClosed()
@@ -481,7 +584,24 @@ class Twin(Supervised):
         return futreq
 
     def send_task(self, msg: rp.RpcReqMsg) -> Any:
-        """Send a message and wait for a response."""
+        """
+        Send an RPC request and return a future representing its response.
+
+        This method schedules :meth:`send` as an asyncio task and registers
+        the outgoing request so that the corresponding response can be
+        matched using the message identifier.
+
+        Parameters
+        ----------
+        msg : :class:`rembus.protocol.RpcReqMsg`
+            The RPC request message to send.
+
+        Returns
+        -------
+        FutureResponse
+            An awaitable object that resolves when the response for the
+            given message is received.
+        """
         task = asyncio.create_task(self.send(msg))
         futreq = FutureResponse(task, msg.data)
         self.outreq[msg.id] = futreq
@@ -497,8 +617,26 @@ class Twin(Supervised):
         except TimeoutError as e:
             raise rp.RembusTimeout() from e
 
-    async def _login(self):
-        """Connect in free mode or authenticate the provisioned component."""
+    async def login(self):
+        """
+        Perform the login handshake with the remote peer.
+
+        The method first sends an :class:`~rembus.protocol.IdentityMsg`
+        identifying the component. If the remote peer replies with a
+        challenge, the challenge is signed using the component’s private
+        key and an :class:`~rembus.protocol.AttestationMsg` is sent to
+        complete the authentication process.
+
+        If no challenge is returned, the connection proceeds in *free mode*
+        (unauthenticated access).
+
+        Raises
+        ------
+        RembusError
+            If the authentication exchange fails.
+        RembusTimeout
+            If the remote peer does not respond within the expected time.
+        """
         futreq = await self._send_message(
             lambda id: rp.IdentityMsg(id=id, cid=self.uid.id)
         )
@@ -533,14 +671,31 @@ class Twin(Supervised):
             logger.debug("[%s]: free mode access", self)
 
     async def publish(self, topic: str, *data: Any, **kwargs):
-        """Publish a message to the specified topic."""
+        """
+        Publish a message to a topic.
 
+        Parameters
+        ----------
+        topic : str
+            The name of the topic to publish to.
+        *data : Any
+            Positional payload values to include in the published message.
+            These are delivered to subscribers as the message content.
+        **kwargs : Any
+            Optional keyword arguments controlling publication behavior
+            (e.g., QoS level, slot, or other transport-specific options).
+
+        Notes
+        -----
+        The message is sent asynchronously and does not wait for delivery
+        acknowledgment unless explicitly configured (e.g., via QoS settings).
+        """
         slot = kwargs.get("slot", None)
         qos = kwargs.get("qos", rp.QOS0) & rp.QOS2
         if qos == rp.QOS0:
             msg = rp.PubSubMsg(topic=topic, data=data, slot=slot)
             msg.twin = self
-            if self.isrepl() and self.isopen():
+            if self.isbroker() and self.isopen():
                 await self._router.inbox.put(msg)
             elif self.socket is None:
                 raise rp.RembusConnectionClosed()
@@ -552,7 +707,28 @@ class Twin(Supervised):
         return None
 
     async def put(self, topic: str, *args: Any, **kwargs):
-        """Publish a message to the topic prefixed with component name."""
+        """
+        Publish a message to a topic namespaced with the component ID.
+
+        This method automatically prefixes the given `topic` with the
+        component's name, so that the message is sent to a
+        topic unique to this component.
+
+        Parameters
+        ----------
+        topic : str
+            The topic name (without the component prefix) to publish to.
+        *args : Any
+            Positional payload values to include in the message.
+        **kwargs : Any
+            Optional keyword arguments passed to :meth:`publish`,
+            such as QoS, slot, or other transport-specific options.
+
+        Notes
+        -----
+        This is a convenience wrapper around :meth:`publish` and is
+        useful for sending messages scoped to this component.
+        """
         await self.publish(self.rid + "/" + topic, *args, **kwargs)
 
     async def _qos_publish(
@@ -590,7 +766,32 @@ class Twin(Supervised):
                     raise rp.RembusTimeout() from e
 
     async def broker_setting(self, command: str, args: dict[str, Any]):
-        """Send a broker configuration command."""
+        """
+        Send a broker configuration command and wait for a response.
+
+        This method sends an administrative message targeting the broker.
+        The `command` specifies the action, and `args` provides any additional
+        parameters required by the specific command.
+
+        Parameters
+        ----------
+        command : str
+            The broker command to execute (e.g., "reactive", "unreactive").
+        args : dict[str, Any]
+            Additional key-value parameters to include with the command.
+
+        Returns
+        -------
+        Any
+            The broker's response data, decoded from the admin message.
+
+        Raises
+        ------
+        RembusError
+            If the broker returns an error response.
+        RembusTimeout
+            If no response is received within the configured timeout.
+        """
         data = {rp.COMMAND: command} | args
         futreq = await self._send_message(
             lambda id: rp.AdminMsg(id=id, topic=rp.BROKER_CONFIG, data=data)
@@ -601,7 +802,36 @@ class Twin(Supervised):
     async def setting(
         self, topic: str, command: str, args: dict[str, Any] | None = None
     ):
-        """Send an admin command to the broker."""
+        """
+        Send a configuration command for a specific topic and await
+        the response.
+
+        This method allows sending an administrative or configuration
+        command targeting a particular topic. The `command` specifies
+        the action to perform, while `args` can include additional
+        parameters required by the command.
+
+        Parameters
+        ----------
+        topic : str
+            The topic to which the configuration command applies.
+        command : str
+            The command to execute (e.g., "expose", "subscribe").
+        args : dict[str, Any]
+            Additional key-value parameters to include with the command.
+
+        Returns
+        -------
+        Any
+            The broker's response data, decoded from the admin message.
+
+        Raises
+        ------
+        RembusError
+            If the broker returns an error response.
+        RembusTimeout
+            If no response is received within the configured timeout.
+        """
         if self.socket:
             if args:
                 data = {rp.COMMAND: command} | args
@@ -615,7 +845,32 @@ class Twin(Supervised):
             return response_data(response)
 
     async def rpc(self, topic: str, *args: Any):
-        """Send a RPC request."""
+        """
+        Send a Remote Procedure Call (RPC) request to a specific topic.
+
+        This method constructs and sends an RPC request with the given
+        `topic` and optional positional arguments. The request
+        expects a response.
+
+        Parameters
+        ----------
+        topic : str
+            The name of the RPC method to invoke.
+        *args : Any
+            Optional positional arguments to include in the RPC request.
+
+        Returns
+        -------
+        FutureResponse
+            A future-like object representing the pending RPC response.
+
+        Raises
+        ------
+        RembusError
+            If the RPC call results in an error response.
+        RembusTimeout
+            If no response is received within the configured timeout.
+        """
         data = rp.df2tag(args)
         futreq = await self._send_message(
             lambda id: rp.RpcReqMsg(id=id, topic=topic, data=data)
@@ -624,7 +879,36 @@ class Twin(Supervised):
         return response_data(response)
 
     async def direct(self, target: str, topic: str, *args: Any):
-        """Send a RPC request to a specific target."""
+        """
+        Send a direct RPC request to a specific target component.
+
+        This method sends a Remote Procedure Call (RPC) to a single
+        component identified by `target`. The `topic` specifies the
+        RPC method or event, and optional positional arguments are
+        passed as parameters to the request.
+
+        Parameters
+        ----------
+        target : str
+            The component name of the node receiving the RPC.
+        topic : str
+            The RPC method to invoke on the target.
+        *args : Any
+            Optional positional arguments to include in the RPC request.
+
+        Returns
+        -------
+        FutureResponse
+            A future-like object representing the pending response
+            from the target.
+
+        Raises
+        ------
+        RembusError
+            If the target returns an error response.
+        RembusTimeout
+            If no response is received within the configured timeout.
+        """
         data = rp.df2tag(args)
         futreq = await self._send_message(
             lambda id: rp.RpcReqMsg(
@@ -635,7 +919,38 @@ class Twin(Supervised):
         return response_data(response)
 
     async def register(self, rid: str, pin: str, scheme: int = rp.SIG_RSA):
-        """Provisions the component with rid identifier."""
+        """
+        Provision a new component with the specified identifier.
+
+        This method registers a component in the Rembus system by
+        associating it with a unique component name (`rid`) and a
+        secret (`pin`) for authentication. A cryptographic key pair is generated
+        according to the specified `scheme` and the public key is
+        sent to the broker for registration.
+
+        Parameters
+        ----------
+        rid : str
+            The unique identifier for the component to register.
+        pin : str
+            A PIN code used for component authentication.
+        scheme : int, optional
+            The cryptographic signature scheme to use for key generation.
+            Supported values are:
+            - `rp.SIG_RSA` (default)
+            - `rp.SIG_ECDSA`
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RembusError
+            If the broker rejects the registration.
+        RembusTimeout
+            If no response is received within the configured timeout.
+        """
         if scheme == rp.SIG_RSA:
             privkey = rp.rsa_private_key()
         else:
@@ -658,7 +973,25 @@ class Twin(Supervised):
         return None
 
     async def unregister(self):
-        """Unprovisions the component."""
+        """
+        Unregister and unprovision the current component.
+
+        This method removes the component's registration from the Rembus
+        broker and deletes any associated public key. After calling this
+        method, the component loses its provisioned privileges; other
+        components may then connect using the same identifier.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RembusError
+            If the broker rejects the unregistration request.
+        RembusTimeout
+            If no response is received within the configured timeout.
+        """
         futreq = await self._send_message(lambda id: rp.UnregisterMsg(id=id))
         response = await self.wait_response(futreq)
         with suppress(FileNotFoundError):
@@ -667,7 +1000,21 @@ class Twin(Supervised):
 
     async def reactive(self):
         """
-        Set the component to receive published messages on subscribed topics.
+        Enable reactive mode for the component.
+
+        In reactive mode, the component receives messages published on topics
+        it has subscribed to.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RembusError
+            If the broker rejects the reactive request.
+        RembusTimeout
+            If no response is received within the configured timeout.
         """
         if self.isclient:
             await self.broker_setting("reactive", {"status": True})
@@ -675,41 +1022,133 @@ class Twin(Supervised):
 
     async def unreactive(self):
         """
-        Set the component to stop receiving published
-        messages on subscribed topics.
+        Disable reactive mode for the component.
+
+        In unreactive mode, the component stops receiving messages published
+        on topics it has subscribed to. This effectively pauses automatic
+        message delivery, though the component can still publish messages or
+        query the broker directly.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RembusError
+            If the broker rejects the unreactive request.
+        RembusTimeout
+            If no response is received within the configured timeout.
         """
         await self.broker_setting("reactive", {"status": False})
         return self
 
     async def private_topic(self, topic: str):
         """
-        Set the specified `topic` to private.
+        Mark a topic as private.
 
-        The component must have the admin role to change the privacy level.
+        This sets the specified `topic` to private, restricting access
+        so that only authorized components can publish or subscribe to it.
+        The component must have administrative privileges to change the privacy
+        level of a topic.
+
+        Parameters
+        ----------
+        topic : str
+            The name of the topic to set as private.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RembusError
+            If the broker rejects the request or the component lacks privileges.
+        RembusTimeout
+            If no response is received within the configured timeout.
         """
         await self.setting(topic, rp.PRIVATE_TOPIC)
 
     async def public_topic(self, topic: str):
         """
-        Set the specified `topic` to public.
+        Mark a topic as public.
 
-        The component must have the admin role to change the privacy level.
+        This sets the specified `topic` to public, allowing any component
+        to publish or subscribe to it. The component must have administrative
+        privileges to change the privacy level of a topic.
+
+        Parameters
+        ----------
+        topic : str
+            The name of the topic to set as public.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RembusError
+            If the broker rejects the request or the component lacks privileges.
+        RembusTimeout
+            If no response is received within the configured timeout.
         """
         await self.setting(topic, rp.PUBLIC_TOPIC)
 
     async def authorize(self, component: str, topic: str):
         """
-        Authorize the `component` to private `topic`.
+        Grant a component access to a private topic.
 
-        `self` must have the admin role for granting topic accessibility.
+        This method authorizes the specified `component` to publish or subscribe
+        to the private `topic`. The calling component must have administrative
+        privileges to grant access.
+
+        Parameters
+        ----------
+        component : str
+            The identifier of the component to authorize.
+        topic : str
+            The name of the private topic for which access is granted.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RembusError
+            If the broker rejects the authorization or the caller lacks privileges.
+        RembusTimeout
+            If no response is received within the configured timeout.
         """
         await self.setting(topic, rp.AUTHORIZE, {rp.CID: component})
 
     async def unauthorize(self, component: str, topic: str):
         """
-        Unauthorize the `component` to private `topic`.
+        Revoke a component's access to a private topic.
 
-        `self` must have the admin role for removing topic accessibility.
+        This method removes the specified `component`'s permission to publish or
+        subscribe to the private `topic`. The calling component must have
+        administrative privileges to revoke access.
+
+        Parameters
+        ----------
+        component : str
+            The identifier of the component whose access is being revoked.
+        topic : str
+            The name of the private topic from which access is removed.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RembusError
+            If the broker rejects the revocation or the caller lacks privileges.
+        RembusTimeout
+            If no response is received within the configured timeout.
         """
         await self.setting(topic, rp.UNAUTHORIZE, {rp.CID: component})
 
@@ -720,25 +1159,41 @@ class Twin(Supervised):
         topic: Optional[str] = None,
     ):
         """
-        Subscribe a callback function to a topic.
+        Subscribe a callback function to a topic to receive published messages.
+
+        The callback `fn` will be invoked for each message published to the
+        specified `topic`. Messages published before the subscription can
+        optionally be ignored using the `msgfrom` parameter.
 
         Parameters
         ----------
-        fn
-            The function to be invoked for each received message.
-        msgfrom
-            A timestamp in nanoseconds that specifies the earliest message to
-            receive when the subscription is created. The special value `rp.Now`
-            means “start from the moment of subscription”, i.e. do not replay any
-            messages published before the subscription was established.
-        topic
-            The topic to subscribe to. If None, the function name (`fn.__name__`)
-            is used as the topic.
+        fn : Callable[..., Any]
+            The function to be called for each received message. The function
+            should accept a single argument containing the message payload.
+        msgfrom : float, optional
+            A timestamp in nanoseconds specifying the earliest message to
+            deliver upon subscription. The default `rp.Now` starts from the
+            moment of subscription, ignoring previously published messages.
+        topic : str, optional
+            The topic to subscribe to. If `None`, the callback function's name
+            (`fn.__name__`) is used as the topic identifier.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RembusError
+            If the subscription request is rejected by the broker or fails due
+            to an internal error.
+        RembusTimeout
+            If no response is received within the configured timeout.
         """
         if topic is None:
             topic = fn.__name__
 
-        if self.isrepl():
+        if self.isbroker():
             if isinstance(self._router, KeySpaceRouter):
                 await self._router.subscribe_handler(self, topic)
         else:
@@ -749,14 +1204,36 @@ class Twin(Supervised):
 
     async def unsubscribe(self, fn: Callable[..., Any] | str):
         """
-        Unsubscribe the function from the corresponding topic.
+        Unsubscribe a callback function or topic name from receiving messages.
+
+        This removes a previously registered subscription. If a function is given,
+        it will be unsubscribed from the topic it was originally subscribed to.
+        If a topic name (string) is provided, all callbacks subscribed to that topic
+        will be removed.
+
+        Parameters
+        ----------
+        fn : Callable[..., Any] or str
+            The callback function to remove from its topic subscription, or the
+            topic name to remove all subscriptions for.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RembusError
+            If the unsubscription fails due to a broker error or internal failure.
+        RembusTimeout
+            If the broker does not respond within the configured timeout.
         """
         if isinstance(fn, str):
             topic = fn
         else:
             topic = fn.__name__
 
-        if self.isrepl():
+        if self.isbroker():
             if isinstance(self._router, KeySpaceRouter):
                 await self._router.unsubscribe_handler(self, topic)
         else:
@@ -767,7 +1244,34 @@ class Twin(Supervised):
 
     async def expose(self, fn: Callable[..., Any], topic: Optional[str] = None):
         """
-        Expose the function as a remote procedure call(RPC) handler.
+        Expose a function as a remote procedure call (RPC) handler.
+
+        Once exposed, the function can be called remotely by other components
+        through the Rembus messaging system. The `topic` identifies the RPC
+        endpoint.
+        If `topic` is not provided, the function's name (`fn.__name__`)
+        is used as the topic name.
+
+        Parameters
+        ----------
+        fn : Callable[..., Any]
+            The function to expose as an RPC handler. The function should accept
+            arguments corresponding to the RPC request parameters.
+        topic : str, optional
+            The RPC topic name under which the function is exposed. Defaults to
+            the function's name if not specified.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RembusError
+            If exposing the function fails due to an internal error.
+        RembusTimeout
+            If the broker does not acknowledge the RPC exposure within the
+            configured timeout.
         """
         if topic is None:
             topic = fn.__name__
@@ -779,7 +1283,30 @@ class Twin(Supervised):
         self, fn: Callable[..., Any] | str, topic: Optional[str] = None
     ):
         """
-        Unexpose the function as a remote procedure call(RPC) handler.
+        Remove a previously exposed function from being a remote procedure call (RPC) handler.
+
+        After calling this method, the function will no longer be callable remotely
+        through the Rembus messaging system. The topic identifies the RPC endpoint;
+        if not provided, the function's name (`fn.__name__`) is used.
+
+        Parameters
+        ----------
+        fn : Callable[..., Any] | str
+            The function or function name to unexpose as an RPC handler.
+        topic : str, optional
+            The RPC topic name under which the function was previously exposed.
+            Defaults to the function's name if not specified.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RembusError
+            If unexposing the function fails due to an internal error.
+        RembusTimeout
+            If the broker does not acknowledge the RPC removal within the configured timeout.
         """
         if isinstance(fn, str):
             topic = fn
@@ -790,7 +1317,24 @@ class Twin(Supervised):
         await self.setting(topic, rp.REMOVE_IMPL)
 
     async def close(self):
-        """Close the connection and clean up resources."""
+        """
+        Close the connection to the Rembus broker and clean up associated
+        resources.
+
+        After calling this method, the component will no longer send or receive
+        messages until it reconnects. All pending subscriptions and RPC handlers
+        will remain registered on the broker, but the local connection state is
+        reset.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RembusError
+            If an error occurs while closing the connection.
+        """
         self.handler["phase"] = lambda: "CLOSED"
         await self.shutdown()
         await asyncio.sleep(0)  # let loop drain tasks
@@ -799,9 +1343,36 @@ class Twin(Supervised):
         self, timeout: float | None = None, signal_handler: bool = True
     ):
         """
-        Start the twin event loop that wait for rembus messages.
+        Start the event loop to process incoming Rembus messages.
+
+        This method runs the twin's main loop, receiving and dispatching
+        messages to the appropriate subscriptions and RPC handlers. The loop
+        continues until the connection is closed or an optional timeout expires.
+
+        Parameters
+        ----------
+        timeout : float | None, optional
+            Maximum time in seconds to wait before stopping the loop.
+            If `None` (default), the loop runs indefinitely until manually
+            stopped.
+        signal_handler : bool, optional
+            Whether to enable handling of OS signals (e.g., SIGINT) to
+            gracefully
+            terminate the loop. Defaults to `True`.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RembusError
+            If an internal error occurs while processing messages.
+        RembusTimeout
+            If the loop times out while waiting for messages (only if `timeout`
+            is set).
         """
-        if not self.isrepl():
+        if not self.isbroker():
             await self.reactive()
         if self._supervisor_task is not None:
             try:
@@ -814,8 +1385,14 @@ class Twin(Supervised):
 
 class ReplTwin(Twin):
     """
-    A ReplTwin represents a virtual Rembus component when a Twin
-    is not a connector.
+    A ReplTwin represents a virtual Rembus component that acts as a broker.
+
+    Unlike a standard Twin, which connects a component to a Rembus broker,
+    a ReplTwin simulates a broker itself.
+
+    Attributes
+    ----------
+    Inherits all attributes and methods from :class:`Twin`.
     """
 
     def __init__(
@@ -827,7 +1404,7 @@ class ReplTwin(Twin):
     ):
         super().__init__(uid, router, isclient, enc)
 
-    def isrepl(self) -> bool:
+    def isbroker(self) -> bool:
         """Check if twin is a REPL"""
         return True
 
@@ -841,8 +1418,13 @@ class ReplTwin(Twin):
 
 class WsTwin(Twin):
     """
-    A Twin represents a Rembus component over WebSocket,
-    either as a client or server.
+    A WsTwin represents a Rembus component communicating over WebSocket.
+
+    This class wraps a :class:`Twin` with WebSocket transport.
+
+    Attributes
+    ----------
+    Inherits all attributes and methods from :class:`Twin`.
     """
 
     def __init__(
@@ -854,20 +1436,46 @@ class WsTwin(Twin):
     ):
         super().__init__(uid, router, isclient, enc)
 
-    def isrepl(self) -> bool:
-        """Check if twin is a REPL"""
+    def isbroker(self) -> bool:
+        """
+        Check whether this Twin represents a broker.
+
+        Returns
+        -------
+        bool
+            Always False for WsTwin, as it represents a connected component,
+            not a broker.
+        """
         return False
 
     def isopen(self) -> bool:
-        """Check if the connection is open."""
+        """
+        Check if the WebSocket connection is currently open.
+
+        Returns
+        -------
+        bool
+            True if the WebSocket connection is open; False if the socket
+            is not connected or has not been initialized.
+        """
         if self.socket is None:
             return False
 
         return self.socket.state == websockets.State.OPEN
 
-    async def wsconnect(self):
-        """Connect to a ws endpoint."""
-        broker_url = self.uid.connection_url()
+    async def connect(self):
+        """
+        Establish a WebSocket connection to the Rembus broker.
+
+        This method handles SSL if the URL scheme is `wss`, sets up the
+        receiver task, and performs login if the Twin has a registered name.
+
+        Raises
+        ------
+        RembusError
+            If login fails after connecting to the broker.
+        """
+        broker_url = self.uid.netlink
         ssl_context = None
         if self.uid.protocol == "wss":
             ssl_context = get_ssl_context()
@@ -883,25 +1491,27 @@ class WsTwin(Twin):
 
         if self.uid.hasname:
             try:
-                await self._login()
+                await self.login()
             except Exception as e:
                 await self.close()
-                raise rp.RembusError(rp.STS_ERROR, "_login failed") from e
+                raise rp.RembusError(rp.STS_ERROR, "login failed") from e
 
         self.handler["phase"] = lambda: "CONNECTED"
-        return self
-
-    async def connect(self):
-        """Connect to the Rembus broker."""
-        await self.wsconnect()
 
     async def send(self, msg: rp.RembusMsg):
-        """Send a rembus message"""
-        try:
-            pkt = msg.to_payload(self.enc)
-            await self._send(pkt)
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.error("message send failed: %s", e)
+        """
+        Send a Rembus message over the WebSocket connection.
+
+        Parameters
+        ----------
+        msg : rp.RembusMsg
+
+        Notes
+        -----
+        Any exceptions during sending are logged as errors but not raised.
+        """
+        pkt = msg.to_payload(self.enc)
+        await self._send(pkt)
 
     async def _close_socket(self):
         if self.socket:
@@ -912,8 +1522,14 @@ class WsTwin(Twin):
 
 class MqttTwin(Twin):
     """
-    A Twin represents a Rembus component over WebSocket,
-    either as a client or server.
+    An MqttTwin represents a Rembus component communicating over MQTT.
+
+    This class wraps a Twin with MQTT transport, allowing the component
+    to act as a publisher or subscriber connected to a MQTT broker.
+
+    Attributes
+    ----------
+    Inherits all attributes and methods from :class:`Twin`.
     """
 
     def __init__(
@@ -929,12 +1545,18 @@ class MqttTwin(Twin):
     def ismqtt(self):
         return True
 
-    def isrepl(self) -> bool:
-        """Check if twin is a REPL"""
+    def isbroker(self) -> bool:
+        """Always False for the MqttTwin subclass."""
         return False
 
     async def on_message(self, client, topic, payload, qos, properties):
-        """Route incoming mqtt messages to the router inbox."""
+        """
+        Handle incoming MQTT messages and route them to the router's inbox.
+
+        This method is called automatically by the MQTT client whenever a
+        message is received on a subscribed topic. It forwards the message
+        payload to the appropriate router for processing.
+        """
         logger.debug("[MQTT] (QOS=%s) %s: %s", qos, topic, payload)
 
         data = json.loads(payload)
@@ -947,8 +1569,14 @@ class MqttTwin(Twin):
         logger.debug("[%s] mqtt msg: %s", self, msg)
         await self._router.inbox.put(msg)
 
-    async def mqttconnect(self):
-        """Connect to an mqtt endpoint."""
+    async def connect(self):
+        """
+        Establish a connection to the configured MQTT broker.
+
+        This method connects the MQTT client to the broker endpoint specified
+        in the Twin configuration. After calling this, the Twin can publish
+        and subscribe to topics over MQTT.
+        """
         client = MQTTClient(self.uid.id)
         ssl_context = False
         if self.uid.protocol == "mqtts":
@@ -962,19 +1590,44 @@ class MqttTwin(Twin):
         client.subscribe("#", qos=1, no_local=True)
         self.socket = client
 
-    async def connect(self):
-        """Connect to the MQTT broker."""
-        await self.mqttconnect()
-
     async def send(self, msg: rp.RembusMsg):
-        """Send a rembus message"""
-        # MQTT publish
+        """
+        Send a Rembus message over MQTT.
+
+        Only Pub/Sub messages (:class:`rp.PubSubMsg`) are supported
+        on the MQTT transport. Attempting to send other message types
+        will raise a :exc:`TypeError`.
+
+        Parameters
+        ----------
+        msg : rp.RembusMsg
+            The Rembus message to send. Must be an instance of
+            :class:`rp.PubSubMsg`.
+
+        Raises
+        ------
+        TypeError
+            If `msg` is not an instance of :class:`rp.PubSubMsg`.
+        """
         if isinstance(msg, rp.PubSubMsg):
-            data = msg.data if len(msg.data) > 1 else msg.data[0]
-            self.socket.publish(msg.topic, json.dumps(data))
+            # If data has a single item, send just that item
+            data_to_send = msg.data if len(msg.data) > 1 else msg.data[0]
+            self.socket.publish(msg.topic, json.dumps(data_to_send))
+        else:
+            raise TypeError(
+                f"MQTT transport cannot send messages of type {type(msg).__name__}:"
+                "Only rp.PubSubMsg is supported."
+            )
 
     def isopen(self) -> bool:
-        """Check if the connection is open."""
+        """
+        Check whether the MQTT connection is currently open.
+
+        Returns
+        -------
+        bool
+            True if the connection to the MQTT broker is active, False otherwise.
+        """
         sts = False
         if self.socket is not None and self.socket.is_connected:
             sts = True

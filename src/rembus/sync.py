@@ -17,6 +17,8 @@ from rembus.component import _component
 
 from rembus.protocol import RembusConnectionClosed
 
+__all__ = ["node"]
+
 logger = logging.getLogger(__name__)
 
 
@@ -118,9 +120,9 @@ class node:  # pylint: disable=invalid-name
         """Check if the connection is open."""
         return self._rb.isopen()
 
-    def isrepl(self) -> bool:
-        """Check if the connection is a REPL (Read-Eval-Print Loop)."""
-        return self._rb.isrepl()
+    def isbroker(self) -> bool:
+        """Check if the node is a broker."""
+        return self._rb.isbroker()
 
     def inject(self, ctx: Any):
         """Initialize the context object."""

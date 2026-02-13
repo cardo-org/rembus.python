@@ -40,7 +40,16 @@ dependencies = [
 # Similar to `dependencies` above, these must be valid existing
 # projects.
 [project.optional-dependencies]
-dev = ["check-manifest", "bumpver", "twine"]
+
+dev = [
+  "check-manifest",
+  "bumpver",
+  "twine",
+  "sphinx",
+  "sphinx-inline-tabs",
+  "furo"
+]
+
 test = [
   "coverage",
   "mock",

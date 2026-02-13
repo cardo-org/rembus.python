@@ -78,7 +78,7 @@ def test_publish(server):
 
     rb = rembus.node(["pub1", "pub2"])
     assert repr(rb.uid) == "repl://:0/repl"
-    assert rb.isrepl() is True
+    assert rb.isbroker() is True
     assert rb.isopen()
 
     # implemented but without meaning in this rembus version

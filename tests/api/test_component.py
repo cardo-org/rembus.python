@@ -165,7 +165,7 @@ async def test_publish():
     cli = await rembus.component("ws://:8006/cmp.net")
     cli.inject(ctx)
 
-    assert cli.isrepl() is False
+    assert cli.isbroker() is False
     assert isinstance(cli.router, rembus.router.Router)
     assert "cmp.net@ws://127.0.0.1:8000" in repr(server.router)
     assert repr(cli.uid) == "ws://127.0.0.1:8006/cmp.net"
@@ -196,7 +196,7 @@ async def test_publish_slot():
     await server.subscribe(mytopic)
 
     cli = await rembus.component("ws://:8007/cmp.net")
-    assert cli.isrepl() is False
+    assert cli.isbroker() is False
     assert isinstance(cli.router, rembus.router.Router)
     assert repr(server.router) == "broker: {'cmp.net@ws://127.0.0.1:8000'}"
     assert repr(cli.uid) == "ws://127.0.0.1:8007/cmp.net"

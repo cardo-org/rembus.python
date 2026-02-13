@@ -6,37 +6,46 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'Rembus'
-copyright = '2025, Attilio Donà'
-author = 'Attilio Donà'
-release = '0.2.0'
+project = "Rembus"
+copyright = "2026, Attilio Donà"
+author = "Attilio Donà"
+release = "0.8.0"
+html_baseurl = "https://cardo-org.github.io/rembus.python/"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
     "sphinx.ext.autodoc",
-    'sphinx.ext.napoleon',
-    'sphinx.ext.autosummary',
-    'sphinx_inline_tabs',
+    "sphinx.ext.napoleon",
+    "sphinx.ext.autosummary",
+    "sphinx_inline_tabs",
 ]
 
 # 'sphinx_tabs.tabs',
 
+autodoc_mock_imports = [
+    "pydantic",
+]
+
 autodoc_default_options = {
-    'members': True,
-    'undoc-members': True,
-    'imported-members': True,  # this is important
+    "members": True,
+    "imported-members": False,
+    "show-inheritance": True,
 }
 
-templates_path = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+autodoc_typehints = "description"
+autodoc_class_signature = "separated"
+autodoc_inherit_docstrings = False
+
+templates_path = ["_templates"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'furo'
+html_theme = "furo"
 
 html_theme_options = {
     "light_css_variables": {
@@ -50,4 +59,4 @@ html_theme_options = {
     "sidebar_hide_name": False,
 }
 
-html_static_path = ['_static']
+html_static_path = ["_static"]

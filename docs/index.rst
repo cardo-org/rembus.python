@@ -17,7 +17,7 @@ The fastest way is to pull and run a docker image for the broker:
 
       .. code-block:: shell
 
-         docker pull rembus/broker
+         docker pull rembus/broker:1.2.3
          docker run --rm \
                     -p 8000:8000 \
                     -e REMBUS_DIR=/etc/rembus \
@@ -56,20 +56,20 @@ Rembus provides both a synchronous and an asynchronous API.
 
    .. code-block:: python
 
-         import rembus
+         import rembus as rb
 
-         rb = rembus.node("mynode")
-         rb.rpc("version")
+         cli = rb.node("mynode")
+         cli.rpc("version")
 
 .. tab:: async
 
    .. code-block:: python
 
-         import rembus
+         import rembus as rb
 
          async main():
-            rb = await rembus.component("mynode")
-            await rb.rpc("version")
+            cli = await rb.component("mynode")
+            await cli.rpc("version")
 
 `rembus.component` returns a coroutine object and `rembus.node` returns a blocking handle
 for interacting with the broker.
@@ -81,6 +81,7 @@ for interacting with the broker.
 
    reference/index
    pubsub/index
+   rpc/index
 
 Indices and tables
 ==================

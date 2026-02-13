@@ -8,20 +8,20 @@ The publisher
 
     .. code-block:: python
 
-         import rembus
+         import rembus as rb
 
-         rb = rembus.node("mynode")
-         rb.publish("mytopic", "mydata")
+         cli = rb.node("mynode")
+         cli.publish("mytopic", "mydata")
 
 .. tab:: async
 
     .. code-block:: python
 
-         import rembus
+         import rembus as rb
 
          async main():
-            rb = await rembus.component("mynode")
-            await rb.publish("mytopic", "mydata")
+            cli = await rb.component("mynode")
+            await cli.publish("mytopic", "mydata")
 
 
 The subscriber
@@ -32,30 +32,30 @@ The subscriber
 
     .. code-block:: python
 
-        import rembus
+        import rembus as rb
 
         def mytopic(data):
             print("Received data:", data)   
 
-        rb = rembus.node("mynode")
-        rb.subscribe(mytopic)
-        rb.reactive()
-        rb.wait()
+        sub = rb.node("mynode")
+        sub.subscribe(mytopic)
+        sub.reactive()
+        sub.wait()
 
 .. tab:: async
 
     .. code-block:: python
 
-        import rembus
+        import rembus as rb
         
         def mytopic(data):
             print("Received data:", data)
         
         async main():
-            rb = await rembus.component("mynode")
-            await rb.subscribe(mytopic)
-            await rb.reactive()
-            await rb.wait()
+            sub = await rb.component("mynode")
+            await sub.subscribe(mytopic)
+            await sub.reactive()
+            await sub.wait()
 
 .. toctree::
    :maxdepth: 2

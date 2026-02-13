@@ -1,6 +1,6 @@
 """
-Utility functions, messages and protocol constants related
-to the Rembus protocol.
+Rembus messages, protocol constants and utility function related
+to the transport layer.
 """
 
 import base64
@@ -18,8 +18,24 @@ from narwhals.typing import IntoFrame
 import polars as pl
 import pandas as pd
 import pyarrow as pa
-from pydantic import BaseModel, PrivateAttr, conint
+from pydantic import BaseModel, PrivateAttr
 import rembus.settings as rs
+
+__all__ = [
+    "CBOR",
+    "JSON",
+    "RembusMsg",
+    "Ack2Msg",
+    "AckMsg",
+    "AdminMsg",
+    "AttestationMsg",
+    "IdentityMsg",
+    "PubSubMsg",
+    "RegisterMsg",
+    "ResMsg",
+    "RpcReqMsg",
+    "UnregisterMsg",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -29,17 +45,18 @@ SIG_RSA = 0x1
 SIG_ECDSA = 0x2
 
 CBOR = 0
+"""CBOR encoding"""
+
 JSON = 1
+"""JSON encoding"""
 
 Now = 0.0
 LastReceived = float("inf")
 
-UInt8 = conint(ge=0, le=255)
-
-QOS0 = UInt8(0x00)
-QOS1 = UInt8(0x10)
-QOS2 = UInt8(0x30)
-SLOT_FLAG = UInt8(0x40)
+QOS0: int = 0x00
+QOS1: int = 0x10
+QOS2: int = 0x30
+SLOT_FLAG: int = 0x40
 
 MSGID_SZ = 8
 
@@ -100,8 +117,10 @@ AUTHORIZE = "authorize"
 UNAUTHORIZE = "unauthorize"
 STATUS = "status"
 
+
 def timestamp():
     return time.time_ns()
+
 
 def msgid():
     """Return an array of MSGID_SZ random bytes."""
@@ -130,9 +149,11 @@ def bytes2id(byte_data: bytearray) -> int:
     # Convert bytes to integer (assuming little-endian, adjust if big-endian)
     return from_bytes(byte_data)
 
+
 class SendDataAtRest:
     def __init__(self, twin):
         self.twin = twin
+
 
 class RembusException(Exception):
     """Base class for all Rembus exceptions."""
@@ -191,12 +212,34 @@ class RembusMsg(BaseModel):
         self._twin = rb
 
     def to_payload(self, enc: int) -> bytes | str:
-        """Return the message list of values to encode"""
-        raise RuntimeError("abstract rembus message")
+        """
+        Encode the message into a serializable format.
+
+        Parameters
+        ----------
+        enc : int
+            The encoding format. Supported values:
+
+            * :obj:`CBOR` : return a CBOR-encoded byte string
+            * :obj:`JSON` : return a JSON-encoded string
+
+        Returns
+        -------
+        bytes | str
+            The serialized payload. Returns ``bytes`` for CBOR encoding
+            and ``str`` for JSON encoding.
+
+        Notes
+        -----
+        This is an abstract method and must be implemented in subclasses.
+        It is available in all subclasses of `RembusMsg` such as
+        :class:`RpcReqMsg` and :class:`ResMsg`.
+        """
+        raise NotImplementedError("Subclasses must implement to_payload")
 
 
 class RpcReqMsg(RembusMsg):
-    """RPC request packet."""
+    """RPC request message."""
 
     id: int
     topic: str
@@ -204,7 +247,7 @@ class RpcReqMsg(RembusMsg):
     target: str | None = None
 
     def to_payload(self, enc: int) -> bytes | str:
-        """Return the RpcReqMsg list of values to encode"""
+        """Serialize the RpcRequest message."""
         if enc == CBOR:
             return cbor2.dumps(
                 [
@@ -227,7 +270,7 @@ class RpcReqMsg(RembusMsg):
 
 
 class ResMsg(RembusMsg):
-    """Response packet."""
+    """Response message."""
 
     id: int
     status: int
@@ -235,7 +278,7 @@ class ResMsg(RembusMsg):
     _reqdata: Any = PrivateAttr()
 
     def to_payload(self, enc: int) -> bytes | str:
-        """Return the ResMsg list of values to encode"""
+        """Serialize the Response message."""
         if enc == CBOR:
             return cbor2.dumps(
                 [
@@ -265,19 +308,19 @@ class ResMsg(RembusMsg):
 
 
 class PubSubMsg(RembusMsg):
-    """Pub/Sub message packet."""
+    """Pub/Sub message."""
 
     id: int | None = None
     topic: str
     data: Any = None
-    flags: UInt8 = QOS0  # type: ignore[valid-type]
+    flags: int = QOS0  # type: ignore[valid-type]
     slot: int | None = None
     recvts: int | None = None
     table: str | None = None
     regex: str | None = None
 
     def to_payload(self, enc: int) -> bytes | str:
-        """Return the PubSubMsg list of values to encode"""
+        """Serialize the Pub/Sub message."""
 
         if self.id is not None:
             if self.slot is not None:
@@ -339,12 +382,12 @@ class PubSubMsg(RembusMsg):
 
 
 class AckMsg(RembusMsg):
-    """Pub/Sub Ack message for QOS1 and QOS2"""
+    """Ack message used for Pub/Sub QOS1 and QOS2."""
 
     id: int
 
     def to_payload(self, enc: int) -> bytes | str:
-        """Return the AckMsg list of values to encode"""
+        """Serialize the Ack message."""
         if enc == CBOR:
             return cbor2.dumps([TYPE_ACK, to_bytes(self.id)])
 
@@ -354,12 +397,12 @@ class AckMsg(RembusMsg):
 
 
 class Ack2Msg(RembusMsg):
-    """Pub/Sub Ack2 message for QOS2"""
+    """Ack2 message used for QOS2"""
 
     id: int
 
     def to_payload(self, enc: int) -> bytes | str:
-        """Return the Ack2Msg list of values to encode"""
+        """Serialize the Ack2 message."""
         if enc == CBOR:
             return cbor2.dumps([TYPE_ACK2, to_bytes(self.id)])
 
@@ -369,7 +412,7 @@ class Ack2Msg(RembusMsg):
 
 
 class AdminMsg(RembusMsg):
-    """AdminMsg packet."""
+    """Admin message."""
 
     id: int
     topic: str
@@ -379,7 +422,7 @@ class AdminMsg(RembusMsg):
         return f"AdminMsg:{self.topic}: {self.data}"
 
     def to_payload(self, enc: int) -> bytes | str:
-        """Return the AdminMsg list of values to encode"""
+        """Serialize the Admin message."""
         if enc == CBOR:
             return cbor2.dumps(
                 [TYPE_ADMIN, to_bytes(self.id), self.topic, self.data]
@@ -396,7 +439,8 @@ class AdminMsg(RembusMsg):
 
 
 class IdentityMsg(RembusMsg):
-    """IdentityMsg packet.
+    """Identity message.
+
     This message is sent by the component to identify itself
     to the remote peer.
     """
@@ -408,7 +452,7 @@ class IdentityMsg(RembusMsg):
         return f"IdentityMsg:{self.cid}"
 
     def to_payload(self, enc: int) -> bytes | str:
-        """Return the IdentityMsg payload"""
+        """Serialize the Identity message."""
         if enc == CBOR:
             return cbor2.dumps([TYPE_IDENTITY, to_bytes(self.id), self.cid])
 
@@ -423,10 +467,7 @@ class IdentityMsg(RembusMsg):
 
 
 class AttestationMsg(RembusMsg):
-    """AttestationMsg packet.
-    This message is sent by the component to authenticate
-    its identity to the remote peer.
-    """
+    """Attestation message."""
 
     id: int
     cid: str
@@ -436,7 +477,7 @@ class AttestationMsg(RembusMsg):
         return f"AttestationMsg:{self.cid}"
 
     def to_payload(self, enc: int) -> bytes | str:
-        """Return the AttestationMsg list of values to encode"""
+        """Serialize the Attestation message."""
         if enc == CBOR:
             return cbor2.dumps(
                 [TYPE_ATTESTATION, to_bytes(self.id), self.cid, self.signature]
@@ -456,10 +497,7 @@ class AttestationMsg(RembusMsg):
 
 
 class RegisterMsg(RembusMsg):
-    """RegisterMsg packet.
-    This message is sent by the component to register
-    its public key to the remote peer.
-    """
+    """Register message."""
 
     id: int
     cid: str
@@ -468,7 +506,7 @@ class RegisterMsg(RembusMsg):
     type: int
 
     def to_payload(self, enc: int) -> bytes | str:
-        """Return the RegisterMsg list of values to encode"""
+        """Serialize the Register message."""
         if enc == CBOR:
             return cbor2.dumps(
                 [
@@ -497,15 +535,12 @@ class RegisterMsg(RembusMsg):
 
 
 class UnregisterMsg(RembusMsg):
-    """UnregisterMsg packet.
-    This message is sent by the component to unregister
-    its public key from the remote peer.
-    """
+    """Unregister message."""
 
     id: int
 
     def to_payload(self, enc: int) -> bytes | str:
-        """Return the UnregisterMsg list of values to encode"""
+        """Serialize the Unregister message."""
         if enc == CBOR:
             return cbor2.dumps([TYPE_UNREGISTER, to_bytes(self.id)])
 

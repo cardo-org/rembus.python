@@ -13,6 +13,16 @@ from urllib.parse import urlparse
 import uuid
 import rembus.protocol as rp
 
+__all__ = [
+    "randname",
+    "bytes_to_b64",
+    "domain",
+    "FutureResponse",
+    "RbURL",
+    "Supervised",
+    "response_data",
+]
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,27 +32,34 @@ def randname() -> str:
 
 
 def bytes_to_b64(val: bytes, enc: int):
-    """Base 64 encodeing for JSON-RPC transport"""
+    """
+    Encode ``val`` as Base64 if ``enc`` equals ``rp.JSON``.
+
+    Returns a UTF-8 string containing the Base64 representation when
+    JSON encoding is requested, otherwise returns ``val`` unchanged.
+    """
     if enc == rp.JSON:
         return base64.b64encode(val).decode("utf-8")
     return val
 
 
 def domain(s: str) -> str:
-    """Return the domain part from the string.
+    """
+    Return the domain portion of a string.
 
-    If no domain is found, return the root domain ".".
+    If the input string does not contain a domain, the root domain
+    "." is returned.
     """
     dot_index = s.find(".")
     if dot_index != -1:
         return s[dot_index + 1 :]
-    else:
-        return "."
+
+    return "."
 
 
 class FutureResponse:
     """
-    Encapsulate a future response for a request.
+    Encapsulate a future response for a Rembus message request.
     """
 
     def __init__(self, task: asyncio.Task | None, data: Any = None):
@@ -54,8 +71,10 @@ class FutureResponse:
 class RbURL:
     """
     A class to parse and manage Rembus URLs.
-    It supports the 'repl' scheme, the standard 'ws'/'wss' and
-    'mqtt/mqtts' schemes.
+    It supports the `repl` scheme, the standard `ws`/`wss` and
+    `mqtt`/`mqtts` schemes.
+
+    The URL `repl` scheme defines a broker.
     """
 
     def __init__(self, url: str | None = None) -> None:
@@ -95,43 +114,55 @@ class RbURL:
     def __repr__(self):
         return f"{self.protocol}://{self.hostname}:{self.port}/{self.id}"
 
-    def isrepl(self):
-        """Check if the URL is a REPL."""
+    def isbroker(self):
+        """Check if the url defines a broker."""
         return self.protocol == "repl"
-
-    def connection_url(self):
-        """Return the URL string."""
-        if self.hasname:
-            return f"{self.protocol}://{self.hostname}:{self.port}/{self.id}"
-        else:
-            return f"{self.protocol}://{self.hostname}:{self.port}"
 
     @property
     def netlink(self):
-        """Return the remote connection endpoint"""
+        """Return the remote connection url endpoint."""
         return f"{self.protocol}://{self.hostname}:{self.port}"
 
     @property
     def twkey(self):
-        """Return the twin key"""
+        """Return a twin unique string identifier."""
         return self.id if self.id == "repl" else f"{self.id}@{self.netlink}"
 
 
-async def shutdown_message(obj) -> None:
-    """Log a shutdown message for the given object."""
-    logger.debug("[%s] sending shutdown message", obj)
-    await obj.inbox.put("shutdown")
+async def shutdown_message(process: Supervised) -> None:
+    """
+    Request graceful shutdown of a supervised process by sending
+    a "shutdown" message to its inbox.
+    """
+    logger.debug("[%s] sending shutdown message", process)
+    await process.inbox.put("shutdown")
 
 
 class Supervised:
     """
     A superclass that provides task supervision and auto-restarting for
     a designated task.
-    Subclasses must implement the '_task_impl' coroutine.
+    Subclasses must implement the `_task_impl` coroutine.
     """
 
     downstream: Supervised | None
+    """
+    The supervised router process next in the chain of Supervised messages
+    handlers.
+
+    The downstream direction terminates at the router returned by
+    :func:`~rembus.router.top_router`.
+    """
+
     upstream: Supervised | None
+    """
+    The supervised router process previous in the chain of Supervised messages
+    handlers.
+
+    The upstream direction terminates at the router returned by
+    :func:`~rembus.router.bottom_router`. It is the router process directly
+    bound to the :class:`~rembus.twin.Twin` entity.
+    """
 
     def __init__(self):
         self.upstream = None
