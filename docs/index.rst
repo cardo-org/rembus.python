@@ -28,7 +28,7 @@ The fastest way is to pull and run a docker image for the broker:
 
       .. code-block:: shell
 
-         docker pull rembus/broker
+         docker pull rembus/broker:1.2.3
          docker run --rm \
                     -p 8000:8000 \
                     -e REMBUS_DIR=/etc/rembus \
