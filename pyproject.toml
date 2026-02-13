@@ -81,6 +81,9 @@ push = true
     'current_version = "{version}"',
     'version = "{version}"',
 ]
+"docs/conf.py" = [
+    'release = "{version}"',
+]
 
 [tool.pytest.ini_options]
 addopts = "--cov=src/rembus --cov-report=xml --cov-report=term-missing"
