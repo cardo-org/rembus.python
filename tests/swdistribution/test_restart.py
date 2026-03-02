@@ -9,7 +9,9 @@ def foo(x,y):
     srv = rb.node(name="orchestrator")
 
     with rb.node("distributor") as n:
-        n.rpc("python_service_install", "myservice", foo_code)
+        n.rpc(
+            "python_service_install", {"name": "myservice", "content": foo_code}
+        )
 
     srv.close()
 

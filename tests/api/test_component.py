@@ -111,8 +111,8 @@ async def test_rpc_ctx():
 
 
 @pytest.mark.asyncio
-async def test_direct():
-    """Test the direct method of the rembus component."""
+async def test_direct_to_broker():
+    """Test the direct method of the rembus component targeting the broker."""
     x = 2
     y = 3
     server = await start_server(port=8004)
@@ -123,6 +123,27 @@ async def test_direct():
     await server.unexpose(myservice)
     await cli.close()
     await server.close()
+
+
+@pytest.mark.asyncio
+async def test_direct():
+    """Test the direct method of the rembus component."""
+    x = 2
+    y = 3
+    bro = await start_server(port=8004)
+    cli = await rembus.component("ws://:8004")
+    server = await rembus.component("ws://:8004/myserver")
+    await server.expose(myservice)
+    result = await cli.direct("myserver", "myservice", x, y)
+    assert result == x + y
+
+    await server.close()
+
+    with pytest.raises(rembus.RembusError):
+        await cli.direct("myserver", "myservice", x, y)
+
+    await cli.close()
+    await bro.close()
 
 
 @pytest.mark.asyncio

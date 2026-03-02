@@ -26,7 +26,7 @@ async def test_spec_from_file_error():
 
     logging.info("broker dir: %s", rb.settings.broker_dir(router.id))
     with pytest.raises(ImportError):
-        await builtins.eval_file(twin, name, path)
+        await builtins.eval_file(twin, "services", name, path)
 
     await twin.close()
 
@@ -39,7 +39,9 @@ async def test_add_myservice():
     name = "myservice"
     source = inspect.getsource(myservice)
 
-    await builtins.add_callback(router, "services", name, source)
+    await builtins.add_callback(
+        router, "services", {"name": name, "content": source}
+    )
 
     await twin.close()
 
@@ -66,7 +68,17 @@ async def test_add_mytopic():
     name = "mytopic"
     source = inspect.getsource(mytopic)
 
-    await builtins.add_callback(router, "subscribers", name, source)
+    await builtins.add_callback(
+        router, "subscribers", {"name": name, "content": source}
+    )
+
+    # install a tagged version of the same topic, should remove the previous one
+    await builtins.add_callback(
+        router, "subscribers", {"name": name, "content": source, "tag": "v2"}
+    )
+
+    lst = await builtins.list_callback(router, "subscribers")
+    assert len(lst) == 1
 
     await twin.close()
 
@@ -91,7 +103,38 @@ async def test_add_service_not_found():
     source = ""
 
     with pytest.raises(ValueError):
-        await builtins.add_callback(router, "services", name, source)
+        await builtins.add_callback(
+            router, "services", {"name": name, "content": source}
+        )
+
+    await twin.close()
+
+
+@pytest.mark.asyncio
+async def test_name_not_found():
+    twin = await rb.component()
+    router = twin.router
+
+    source = inspect.getsource(mytopic)
+
+    with pytest.raises(ValueError):
+        await builtins.add_callback(router, "services", {"content": source})
+
+    await twin.close()
+
+
+@pytest.mark.asyncio
+async def test_impl_not_found():
+    twin = await rb.component()
+    router = twin.router
+
+    name = "myservice"
+    source = "myvar=10"
+
+    with pytest.raises(ValueError):
+        await builtins.add_callback(
+            router, "services", {"name": name, "content": source}
+        )
 
     await twin.close()
 
@@ -104,6 +147,26 @@ async def test_add_service__notequal_to_topic():
     name = "service"
     source = inspect.getsource(service_notequal_to_topic)
 
-    await builtins.add_callback(router, "services", name, source)
+    await builtins.add_callback(
+        router, "services", {"name": name, "content": source}
+    )
 
+    await twin.close()
+
+
+@pytest.mark.asyncio
+async def test_list_callbacks():
+    twin = await rb.component()
+    router = twin.router
+
+    lst = await builtins.list_callback(router, "subscribers")
+    assert "name" in lst[0]
+
+    lst = await builtins.list_callback(router, "subscribers", True)
+    assert "body" in lst[0]
+
+    lst = await builtins.list_callback(router, "unknow_type", True)
+    assert not lst
+
+    logging.info("list callbacks: %s", lst)
     await twin.close()

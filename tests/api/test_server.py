@@ -1,4 +1,5 @@
 """Test reconnecting to a rembus broker and builtins methods."""
+
 import time
 import rembus
 
@@ -33,7 +34,7 @@ def test_builtins():
     rid = rb1.rpc("rid")
     assert rid == rembus.settings.DEFAULT_BROKER
     version = rb1.rpc("version")
-    assert version == rembus.__version__
+    assert version == f"python_{rembus.__version__}"
     uptime = rb1.rpc("uptime")
     assert isinstance(uptime, str)
     rb1.close()

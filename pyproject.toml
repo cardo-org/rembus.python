@@ -32,6 +32,7 @@ dependencies = [
   "pydantic",
   "duckdb>=1.4.2",
   "gmqtt>=0.7.0",
+  "aiofiles>=25.1.0",
 ]
 
 #

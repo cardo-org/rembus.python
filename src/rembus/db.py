@@ -144,6 +144,15 @@ def init_db(router, schema):
 
     tables = [
         """
+        CREATE TABLE IF NOT EXISTS component (
+            broker TEXT NOT NULL,
+            host TEXT NOT NULL,
+            twin TEXT NOT NULL,
+            status TEXT,
+            last_changed TIMESTAMP
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS message (
             name TEXT NOT NULL,
             recv UBIGINT,

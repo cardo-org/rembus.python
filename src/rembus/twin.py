@@ -32,7 +32,7 @@ from rembus.core import (
     response_data,
     bytes_to_b64,
 )
-from rembus.router import bottom_router, top_router
+from rembus.router import bottom_router, top_router, twin_down
 from rembus.keyspace import KeySpaceRouter
 
 __all__ = [
@@ -88,9 +88,8 @@ async def init_twin(router, uid: RbURL, enc: int, isserver: bool):
     await cmp.start()
     router.id_twin[uid.twkey] = cmp
     try:
-        if cmp.isbroker():
-            await builtins.load_callbacks(cmp)
-        else:
+        await builtins.load_callbacks(cmp)
+        if not cmp.isbroker():
             if router.config.start_anyway:
                 await cmp.inbox.put("reconnect")
             else:
@@ -375,7 +374,8 @@ class Twin(Supervised):
 
         On non-Windows platforms, this adds handlers for SIGINT and SIGTERM
         that schedule the asynchronous :meth:`close` method. This ensures the
-        component can perform cleanup when the process is interrupted or terminated.
+        component can perform cleanup when the process is interrupted
+        or terminated.
         """
         if sys.platform != "win32":
             loop = asyncio.get_running_loop()
@@ -389,8 +389,9 @@ class Twin(Supervised):
     async def _shutdown(self):
         """Twin cleanup logic when shutting down."""
         logger.debug("[%s] twin shutdown", self)
-
         if self.db is not None:
+            if self.uid.hasname and self.socket:
+                await twin_down(self)
             save_twin(self)
 
         if self.uid.isbroker():
@@ -1603,21 +1604,11 @@ class MqttTwin(Twin):
         msg : rp.RembusMsg
             The Rembus message to send. Must be an instance of
             :class:`rp.PubSubMsg`.
-
-        Raises
-        ------
-        TypeError
-            If `msg` is not an instance of :class:`rp.PubSubMsg`.
         """
         if isinstance(msg, rp.PubSubMsg):
             # If data has a single item, send just that item
             data_to_send = msg.data if len(msg.data) > 1 else msg.data[0]
             self.socket.publish(msg.topic, json.dumps(data_to_send))
-        else:
-            raise TypeError(
-                f"MQTT transport cannot send messages of type {type(msg).__name__}:"
-                "Only rp.PubSubMsg is supported."
-            )
 
     def isopen(self) -> bool:
         """

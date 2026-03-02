@@ -7,9 +7,10 @@ from enum import Enum
 from functools import partial
 import logging
 import os
-import time
+from datetime import datetime, timezone
 import traceback
 from typing import Callable, Any, Optional, List, cast
+import socket
 import ssl
 from websockets.asyncio.server import serve
 import cbor2
@@ -201,17 +202,25 @@ class Router(Supervised):
 
     def uptime(self) -> str:
         """Return the uptime of the router."""
-        return f"up for {int(time.time() - self.start_ts)} seconds"
+        uptime = (rp.timestamp() - self.start_ts) / 1_000_000_000
+        return f"up for {uptime} seconds"
 
     def _builtins(self):
         self.handler["rid"] = lambda *_, **__: self.id
-        self.handler["version"] = lambda *_, **__: __version__
+        self.handler["version"] = lambda *_, **__: f"python_{__version__}"
         self.handler["uptime"] = lambda *_, **__: self.uptime()
+
+        self.handler["python_service_list"] = partial(
+            builtins.list_callback, self, "services"
+        )
         self.handler["python_service_install"] = partial(
             builtins.add_callback, self, "services"
         )
         self.handler["python_service_uninstall"] = partial(
             builtins.remove_callback, self, "services"
+        )
+        self.handler["python_subscriber_list"] = partial(
+            builtins.list_callback, self, "subscribers"
         )
         self.handler["python_subscriber_install"] = partial(
             builtins.add_callback, self, "subscribers"
@@ -330,6 +339,19 @@ class Router(Supervised):
         topic = msg.topic
         if msg.twin.isbroker():
             await self.send_message(msg)
+        elif msg.target is not None and msg.target != self.id:
+            target_url = RbURL(msg.target)
+            target_twin = self.id_twin.get(target_url.twkey)
+            if target_twin and target_twin.isopen():
+                logger.debug("[%s] sending to [%s]", self, target_twin)
+                # dispatch to the target twin, reset target
+                msg.target = None
+                await target_twin.inbox.put(msg)
+            else:
+                outmsg = rp.ResMsg(
+                    id=msg.id, status=rp.STS_METHOD_UNAVAILABLE, data=topic
+                )
+                await msg.twin.send(outmsg)
         elif topic in self.handler and self.isauthorized(topic, msg.twin):
             status = rp.STS_OK
             try:
@@ -484,6 +506,7 @@ class Router(Supervised):
         self.id_twin.pop(twin.twkey, twin)
         twin.rid = identity
         self.id_twin[twin.twkey] = twin
+        await twin_up(twin)
         if twin.db is not None:
             load_twin(twin)
             if twin.router.upstream:
@@ -583,6 +606,46 @@ class Router(Supervised):
             await msg.twin.response(sts, msg, reason)
 
 
+async def twin_up(twin):
+    """Update the twin up status."""
+    router = twin.router
+    db = router.db
+    # Get remote address
+    remote_ip, _ = twin.socket.remote_address
+    loop = asyncio.get_event_loop()
+    try:
+        remote_host = await loop.run_in_executor(
+            None, lambda: socket.gethostbyaddr(remote_ip)[0]
+        )
+    except socket.herror:
+        remote_host = remote_ip
+
+    now = datetime.now(timezone.utc)
+    db.execute(
+        "DELETE FROM component WHERE broker = ? AND twin = ?",
+        (router.id, twin.rid),
+    )
+    db.execute(
+        """
+        INSERT INTO component (broker, host, twin, status, last_changed)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (router.id, remote_host, twin.rid, "up", now),
+    )
+
+
+async def twin_down(twin):
+    """Update the twin down status."""
+    router = twin.router
+    db = router.db
+    now = datetime.now(timezone.utc)
+    db.execute(
+        """UPDATE component SET status = 'down', last_changed = ?
+        WHERE broker = ? AND twin = ?""",
+        (now, router.id, twin.rid),
+    )
+
+
 def top_router(router: Supervised) -> Router:
     """Return the topmost router (the core router)."""
     r = router
@@ -661,8 +724,11 @@ def load_twin(twin):
         for topic in df["topic"].to_list():
             if topic not in router.subscribers:
                 router.subscribers[topic] = []
-            if twin not in router.subscribers[topic]:
-                router.subscribers[topic].append(twin)
+
+            if twin in router.subscribers[topic]:
+                router.subscribers[topic].remove(twin)
+
+            router.subscribers[topic].append(twin)
 
     df = db.sql(
         "SELECT topic FROM exposer WHERE name = ? AND twin = ?",
@@ -674,8 +740,11 @@ def load_twin(twin):
         for topic in df["topic"].to_list():
             if topic not in router.exposers:
                 router.exposers[topic] = []
-            if twin not in router.exposers[topic]:
-                router.exposers[topic].append(twin)
+
+            if twin in router.exposers[topic]:
+                router.exposers[topic].remove(twin)
+
+            router.exposers[topic].append(twin)
 
     # Load messages marks.
     result = db.sql(

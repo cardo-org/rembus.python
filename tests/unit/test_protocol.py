@@ -4,7 +4,7 @@ import logging
 import pytest
 import rembus.protocol as rp
 import rembus.core as rc
-from rembus.router import Router
+from rembus.router import Router, twin_up
 from rembus.twin import WsTwin
 
 
@@ -57,5 +57,26 @@ async def test_rembus_messages():
         rp.IdentityMsg(id=2, cid="cid"),
     ]:
         logging.info(str(msg))
+
+    await twin.close()
+
+
+async def test_ip_not_resolved():
+    """Test handling of unresolved IP addresses in the router."""
+
+    class SocketMock:
+        def __init__(self, remote_address):
+            self.remote_address = (remote_address, 1234)
+
+        async def close(self):
+            pass
+
+    router = Router("broker")
+    await router.start()
+    twin = WsTwin(rc.RbURL("twin"), router)
+    await twin.start()
+
+    twin.socket = SocketMock("1.2.3.4")
+    await twin_up(twin)
 
     await twin.close()
