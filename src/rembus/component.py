@@ -1,3 +1,5 @@
+"""Rembus component entry point."""
+
 from typing import List
 from contextlib import asynccontextmanager
 from rembus.core import RbURL

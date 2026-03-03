@@ -61,6 +61,9 @@ test = [
   "pytest-anyio"
 ]
 
+[project.scripts]
+brokerd = "rembus.brokerd:main"
+
 [project.urls]
 "Homepage" = "https://github.com/cardo-org/rembus.python"
 "Bug Tracker" = "https://github.com/cardo-org/rembus.python/issues"

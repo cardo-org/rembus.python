@@ -140,6 +140,7 @@ def dbconnect(router_name: str = "broker"):
 
 def init_db(router, schema):
     """Initialize the database for a given router."""
+    logger.debug("[%s] initializing database", router)
     db = dbconnect(router.id)
 
     tables = [

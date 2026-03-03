@@ -3,15 +3,25 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2]
+
+### Added
+
+- brokerd entry point script 
+
+### Fixed
+
+- Code distribution on components using direct.
+
 ## [0.8.1] 2026-02-13
 
-## Fixed
+### Fixed
 
 - Docs review and ci workflow.
 
 ## [0.8.0] 2026-02-09
 
-## Add
+### Add
 
 - Code distribution impl started.
 
@@ -19,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Auth apis: `authorize`, `private_topic`, `public_topic`.
 
-## Fixed
+### Fixed
 
 - Manage space topics subscribed by broker/server components.
 
