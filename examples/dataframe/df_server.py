@@ -2,6 +2,7 @@
 Expose the RPC service add_columns that expects a dataframe
 as input and returns a modified dataframe.
 """
+
 import asyncio
 import pandas as pd
 import rembus
@@ -12,9 +13,10 @@ async def add_columns(df):
     Add two columns to the input dataframe and returns the result.
     The input dataframe must have `x` and `name` columns.
     """
-    df["y"] = df["x"]**2
+    df["y"] = df["x"] ** 2
     df["descr"] = df["name"].apply(
-        lambda n: f"descr for {n}" if pd.notna(n) else None)
+        lambda n: f"descr for {n}" if pd.notna(n) else None
+    )
     return df
 
 
@@ -32,7 +34,7 @@ async def metrics(df):
 
 async def serve():
     """Start the Rembus server"""
-    rb = await rembus.component(port=8000)
+    rb = await rembus.component(port=8338)
 
     # Make available the RPC service `add_columns` to the clients.
     await rb.expose(add_columns)

@@ -13,7 +13,7 @@ import rembus.protocol as rp
 
 
 @pytest.fixture(scope="module")
-def server(port=8000):
+def server(port=8338):
     """
     Fixture to start and yield a rembus server, then shut it down.
     The server will be available to tests that request this fixture.

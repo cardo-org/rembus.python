@@ -57,7 +57,7 @@ def test_mqtt_subscribe():
 
     wait_for_broker(mqtt_port)
 
-    bro = rb.node(mqtt=f"mqtt://{mqtt_host}:{mqtt_port}", port=8000)
+    bro = rb.node(mqtt=f"mqtt://{mqtt_host}:{mqtt_port}", port=8338)
 
     cli = rb.node("mysubscriber")
     cli.subscribe(mqtt_topic)
@@ -85,7 +85,7 @@ def test_mqtt_space_subscribe():
         logging.debug("consume_alarms %s with data: %s", topic, data)
         received.set()
 
-    bro = rb.node(mqtt=f"mqtt://{mqtt_host}:{mqtt_port}", port=8000)
+    bro = rb.node(mqtt=f"mqtt://{mqtt_host}:{mqtt_port}", port=8338)
 
     cli = rb.node("mysubscriber")
     cli.subscribe(consume_alarms, topic="*/alarm")
@@ -118,7 +118,7 @@ async def test_mqtt_publish():
         received_payload["data"] = json.loads(payload.decode())
         received.set()
 
-    bro = await rb.component(mqtt=f"mqtt://{mqtt_host}:{mqtt_port}", port=8000)
+    bro = await rb.component(mqtt=f"mqtt://{mqtt_host}:{mqtt_port}", port=8338)
 
     # --- MQTT subscriber
     sub = MQTTClient("mqtt-subscriber")

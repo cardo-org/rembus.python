@@ -3,7 +3,7 @@ import polars as pl
 import rembus as rb
 
 parser = argparse.ArgumentParser(description="campobase broker")
-parser.add_argument("-p", "--port", default=8000, help="broker port")
+parser.add_argument("-p", "--port", default=8338, help="broker port")
 args = parser.parse_args()
 
 df = pl.DataFrame(

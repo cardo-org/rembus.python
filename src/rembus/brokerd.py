@@ -78,7 +78,9 @@ def main():
     )
     logging.getLogger("websockets").setLevel(logging.WARNING)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     loop.run_until_complete(
         broker(
             name=name,

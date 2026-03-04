@@ -4,16 +4,18 @@ import rembus as rb
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Publish a message to a Rembus topic")
+        description="Publish a message to a Rembus topic"
+    )
     parser.add_argument(
-        "-t", "--topic",
+        "-t",
+        "--topic",
         default="mysite/HVAC/mysite.sensor3/sensor",
-        help="Topic to publish to (default: %(default)s)"
+        help="Topic to publish to (default: %(default)s)",
     )
     parser.add_argument(
         "--url",
-        default="ws://:8000/myclient",
-        help="Rembus node URL (default: %(default)s)"
+        default="ws://:8338/myclient",
+        help="Rembus node URL (default: %(default)s)",
     )
 
     args = parser.parse_args()

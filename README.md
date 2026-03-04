@@ -75,7 +75,7 @@ Start a broker (sync or async):
 import rembus as rb
 
 # sync version
-bro = rb.node() # equivalent to rb.node(port = 8000)
+bro = rb.node() # equivalent to rb.node(port = 8338)
 bro.wait() # event loop, not needed in interactive interpreter
 
 
@@ -179,13 +179,13 @@ Connect to a Broker:
 
 ```python
 # named component
-cli = await rb.component("ws://host:8000/myname")
+cli = await rb.component("ws://host:8338/myname")
 
 # default host/port
 cli = await rb.component("myname")
 
 # anonymous
-cli = await rb.component(rb.anonym(host="host", port=8000))
+cli = await rb.component(rb.anonym(host="host", port=8338))
 ```
 
 ### Why named components

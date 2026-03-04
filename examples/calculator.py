@@ -7,7 +7,7 @@ async def add(x, y):
 
 
 async def main():
-    rb = await rembus.component(port=8000)
+    rb = await rembus.component(port=8338)
 
     await rb.expose(add)
 

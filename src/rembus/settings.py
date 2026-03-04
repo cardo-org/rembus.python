@@ -9,7 +9,7 @@ from platformdirs import user_config_dir
 logger = logging.getLogger(__name__)
 
 DEFAULT_BROKER = "broker"
-DEFAULT_PORT = 8000
+DEFAULT_PORT = 8338
 TENANTS_FILE = "tenants.json"
 
 

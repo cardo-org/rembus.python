@@ -9,7 +9,7 @@ logging.getLogger("websockets").setLevel(logging.WARNING)
 
 async def main():
     parser = argparse.ArgumentParser(description="rembus broker")
-    parser.add_argument("-p", "--port", default=8000, help="broker port")
+    parser.add_argument("-p", "--port", default=8338, help="broker port")
     args = parser.parse_args()
 
     bro = await rb.component(port=args.port)

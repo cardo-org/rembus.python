@@ -1,3 +1,4 @@
+import os
 from importlib.metadata import version
 
 __version__ = version("rembus")
@@ -26,6 +27,12 @@ from .router import add_plugin
 from .sync import node, register
 from .keyspace import KeySpaceRouter
 from .db import dbconnect
+
+if os.environ.get("REMBUS_KEEP_PROXY", "0") == "0":
+    os.environ.pop("http_proxy", None)
+    os.environ.pop("HTTP_PROXY", None)
+    os.environ.pop("https_proxy", None)
+    os.environ.pop("HTTPS_PROXY", None)
 
 __all__ = [
     "add_plugin",

@@ -118,7 +118,7 @@ async def test_mqtts_publish(mosquitto_tls, mqtt_ssl_context):
     # Start Rembus broker component with a MQTTS bridge.
     broker = await rembus.component(
         mqtt=f"mqtts://{mqtt_host}:{mqtt_port}",
-        port=8000,
+        port=8338,
     )
 
     # TLS subscriber

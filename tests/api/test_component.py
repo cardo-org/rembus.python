@@ -188,7 +188,7 @@ async def test_publish():
 
     assert cli.isbroker() is False
     assert isinstance(cli.router, rembus.router.Router)
-    assert "cmp.net@ws://127.0.0.1:8000" in repr(server.router)
+    assert "cmp.net@ws://127.0.0.1:8338" in repr(server.router)
     assert repr(cli.uid) == "ws://127.0.0.1:8006/cmp.net"
     assert rembus.core.domain(cli.rid) == "net"
 
@@ -219,7 +219,7 @@ async def test_publish_slot():
     cli = await rembus.component("ws://:8007/cmp.net")
     assert cli.isbroker() is False
     assert isinstance(cli.router, rembus.router.Router)
-    assert repr(server.router) == "broker: {'cmp.net@ws://127.0.0.1:8000'}"
+    assert repr(server.router) == "broker: {'cmp.net@ws://127.0.0.1:8338'}"
     assert repr(cli.uid) == "ws://127.0.0.1:8007/cmp.net"
     assert rembus.core.domain(cli.rid) == "net"
     await cli.publish("mytopic", slot=rembus.nowbucket())
@@ -233,7 +233,7 @@ async def test_publish_slot():
 @pytest.mark.asyncio
 async def test_cancel_server_task():
     """Test shutdown in case of task cancellation"""
-    server = await rembus.component(port=8000)
+    server = await rembus.component(port=8338)
     await asyncio.sleep(0)
 
     # yield point

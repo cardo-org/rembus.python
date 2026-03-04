@@ -78,7 +78,7 @@ class RbURL:
     """
 
     def __init__(self, url: str | None = None) -> None:
-        default_url = os.getenv("REMBUS_BASE_URL", "ws://127.0.0.1:8000")
+        default_url = os.getenv("REMBUS_BASE_URL", "ws://127.0.0.1:8338")
         baseurl = urlparse(default_url)
         u = urlparse(url)
 

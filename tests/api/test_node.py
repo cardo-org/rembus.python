@@ -14,7 +14,7 @@ def myservice(x, y):
 
 def test_anonym(server):
     """Connect anonymously."""
-    node = rembus.node(rembus.anonym(host="127.0.0.1", port=8000))
+    node = rembus.node(rembus.anonym(host="127.0.0.1", port=8338))
     rid = node.rpc("rid")
     assert rid == "broker"
     node.close()
@@ -97,7 +97,7 @@ def test_publish(server):
     server.inject(ctx)
 
     rb = rembus.node("cmp.net")
-    assert repr(rb.uid) == "ws://127.0.0.1:8000/cmp.net"
+    assert repr(rb.uid) == "ws://127.0.0.1:8338/cmp.net"
     assert rb.isbroker() is False
     assert rb.isopen()
 

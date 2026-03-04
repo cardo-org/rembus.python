@@ -26,7 +26,7 @@ async def create_sub(name, topic, ctx):
 async def test_add_plugin():
     space_topic = "k/*/y"
     ctx = {}
-    server = await rembus.component(port=8000)
+    server = await rembus.component(port=8338)
 
     # register a space topic to the server
     await server.subscribe(broker_consume, topic=space_topic)
@@ -58,7 +58,7 @@ async def test_add_plugin():
 async def test_remove_close_from_keyspace():
     space_topic = "k/*/y"
     ctx = {}
-    server = await rembus.component(port=8000)
+    server = await rembus.component(port=8338)
 
     pub = await rembus.component("pub")
 
