@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://cardo-org.github.io/rembus.python/reference/index.html">
 
     <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>API Reference - Rembus 0.8.1 documentation</title>
+        <title>API Reference - Rembus 0.8.2 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/tabs.css?v=4c969af8" />
@@ -169,7 +169,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">Rembus 0.8.1 documentation</div></a>
+      <a href="../index.html"><div class="brand">Rembus 0.8.2 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -190,7 +190,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
-  <span class="sidebar-brand-text">Rembus 0.8.1 documentation</span>
+  <span class="sidebar-brand-text">Rembus 0.8.2 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -938,7 +938,8 @@ initializing or updating the shared context for components.</p>
 <dd><p>Register signal handlers to gracefully shut down the component.</p>
 <p>On non-Windows platforms, this adds handlers for SIGINT and SIGTERM
 that schedule the asynchronous <a class="reference internal" href="#rembus.twin.Twin.close" title="rembus.twin.Twin.close"><code class="xref py py-meth docutils literal notranslate"><span class="pre">close()</span></code></a> method. This ensures the
-component can perform cleanup when the process is interrupted or terminated.</p>
+component can perform cleanup when the process is interrupted
+or terminated.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -1601,9 +1602,6 @@ will raise a <code class="xref py py-exc docutils literal notranslate"><span cla
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>msg</strong> (<em>rp.RembusMsg</em>) – The Rembus message to send. Must be an instance of
 <code class="xref py py-class docutils literal notranslate"><span class="pre">rp.PubSubMsg</span></code>.</p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>TypeError</strong> – If <cite>msg</cite> is not an instance of <code class="xref py py-class docutils literal notranslate"><span class="pre">rp.PubSubMsg</span></code>.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -2529,7 +2527,7 @@ messages on subscribed topics.</p>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=ec16d22d"></script>
+</div><script src="../_static/documentation_options.js?v=dbee5847"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
