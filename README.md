@@ -2,8 +2,8 @@
 
 [![Docs Stable](https://img.shields.io/badge/docs-stable-blue)](https://cardo-org.github.io/rembus.python/stable/)
 [![Docs Dev](https://img.shields.io/badge/docs-dev-orange)](https://cardo-org.github.io/rembus.python/dev/)
-[![Build Status](https://github.com/cardo-org/rembus.python/actions/workflows/python-app.yml/badge.svg?branch=main)](https://github.com/cardo-org/rembus.python/actions/workflows/CI.yml?query=branch%3Amain)
-[![Coverage](https://codecov.io/gh/cardo-org/rembus.python/branch/main/graph/badge.svg)](https://codecov.io/gh/cardo-org/rembus.python)
+[![Build Status](https://github.com/cardo-org/rembus.python/actions/workflows/python-app.yml/badge.svg?branch=main)](https://github.com/cardo-org/rembus.python/actions/workflows/python-app.yml?query=branch%3Amain)
+[![Coverage](https://codecov.io/github/cardo-org/rembus.python/branch/main/graph/badge.svg)](https://codecov.io/gh/cardo-org/rembus.python)
 
 Rembus is a Pub/Sub and RPC middleware.
 
