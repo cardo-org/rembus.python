@@ -19,7 +19,7 @@ The fastest way is to pull and run a docker image for the broker:
 
          docker pull rembus/broker:1.2.3
          docker run --rm \
-                    -p 8000:8000 \
+                    -p 8338:8338 \
                     -e REMBUS_DIR=/etc/rembus \
                     -v $HOME/.config/rembus:/etc/rembus \
                     -t rembus/broker
@@ -30,7 +30,7 @@ The fastest way is to pull and run a docker image for the broker:
 
          docker pull rembus/broker:1.2.3
          docker run --rm \
-                    -p 8000:8000 \
+                    -p 8338:8338 \
                     -e REMBUS_DIR=/etc/rembus \
                     -v $HOME/.config/rembus:/etc/rembus \
                     -t rembus/broker -s
