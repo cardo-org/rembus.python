@@ -41,7 +41,9 @@ class Config:
         self.ws_ping_interval = cfg.get(
             "ws_ping_interval", def_ws_ping_interval
         )
-        self.start_anyway = cfg.get("start_anyway", False)
+        self.start_anyway = cfg.get(
+            "start_anyway", os.environ.get("REMBUS_START_ANYWAY", False)
+        )
 
         # Max numbers of QOS1 and QOS2 Pub/Sub retrasmissions
         self.send_retries = cfg.get("send_retries", def_send_retries)

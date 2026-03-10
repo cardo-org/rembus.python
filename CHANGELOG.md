@@ -3,11 +3,14 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.3] 
+## [0.8.3] 2026-03-10
 
 ### Changed
 
 - Default port 8338 (was the widely used port 8000)
+
+- Add environment variable REMBUS_START_ANYWAY. If true start the
+  component even if the broker/server is down.
 
 ## [0.8.2] 2026-03-04
 
