@@ -79,7 +79,7 @@ def local_twin(router):
     return router.id_twin[next(iter(router.id_twin))]
 
 
-async def list_callback(router, cbtype, getbody=False):
+async def list_callback(router, cbtype, getbody=False, _ctx=None, _node=None):
     """
     Get the list of distributed services.
 
@@ -107,7 +107,7 @@ async def list_callback(router, cbtype, getbody=False):
     return files
 
 
-async def add_callback(router, cbtype, cfg):
+async def add_callback(router, cbtype, cfg, _ctx=None, _node=None):
     """
     Save service/subscriber code to a file and dynamically load it.
 
@@ -147,7 +147,7 @@ async def add_callback(router, cbtype, cfg):
     await eval_file(twin, cbtype, name, file_path)
 
 
-async def remove_callback(router, cbtype, name):
+async def remove_callback(router, cbtype, name, _ctx=None, _node=None):
     """
     Remove service/subscriber code to a file and dynamically load it.
 
