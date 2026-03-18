@@ -159,8 +159,9 @@ async def remove_callback(router, cbtype, name, _ctx=None, _node=None):
     dir_path = callback_dir(router.id, cbtype)
     if not dir_path.is_dir():
         return
-    fn = dir_path / f"{name}.py"
-    fn.unlink(missing_ok=True)
+
+    for fn in dir_path.glob(f"{name}_*.py"):
+        fn.unlink(missing_ok=True)
 
     twin = local_twin(router)
     if cbtype == "services":
