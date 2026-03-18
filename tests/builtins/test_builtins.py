@@ -84,17 +84,6 @@ async def test_add_mytopic():
 
 
 @pytest.mark.asyncio
-async def test_remove_mytopic():
-    twin = await rb.component()
-    router = twin.router
-    name = "mytopic"
-
-    await builtins.remove_callback(router, "subscribers", name)
-
-    await twin.close()
-
-
-@pytest.mark.asyncio
 async def test_add_service_not_found():
     twin = await rb.component()
     router = twin.router
@@ -169,4 +158,15 @@ async def test_list_callbacks():
     assert not lst
 
     logging.info("list callbacks: %s", lst)
+    await twin.close()
+
+
+@pytest.mark.asyncio
+async def test_remove_mytopic():
+    twin = await rb.component()
+    router = twin.router
+    name = "mytopic"
+
+    await builtins.remove_callback(router, "subscribers", name)
+
     await twin.close()

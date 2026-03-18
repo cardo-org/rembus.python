@@ -134,7 +134,6 @@ def dbconnect(router_name: str = "broker"):
     """Open and return an handle to the database."""
     db = duckdb.connect()
     dbattach = db_attach(router_name)
-    print(dbattach)
     logger.debug("db attach: %s", dbattach)
     db.sql(dbattach)
     db.sql("USE rl")
