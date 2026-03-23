@@ -27,6 +27,7 @@ typemap = {
     "UTINYINT": pl.UInt8,
     "SMALLINT": pl.Int16,
     "INTEGER": pl.Int32,
+    "BIGINT": pl.Int64,
     "HUGEINT": pl.Int128
     if hasattr(pl, "Int128")
     else pl.Int64,  # Int128 fallback

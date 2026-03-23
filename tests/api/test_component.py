@@ -174,22 +174,23 @@ def puttopic():
 @pytest.mark.asyncio
 async def test_publish():
     """Test the publish method of the rembus component."""
-    server = await start_server(port=8006)
+    port = 8006
+    server = await start_server(port=port)
     await server.subscribe(puttopic, topic="cmp.net/mytopic")
     await server.subscribe(mytopic)
 
-    sub = await rembus.component("ws://:8006/sub.net")
+    sub = await rembus.component(f"ws://:{port}/sub.net")
     await sub.subscribe(mytopic)
     await sub.reactive()
 
     ctx = {}
-    cli = await rembus.component("ws://:8006/cmp.net")
+    cli = await rembus.component(f"ws://:{port}/cmp.net")
     cli.inject(ctx)
 
     assert cli.isbroker() is False
     assert isinstance(cli.router, rembus.router.Router)
-    assert "cmp.net@ws://127.0.0.1:8338" in repr(server.router)
-    assert repr(cli.uid) == "ws://127.0.0.1:8006/cmp.net"
+    assert f"cmp.net@ws://127.0.0.1:{port}" in repr(server.router)
+    assert repr(cli.uid) == f"ws://127.0.0.1:{port}/cmp.net"
     assert rembus.core.domain(cli.rid) == "net"
 
     # subscription to itself
@@ -212,15 +213,16 @@ async def test_publish():
 @pytest.mark.asyncio
 async def test_publish_slot():
     """Test the slot option of the publish api."""
-    server = await start_server(port=8007)
+    port = 8007
+    server = await start_server(port=port)
     await server.subscribe(puttopic, topic="cmp.net/mytopic")
     await server.subscribe(mytopic)
 
-    cli = await rembus.component("ws://:8007/cmp.net")
+    cli = await rembus.component(f"ws://:{port}/cmp.net")
     assert cli.isbroker() is False
     assert isinstance(cli.router, rembus.router.Router)
-    assert repr(server.router) == "broker: {'cmp.net@ws://127.0.0.1:8338'}"
-    assert repr(cli.uid) == "ws://127.0.0.1:8007/cmp.net"
+    assert repr(server.router) == f"broker: {{'cmp.net@ws://127.0.0.1:{port}'}}"
+    assert repr(cli.uid) == f"ws://127.0.0.1:{port}/cmp.net"
     assert rembus.core.domain(cli.rid) == "net"
     await cli.publish("mytopic", slot=rembus.nowbucket())
     await cli.publish("mytopic", slot=1234, qos=rp.QOS2)

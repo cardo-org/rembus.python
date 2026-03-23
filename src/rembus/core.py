@@ -114,6 +114,12 @@ class RbURL:
     def __repr__(self):
         return f"{self.protocol}://{self.hostname}:{self.port}/{self.id}"
 
+    def __eq__(self, other: RbURL) -> bool:
+        return self.twkey == other.twkey
+
+    def __hash__(self) -> int:
+        return hash(self.twkey)
+
     def isbroker(self):
         """Check if the url defines a broker."""
         return self.protocol == "repl"

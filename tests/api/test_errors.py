@@ -21,8 +21,7 @@ def test_register_error(server):
     rembus.register(cid, "11223344")
     key_dir = rs.keys_dir(server.router.id)
     curr_mode = os.stat(key_dir).st_mode
-    os.chmod(key_dir, curr_mode & ~(
-        stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
+    os.chmod(key_dir, curr_mode & ~(stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
     try:
         myname = rembus.node(cid)
         myname.unregister()

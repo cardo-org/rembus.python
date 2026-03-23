@@ -22,6 +22,16 @@ __all__ = ["node"]
 logger = logging.getLogger(__name__)
 
 
+def node_url(url: RbURL | str | List[str] | None):
+    """Normalize to a RbURL value."""
+    if isinstance(url, str):
+        return RbURL(url)
+    elif isinstance(url, RbURL):
+        return url
+    else:
+        return RbURL("repl://")
+
+
 class AsyncLoopRunner:
     """:meta private:"""
 
@@ -57,7 +67,7 @@ class AsyncLoopRunner:
                 )
 
 
-class node:  # pylint: disable=invalid-name
+class Node:
     """The synchronous Rembus twin."""
 
     def __init__(
@@ -78,6 +88,7 @@ class node:  # pylint: disable=invalid-name
                 url, name, port, secure, policy, schema, enc, keyspace, mqtt
             )
         )
+        self.url = node_url(url)
 
     def __enter__(self):
         return self
@@ -263,12 +274,13 @@ class node:  # pylint: disable=invalid-name
             self.exec(self._rb.close)
             self._runner.shutdown()
             self._runner = None
+            _registry.pop(self.url, None)
 
 
 def register(rid: str, pin: str, scheme: int = SIG_RSA, enc: int = CBOR):
     """Provisions the component with rid identifier."""
     rburl = RbURL(rid)
-    rb = node(rid, enc=enc)
+    rb = Node(rid, enc=enc)
     try:
         rb.register(rburl.id, pin, scheme)
     except Exception as e:
@@ -276,3 +288,32 @@ def register(rid: str, pin: str, scheme: int = SIG_RSA, enc: int = CBOR):
         raise
     finally:
         rb.close()
+
+
+_registry: dict[RbURL, Node] = {}
+
+
+def node(
+    url: RbURL | str | List[str] | None = None,
+    name: str | None = None,
+    port: int | None = None,
+    secure: bool = False,
+    policy: str = "first_up",
+    schema: str | None = None,
+    enc: int = CBOR,
+    keyspace: bool = True,
+    mqtt: str | None = None,
+) -> Node:
+    """Initialize a rembus node."""
+    uid = node_url(url)
+
+    if uid in _registry and not uid.isbroker():
+        handle = _registry[uid]
+    else:
+        handle = Node(
+            url, name, port, secure, policy, schema, enc, keyspace, mqtt
+        )
+        if not uid.isbroker():
+            _registry[uid] = handle
+
+    return handle

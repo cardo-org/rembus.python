@@ -152,6 +152,7 @@ class Router(Supervised):
         schema: str | None = None,
     ):
         super().__init__()
+        self.wsport = None
         self.id = name
         self.admins: dict = {}
         self.id_twin: dict = {}
@@ -194,11 +195,13 @@ class Router(Supervised):
 
     def isconnected(self, rid: str) -> bool:
         """Check if a component with the given rid is connected."""
-        for tk, twin in self.id_twin.items():
-            if tk.startswith(rid + "@"):
-                if twin.isopen():
-                    return True
-        return False
+        key = RbURL(rid).twkey
+        return key in self.id_twin and self.id_twin[key].isopen()
+
+    def get_twin(self, rid: str):
+        """Return the twin with name `rid`."""
+        key = RbURL(rid).twkey
+        return self.id_twin.get(key, None)
 
     def uptime(self) -> str:
         """Return the uptime of the router."""
@@ -341,6 +344,7 @@ class Router(Supervised):
             await self.send_message(msg)
         elif msg.target is not None and msg.target != self.id:
             target_url = RbURL(msg.target)
+            target_url.port = self.wsport
             target_twin = self.id_twin.get(target_url.twkey)
             if target_twin and target_twin.isopen():
                 logger.debug("[%s] sending to [%s]", self, target_twin)
@@ -462,6 +466,7 @@ class Router(Supervised):
         from rembus.twin import WsTwin
 
         url = RbURL()
+        url.port = self.wsport
         twin = WsTwin(url, bottom_router(self), False)
         await twin.start()
         self.id_twin[url.twkey] = twin
@@ -471,6 +476,7 @@ class Router(Supervised):
 
     async def serve_ws(self, port: int, issecure: bool = False):
         """Start a WebSocket server to handle incoming connections."""
+        self.wsport = port
         ssl_context = None
         if issecure:
             trust_store = rs.keystore_dir()

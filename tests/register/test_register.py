@@ -1,4 +1,5 @@
 """Test the registration and unregistration of rembus nodes."""
+
 import logging
 import os
 import pytest
@@ -77,8 +78,7 @@ def test_connect_authenticated():
     assert rid == rembus.settings.DEFAULT_BROKER
 
     # already connected
-    with pytest.raises(rp.RembusError):
-        rembus.node(f"ws://:8990/{NAME}")
+    rembus.node(f"ws://:8990/{NAME}")
 
     rb.close()
     server.close()
@@ -99,7 +99,7 @@ def test_verify_error():
     """Test the error condition when the secret file is wrong."""
     fn = rembus.settings.key_file(rembus.settings.DEFAULT_BROKER, NAME)
     # create an empty secret file to trigger a verify error
-    with open(fn, 'w', encoding="utf-8") as _:
+    with open(fn, "w", encoding="utf-8") as _:
         pass
 
     server = rembus.node(port=8990)

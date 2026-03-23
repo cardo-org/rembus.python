@@ -22,8 +22,13 @@ def test_broker():
     server = rembus.node(port=8801)
     server.expose(broker_service)
 
-    srv = rembus.node("ws://:8801/srv")
+    srv_name = "srv"
+    srv = rembus.node(f"ws://:8801/{srv_name}")
     srv.expose(myservice)
+
+    router = server.router
+    twin = router.get_twin(f"ws://:8801/{srv_name}")
+    assert twin.uid.id == srv_name
 
     cli = rembus.node("ws://:8801/cli")
     z = cli.rpc("myservice", x, y)

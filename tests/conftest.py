@@ -22,7 +22,7 @@ def server(port=8338):
     rb.register_shutdown()
 
     time.sleep(1)  # Give the server a moment to start
-    logging.info("starting test rembus server")
+    logging.info("test rembus server is open: %s", rb.isopen())
     yield rb
     logging.info("shutting down test rembus server")
     rb.close()

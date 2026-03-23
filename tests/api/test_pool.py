@@ -23,6 +23,7 @@ def test_rpc(server):
     x = 2
     y = 3
     rb = rembus.node(["client1", "client2"])
+
     server.router.shared = None
     server.expose(myservice)
     server.expose(slowservice)
