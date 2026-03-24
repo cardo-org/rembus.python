@@ -12,6 +12,9 @@ def topic4(d):
 
 async def test_init_db():
     bro = await start_broker("schema.json")
+
+    assert bro.db
+
     await asyncio.sleep(0.1)
 
     sub = await rb.component("sub")
@@ -80,8 +83,10 @@ async def test_init_db():
     timepoint = now_dt + timedelta(seconds=2)
     df = await pub.rpc(
         "query_topic3",
-        {"when": timepoint.strftime(
-            "%Y-%m-%d %H:%M:%S"), "where": "double=3.0"},
+        {
+            "when": timepoint.strftime("%Y-%m-%d %H:%M:%S"),
+            "where": "double=3.0",
+        },
     )
     assert df.shape[0] == 1
 
@@ -97,9 +102,7 @@ async def test_init_db():
 
     await pub.rpc(
         "delete_topic3",
-        {
-            "where": "name='name_a' and type='type_default'"
-        },
+        {"where": "name='name_a' and type='type_default'"},
     )
     df = db.execute("select * from topic3").pl()
     assert df.shape[0] == 0

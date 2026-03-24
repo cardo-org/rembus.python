@@ -127,6 +127,11 @@ class Node:
         """The unique Rembus id for this node."""
         return self._rb.rid
 
+    @property
+    def db(self):
+        """The db handle."""
+        return self.router.db
+
     def isopen(self) -> bool:
         """Check if the connection is open."""
         return self._rb.isopen()
@@ -299,7 +304,7 @@ def node(
     port: int | None = None,
     secure: bool = False,
     policy: str = "first_up",
-    schema: str | None = None,
+    schema=None,
     enc: int = CBOR,
     keyspace: bool = True,
     mqtt: str | None = None,
