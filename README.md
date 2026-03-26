@@ -151,8 +151,9 @@ with metric values extracted from the message payload.
 If a schema is provided, DuckLake tables are created automatically if they
 do not already exist, and all matching publications are persisted.
 
-For each table two special topics are automatically created:
+For each table three special topics for RPC services are automatically created:
 
+* `upsert_<table>` insert/update records;
 * `query_<table>` retrieve records;
 * `delete_<table>` remove records;
 

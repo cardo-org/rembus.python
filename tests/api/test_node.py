@@ -29,6 +29,9 @@ def test_rpc(server):
     logging.debug("test __str__ for node %s", rb)
     repr(rb)
 
+    # the db handle is accesible from node
+    rb.db
+    
     server.expose(myservice)
 
     result = rb.rpc("myservice", x, y)

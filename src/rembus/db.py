@@ -230,11 +230,62 @@ def init_db(router, schema):
             sql = create_table_sql(table)
             logger.debug("creating table %s: %s", tname, sql)
             db.execute(sql)
-            # Create the query and delete rpc topics.
+            # Create the query, delete and upsert rpc topics
+            router.handler[f"upsert_{tname}"] = partial(
+                rpc_upsert, router, tname)
             router.handler[f"query_{tname}"] = partial(query, router, tname)
             router.handler[f"delete_{tname}"] = partial(delete, router, tname)
 
     return db
+
+
+def rpc_add_ts(table, obj):
+    """Add recv_ts field if required by schema."""
+    if "recv_ts" in table.extras:
+        col_name = table.extras["recv_ts"]
+        ts = timestamp()
+        if isinstance(obj, dict):
+            obj[col_name] = ts
+        elif isinstance(obj, list):
+            for el in obj:
+                el[col_name] = ts
+        elif isinstance(obj, pl.DataFrame):
+            obj = obj.with_columns(
+                pl.lit(ts).alias(col_name)
+            )
+
+    return obj
+
+
+def rpc_upsert(router, tname, obj, ctx=None, node=None):
+    """Insert/update obj values."""
+    table = router.tables[tname]
+    col_names = columns(table) + list(table.extras.values())
+    indexes = list(table.keys)
+    con = router.db
+
+    obj = rpc_add_ts(table, obj)
+    batch_df = None
+    if isinstance(obj, dict):
+        batch_df = pl.DataFrame([obj], schema=col_names)
+    elif isinstance(obj, list):
+        batch_df = pl.DataFrame(obj, schema=col_names)
+    elif isinstance(obj, pl.DataFrame):
+        missing_cols = [c for c in col_names if c not in obj.columns]
+        for col in missing_cols:
+            obj = obj.with_columns(pl.lit(None).alias(col))
+
+        batch_df = obj.select(col_names)
+
+    if batch_df is None:
+        raise RuntimeError(f"upsert failed: invalid record type {type(obj)}")
+
+    if table.keys:
+        execute_upsert_df(con, table, col_names, indexes, batch_df)
+    else:
+        con.register("batch_view", batch_df)
+        con.execute(f"INSERT INTO {tname} SELECT * FROM batch_view")
+        con.unregister("batch_view")
 
 
 def delete(router, table, obj=None, ctx=None, node=None):
@@ -525,19 +576,15 @@ def handle_default(msg, table, col_names, records, tname):
     records.append(vals + extra_vals)
 
 
-def execute_upsert(con, table, col_names, indexes, records, dataframes):
+def execute_upsert_df(con, table, col_names, indexes, df):
     tname = table.table
-
-    tdf = pl.DataFrame(records, schema=schema_to_polars(table), orient="row")
-    tdf = pl.concat([tdf, *dataframes], how="vertical")
-
-    if tdf.is_empty():
+    if df.is_empty():
         return
 
     if indexes:
-        tdf = tdf.sort(indexes).group_by(indexes).agg([pl.all().last()])
+        df = df.sort(indexes).group_by(indexes).agg([pl.all().last()])
 
-    con.register("df_view", tdf)
+    con.register("df_view", df)
 
     cond_str = " AND ".join(f"df_view.{k} = {tname}.{k}" for k in indexes)
     col_list = ", ".join(col_names)
@@ -556,6 +603,14 @@ def execute_upsert(con, table, col_names, indexes, records, dataframes):
 
     con.execute(sql)
     con.unregister("df_view")
+
+
+def execute_upsert(con, table, col_names, indexes, records, dataframes):
+    """Excute upsert on multiple records and dataframes."""
+    tdf = pl.DataFrame(records, schema=schema_to_polars(table), orient="row")
+    tdf = pl.concat([tdf, *dataframes], how="vertical")
+
+    execute_upsert_df(con, table, col_names, indexes, tdf)
 
 
 def upsert(con: duckdb.DuckDBPyConnection, table, messages):

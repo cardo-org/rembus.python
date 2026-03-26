@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `upsert_<topic>` rpc service.
+
 - node internal registry
 
 ## [0.8.4] 2026-03-21
