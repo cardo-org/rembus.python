@@ -232,7 +232,8 @@ def init_db(router, schema):
             db.execute(sql)
             # Create the query, delete and upsert rpc topics
             router.handler[f"upsert_{tname}"] = partial(
-                rpc_upsert, router, tname)
+                rpc_upsert, router, tname
+            )
             router.handler[f"query_{tname}"] = partial(query, router, tname)
             router.handler[f"delete_{tname}"] = partial(delete, router, tname)
 
@@ -250,20 +251,17 @@ def rpc_add_ts(table, obj):
             for el in obj:
                 el[col_name] = ts
         elif isinstance(obj, pl.DataFrame):
-            obj = obj.with_columns(
-                pl.lit(ts).alias(col_name)
-            )
+            obj = obj.with_columns(pl.lit(ts).alias(col_name))
 
     return obj
 
 
-def rpc_upsert(router, tname, obj, ctx=None, node=None):
+def rpc_upsert(router, tname, obj, options={}, ctx=None, node=None):
     """Insert/update obj values."""
     table = router.tables[tname]
     col_names = columns(table) + list(table.extras.values())
     indexes = list(table.keys)
     con = router.db
-
     obj = rpc_add_ts(table, obj)
     batch_df = None
     if isinstance(obj, dict):
@@ -281,7 +279,7 @@ def rpc_upsert(router, tname, obj, ctx=None, node=None):
         raise RuntimeError(f"upsert failed: invalid record type {type(obj)}")
 
     if table.keys:
-        execute_upsert_df(con, table, col_names, indexes, batch_df)
+        execute_upsert_df(con, table, col_names, indexes, batch_df, options)
     else:
         con.register("batch_view", batch_df)
         con.execute(f"INSERT INTO {tname} SELECT * FROM batch_view")
@@ -314,13 +312,15 @@ def query(router, table, obj=None, ctx=None, node=None):
     if obj is None:
         sql = f"SELECT * FROM {table}"
     else:
-        allowed = ("where", "when")
+        allowed = ("cols", "where", "when")
         bad = [k for k in obj.keys() if k not in allowed]
         if bad:
             raise ValueError(f"invalid keys: {', '.join(bad)}")
         where_cond = ""
+
         if "where" in obj:
             where_cond = " WHERE " + obj["where"]
+
         at = ""
         if "when" in obj:
             if isinstance(obj["when"], (int, float)):
@@ -329,7 +329,16 @@ def query(router, table, obj=None, ctx=None, node=None):
             else:
                 ts = obj["when"]
             at = f" AT (TIMESTAMP => CAST('{ts}' AS TIMESTAMP))"
-        sql = f"SELECT * FROM {table} {at} {where_cond}"
+
+        if "cols" in obj:
+            cols = obj["cols"]
+            if isinstance(cols, list):
+                cols_str = ", ".join(cols)
+            else:
+                cols_str = str(cols)
+            sql = f"SELECT {cols_str} FROM {table} {at} {where_cond}"
+        else:
+            sql = f"SELECT * FROM {table} {at} {where_cond}"
 
     logger.debug("db query: %s", sql)
     return router.db.execute(sql).pl()
@@ -576,7 +585,7 @@ def handle_default(msg, table, col_names, records, tname):
     records.append(vals + extra_vals)
 
 
-def execute_upsert_df(con, table, col_names, indexes, df):
+def execute_upsert_df(con, table, col_names, indexes, df, options={}):
     tname = table.table
     if df.is_empty():
         return
@@ -590,7 +599,15 @@ def execute_upsert_df(con, table, col_names, indexes, df):
     col_list = ", ".join(col_names)
     val_list = ", ".join(f"df_view.{c}" for c in col_names)
 
-    update_cols = [c for c in col_names if c not in indexes]
+    if "nulls" in options and options["nulls"]:
+        update_cols = [c for c in col_names if c not in indexes]
+    else:
+        update_cols = [
+            c
+            for c in col_names
+            if c not in indexes and df[c].drop_nulls().len() > 0
+        ]
+
     update_list = ", ".join(f"{c} = df_view.{c}" for c in update_cols)
 
     sql = f"""
@@ -600,7 +617,6 @@ def execute_upsert_df(con, table, col_names, indexes, df):
         WHEN MATCHED THEN UPDATE SET {update_list}
         WHEN NOT MATCHED THEN INSERT ({col_list}) VALUES ({val_list})
     """
-
     con.execute(sql)
     con.unregister("df_view")
 
