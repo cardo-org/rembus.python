@@ -116,7 +116,7 @@ def test_upsert_topic2():
         "type": "router",
         "utinyint": 1
     }
-    cli.rpc("upsert_topic2", obj)
+    cli.rpc("upsert_topic2", obj, {"nulls": True})
 
     obj["utinyint"] = 2
     cli.rpc("upsert_topic2", obj)

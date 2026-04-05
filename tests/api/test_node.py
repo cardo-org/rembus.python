@@ -1,6 +1,7 @@
 """Test cases for the node synchronous API."""
 
 import logging
+import threading
 import pytest
 import rembus
 import rembus.protocol as rp
@@ -14,7 +15,8 @@ def myservice(x, y):
 
 def test_anonym(server):
     """Connect anonymously."""
-    node = rembus.node(rembus.anonym(host="127.0.0.1", port=8338))
+    node = rembus.node(rembus.anonym(
+        host="127.0.0.1", port=8338), thread=threading.Thread)
     rid = node.rpc("rid")
     assert rid == "broker"
     node.close()
@@ -31,7 +33,7 @@ def test_rpc(server):
 
     # the db handle is accesible from node
     rb.db
-    
+
     server.expose(myservice)
 
     result = rb.rpc("myservice", x, y)

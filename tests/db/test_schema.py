@@ -93,11 +93,15 @@ async def test_init_db():
     # Using epoch seconds
     df = await pub.rpc(
         "query_topic3",
-        {"when": timepoint.timestamp(), "where": "double=3.0"},
+        {"cols": ["name", "type"], "when": timepoint.timestamp(),
+         "where": "double=3.0"},
     )
     assert df.shape[0] == 1
 
-    df = await pub.rpc("query_topic3", {"where": "double>10"})
+    df = await pub.rpc(
+        "query_topic3",
+        {"cols": "name, type", "where": "double>10"}
+    )
     assert df.shape[0] == 0
 
     await pub.rpc(

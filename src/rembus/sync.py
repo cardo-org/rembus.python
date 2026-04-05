@@ -35,9 +35,14 @@ def node_url(url: RbURL | str | List[str] | None):
 class AsyncLoopRunner:
     """:meta private:"""
 
-    def __init__(self):
+    def __init__(self, thread=None):
         self.loop = asyncio.new_event_loop()
-        self._thread = threading.Thread(target=self._start_loop, daemon=True)
+        if thread:
+            self._thread = thread(target=self._start_loop, daemon=True)
+        else:
+            self._thread = threading.Thread(
+                target=self._start_loop, daemon=True)
+
         self._thread.start()
 
     def _start_loop(self):
@@ -81,8 +86,9 @@ class Node:
         enc: int = CBOR,
         keyspace: bool = True,
         mqtt: str | None = None,
+        thread: Optional[Callable[..., threading.Thread]] = None,
     ):
-        self._runner = AsyncLoopRunner()
+        self._runner = AsyncLoopRunner(thread)
         self._rb = self._runner.run(
             _component(
                 url, name, port, secure, policy, schema, enc, keyspace, mqtt
@@ -308,6 +314,7 @@ def node(
     enc: int = CBOR,
     keyspace: bool = True,
     mqtt: str | None = None,
+    thread: Optional[Callable[..., threading.Thread]] = None,
 ) -> Node:
     """Initialize a rembus node."""
     uid = node_url(url)
@@ -316,7 +323,7 @@ def node(
         handle = _registry[uid]
     else:
         handle = Node(
-            url, name, port, secure, policy, schema, enc, keyspace, mqtt
+            url, name, port, secure, policy, schema, enc, keyspace, mqtt, thread
         )
         if not uid.isbroker():
             _registry[uid] = handle
