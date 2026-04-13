@@ -115,7 +115,9 @@ class KeySpaceRouter(rc.Supervised):
 
             # Evaluate local subscribers
             if pattern in self.broker.handler:
-                await self.broker.evaluate(space_twin, pattern, datas)
+                if twid in self.broker.id_twin:
+                    tw = self.broker.id_twin[twid]
+                    await self.broker.evaluate(tw, pattern, datas)
 
             if twid in self.broker.twins:
                 tw = self.broker.id_twin[twid]
