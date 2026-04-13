@@ -318,6 +318,7 @@ class PubSubMsg(RembusMsg):
     recvts: int | None = None
     table: str | None = None
     regex: str | None = None
+    from_mqtt: bool = False
 
     def to_payload(self, enc: int) -> bytes | str:
         """Serialize the Pub/Sub message."""

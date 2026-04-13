@@ -1566,6 +1566,7 @@ class MqttTwin(Twin):
             topic=topic,
             data=data if isinstance(data, list) else [data],
             flags=qos,
+            from_mqtt=True,
         )
         logger.debug("[%s] mqtt msg: %s", self, msg)
         await self._router.inbox.put(msg)
@@ -1586,9 +1587,9 @@ class MqttTwin(Twin):
         await client.connect(
             self.uid.hostname, self.uid.port or 1883, ssl=ssl_context
         )
-
+        base_topic = os.getenv("REMBUS_MQTT_BASE_TOPIC", "#")
         client.on_message = self.on_message
-        client.subscribe("#", qos=1, no_local=True)
+        client.subscribe(base_topic, qos=1, no_local=True)
         self.socket = client
 
     async def send(self, msg: rp.RembusMsg):

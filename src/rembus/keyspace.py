@@ -121,7 +121,8 @@ class KeySpaceRouter(rc.Supervised):
                 tw = self.broker.id_twin[twid]
                 if tw.isopen():
                     if tw.ismqtt:
-                        await tw.publish(topic, *msg.data)
+                        if not msg.from_mqtt:
+                            await tw.publish(topic, *msg.data)
                     else:
                         await tw.publish(pattern, *datas)
 
