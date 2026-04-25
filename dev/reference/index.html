@@ -1033,6 +1033,20 @@ complete the authentication process.</p>
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="rembus.twin.Twin.torouter">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">torouter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">topic</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.Twin.torouter" title="Link to this definition">¶</a></dt>
+<dd><p>Publish a message to the router.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>topic</strong> (<em>str</em>)</p></li>
+<li><p><strong>data</strong> (<em>Any</em>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="rembus.twin.Twin.publish">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">publish</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">topic</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.Twin.publish" title="Link to this definition">¶</a></dt>
 <dd><p>Publish a message to a topic.</p>
@@ -2147,6 +2161,7 @@ If the topic is public the component is always authorized.</p>
 <li><a class="reference internal" href="#rembus.twin.Twin.send_task"><code class="docutils literal notranslate"><span class="pre">Twin.send_task()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.wait_response"><code class="docutils literal notranslate"><span class="pre">Twin.wait_response()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.login"><code class="docutils literal notranslate"><span class="pre">Twin.login()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.twin.Twin.torouter"><code class="docutils literal notranslate"><span class="pre">Twin.torouter()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.publish"><code class="docutils literal notranslate"><span class="pre">Twin.publish()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.put"><code class="docutils literal notranslate"><span class="pre">Twin.put()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.broker_setting"><code class="docutils literal notranslate"><span class="pre">Twin.broker_setting()</span></code></a></li>
