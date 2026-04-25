@@ -671,6 +671,28 @@ class Twin(Supervised):
         else:
             logger.debug("[%s]: free mode access", self)
 
+    async def _publish(self, torouter: bool, topic: str, *data: Any, **kwargs):
+        slot = kwargs.get("slot", None)
+        qos = kwargs.get("qos", rp.QOS0) & rp.QOS2
+        if qos == rp.QOS0:
+            msg = rp.PubSubMsg(topic=topic, data=data, slot=slot)
+            msg.twin = self
+            #if self.isbroker() and self.isopen():
+            if torouter:
+                await self._router.inbox.put(msg)
+            elif self.socket is None:
+                raise rp.RembusConnectionClosed()
+            else:
+                await self.send(msg)
+        else:
+            await self._qos_publish(topic, data, qos, slot)
+
+        return None
+
+    async def torouter(self, topic: str, *data: Any, **kwargs):
+        """Publish a message to the router."""
+        await self._publish(True, topic, *data, **kwargs)
+
     async def publish(self, topic: str, *data: Any, **kwargs):
         """
         Publish a message to a topic.
@@ -691,20 +713,8 @@ class Twin(Supervised):
         The message is sent asynchronously and does not wait for delivery
         acknowledgment unless explicitly configured (e.g., via QoS settings).
         """
-        slot = kwargs.get("slot", None)
-        qos = kwargs.get("qos", rp.QOS0) & rp.QOS2
-        if qos == rp.QOS0:
-            msg = rp.PubSubMsg(topic=topic, data=data, slot=slot)
-            msg.twin = self
-            if self.isbroker() and self.isopen():
-                await self._router.inbox.put(msg)
-            elif self.socket is None:
-                raise rp.RembusConnectionClosed()
-            else:
-                await self.send(msg)
-        else:
-            await self._qos_publish(topic, data, qos, slot)
-
+        torouter = self.isbroker() and self.isopen()
+        await self._publish(torouter, topic, *data, **kwargs)
         return None
 
     async def put(self, topic: str, *args: Any, **kwargs):
@@ -1550,6 +1560,12 @@ class MqttTwin(Twin):
         """Always False for the MqttTwin subclass."""
         return False
 
+    def on_connect(self, client, flags, rc, properties):
+        logger.debug("[MQTT] Connected to %s with result code %s", self.uid, rc)
+        base_topic = os.getenv("REMBUS_MQTT_BASE_TOPIC", "#")
+        logger.debug("[MQTT] Subscribing to %s with topic '%s'", self.uid, base_topic)
+        client.subscribe(base_topic, qos=1, no_local=True)
+
     async def on_message(self, client, topic, payload, qos, properties):
         """
         Handle incoming MQTT messages and route them to the router's inbox.
@@ -1558,18 +1574,20 @@ class MqttTwin(Twin):
         message is received on a subscribed topic. It forwards the message
         payload to the appropriate router for processing.
         """
-        logger.debug("[MQTT] (QOS=%s) %s: %s", qos, topic, payload)
+        try:
+            logger.debug("[MQTT] (QOS=%s) %s: %s", qos, topic, payload)
 
-        data = json.loads(payload)
+            data = json.loads(payload)
 
-        msg = rp.PubSubMsg(
-            topic=topic,
-            data=data if isinstance(data, list) else [data],
-            flags=qos,
-            from_mqtt=True,
-        )
-        logger.debug("[%s] mqtt msg: %s", self, msg)
-        await self._router.inbox.put(msg)
+            msg = rp.PubSubMsg(
+                topic=topic,
+                data=data if isinstance(data, list) else [data],
+                flags=qos,
+                from_mqtt=True,
+            )
+            await self._router.inbox.put(msg)
+        except Exception as e:
+            logger.error("[MQTT] topic %s: %s", topic, e)
 
     async def connect(self):
         """
@@ -1580,6 +1598,10 @@ class MqttTwin(Twin):
         and subscribe to topics over MQTT.
         """
         client = MQTTClient(self.uid.id)
+        self.socket = client
+        client.on_connect = self.on_connect
+        client.on_message = self.on_message
+
         ssl_context = False
         if self.uid.protocol == "mqtts":
             ssl_context = get_ssl_context()
@@ -1587,10 +1609,6 @@ class MqttTwin(Twin):
         await client.connect(
             self.uid.hostname, self.uid.port or 1883, ssl=ssl_context
         )
-        base_topic = os.getenv("REMBUS_MQTT_BASE_TOPIC", "#")
-        client.on_message = self.on_message
-        client.subscribe(base_topic, qos=1, no_local=True)
-        self.socket = client
 
     async def send(self, msg: rp.RembusMsg):
         """

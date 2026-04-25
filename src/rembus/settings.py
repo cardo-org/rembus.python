@@ -52,7 +52,7 @@ class Config:
         self.ack_timeout = cfg.get("ack_timeout", def_ack_timeout)
 
         self.db_attach = db_attach(name)
-        logger.info("db: %s", self.db_attach)
+        logger.debug("db: %s", self.db_attach)
 
 
 def db_attach(router_id):
@@ -64,9 +64,9 @@ def db_attach(router_id):
         db_name = f"ducklake:{data_dir}.ducklake"
 
     if "DUCKDB_IGNORE_DATA_PATH" not in os.environ:
-        return f"ATTACH '{db_name}' AS rl (DATA_PATH '{data_dir}')"
+        return f"ATTACH '{db_name}' AS rl (DATA_PATH '{data_dir}', AUTOMATIC_MIGRATION TRUE)"
     else:
-        return f"ATTACH '{db_name}' AS rl"
+        return f"ATTACH '{db_name}' AS rl (AUTOMATIC_MIGRATION TRUE)"
 
 
 def rembus_dir():

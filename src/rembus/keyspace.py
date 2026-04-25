@@ -124,7 +124,8 @@ class KeySpaceRouter(rc.Supervised):
                 if tw.isopen():
                     if tw.ismqtt:
                         if not msg.from_mqtt:
-                            await tw.publish(topic, *msg.data)
+                            torouter = not tw.isclient
+                            await tw._publish(torouter, topic, *msg.data)
                     else:
                         await tw.publish(pattern, *datas)
 
