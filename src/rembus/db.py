@@ -256,8 +256,11 @@ def rpc_add_ts(table, obj):
     return obj
 
 
-def rpc_upsert(router, tname, obj, options={}, ctx=None, node=None):
+def rpc_upsert(router, tname, obj, options=None, ctx=None, node=None):
     """Insert/update obj values."""
+    if options is None:
+        options = {}
+
     table = router.tables[tname]
     col_names = columns(table) + list(table.extras.values())
     indexes = list(table.keys)
@@ -585,7 +588,10 @@ def handle_default(msg, table, col_names, records, tname):
     records.append(vals + extra_vals)
 
 
-def execute_upsert_df(con, table, col_names, indexes, df, options={}):
+def execute_upsert_df(con, table, col_names, indexes, df, options=None):
+    if options is None:
+        options = {}
+
     tname = table.table
     if df.is_empty():
         return
