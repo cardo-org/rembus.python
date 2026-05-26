@@ -1593,6 +1593,12 @@ to act as a publisher or subscriber connected to a MQTT broker.</p>
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="rembus.twin.MqttTwin.worker">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">worker</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.MqttTwin.worker" title="Link to this definition">¶</a></dt>
+<dd><p>Worker task to process messages from MQTT.</p>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="rembus.twin.MqttTwin.on_message">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">on_message</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">client</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">topic</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">payload</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qos</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.MqttTwin.on_message" title="Link to this definition">¶</a></dt>
 <dd><p>Handle incoming MQTT messages and route them to the router’s inbox.</p>
@@ -2186,6 +2192,7 @@ If the topic is public the component is always authorized.</p>
 </li>
 <li><a class="reference internal" href="#rembus.twin.MqttTwin"><code class="docutils literal notranslate"><span class="pre">MqttTwin</span></code></a><ul>
 <li><a class="reference internal" href="#rembus.twin.MqttTwin.isbroker"><code class="docutils literal notranslate"><span class="pre">MqttTwin.isbroker()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.twin.MqttTwin.worker"><code class="docutils literal notranslate"><span class="pre">MqttTwin.worker()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.MqttTwin.on_message"><code class="docutils literal notranslate"><span class="pre">MqttTwin.on_message()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.MqttTwin.connect"><code class="docutils literal notranslate"><span class="pre">MqttTwin.connect()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.MqttTwin.send"><code class="docutils literal notranslate"><span class="pre">MqttTwin.send()</span></code></a></li>
