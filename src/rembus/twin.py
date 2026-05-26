@@ -677,7 +677,7 @@ class Twin(Supervised):
         if qos == rp.QOS0:
             msg = rp.PubSubMsg(topic=topic, data=data, slot=slot)
             msg.twin = self
-            #if self.isbroker() and self.isopen():
+            # if self.isbroker() and self.isopen():
             if torouter:
                 await self._router.inbox.put(msg)
             elif self.socket is None:
@@ -1551,6 +1551,7 @@ class MqttTwin(Twin):
         enc: int = rp.CBOR,
     ):
         super().__init__(uid, router, isclient, enc)
+        self.queue = asyncio.Queue(maxsize=10000)
 
     @property
     def ismqtt(self):
@@ -1563,8 +1564,32 @@ class MqttTwin(Twin):
     def on_connect(self, client, flags, rc, properties):
         logger.debug("[MQTT] Connected to %s with result code %s", self.uid, rc)
         base_topic = os.getenv("REMBUS_MQTT_BASE_TOPIC", "#")
-        logger.debug("[MQTT] Subscribing to %s with topic '%s'", self.uid, base_topic)
+        logger.debug(
+            "[MQTT] Subscribing to %s with topic '%s'", self.uid, base_topic
+        )
+        self.workers = [asyncio.create_task(self.worker()) for _ in range(20)]
         client.subscribe(base_topic, qos=1, no_local=True)
+
+    async def process_message(self, topic, payload):
+        try:
+            data = json.loads(payload)
+            msg = rp.PubSubMsg(
+                topic=topic,
+                data=data if isinstance(data, list) else [data],
+                from_mqtt=True,
+            )
+            await self._router.inbox.put(msg)
+        except Exception as e:
+            logger.error("[MQTT] topic %s: %s", topic, e)
+
+    async def worker(self):
+        """Worker task to process messages from MQTT."""
+        while True:
+            topic, payload = await self.queue.get()
+            try:
+                await self.process_message(topic, payload)
+            finally:
+                self.queue.task_done()
 
     async def on_message(self, client, topic, payload, qos, properties):
         """
@@ -1575,19 +1600,11 @@ class MqttTwin(Twin):
         payload to the appropriate router for processing.
         """
         try:
-            logger.debug("[MQTT] (QOS=%s) %s: %s", qos, topic, payload)
-
-            data = json.loads(payload)
-
-            msg = rp.PubSubMsg(
-                topic=topic,
-                data=data if isinstance(data, list) else [data],
-                flags=qos,
-                from_mqtt=True,
+            self.queue.put_nowait((topic, payload))
+        except asyncio.QueueFull:
+            logger.error(
+                "[MQTT] queue full, dropping message from topic %s", topic
             )
-            await self._router.inbox.put(msg)
-        except Exception as e:
-            logger.error("[MQTT] topic %s: %s", topic, e)
 
     async def connect(self):
         """
@@ -1648,3 +1665,12 @@ class MqttTwin(Twin):
             await self.socket.disconnect()
 
         self.socket = None
+        await self.queue.join()
+
+        for task in self.workers:
+            task.cancel()
+
+        await asyncio.gather(
+            *self.workers,
+            return_exceptions=True,
+        )
