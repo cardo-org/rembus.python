@@ -1,6 +1,6 @@
 """Settings for Rembus components."""
 
-import json
+import orjson as json
 import logging
 import os
 import time
@@ -26,9 +26,9 @@ class Config:
         try:
             fn = os.path.join(rembus_dir(), name, "settings.json")
             if os.path.isfile(fn):
-                with open(fn, "r", encoding="utf-8") as f:
-                    cfg = json.load(f)
-        except json.decoder.JSONDecodeError as e:
+                with open(fn, "rb") as f:
+                    cfg = json.loads(f.read())
+        except json.JSONDecodeError as e:
             raise (RuntimeError(f"{fn}: {e}")) from e
 
         def_timeout = float(os.environ.get("REMBUS_TIMEOUT", 10))

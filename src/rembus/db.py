@@ -7,7 +7,7 @@ import logging
 import shutil
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
-import json
+import orjson as json
 import re
 import cbor2
 import duckdb
@@ -218,10 +218,9 @@ def init_db(router, schema):
     if schema:
         with open(
             schema,
-            "r",
-            encoding="utf-8",
+            "rb",
         ) as f:
-            data = json.load(f)
+            data = json.loads(f.read())
 
         sch = Schema(**data)
         router.tables = {tbl.table: tbl for tbl in sch.tables}

@@ -3,7 +3,7 @@ Tests for MQTT over TLS (MQTTS) connections in rembus.
 """
 
 import asyncio
-import json
+import orjson as json
 import os
 import shutil
 import socket

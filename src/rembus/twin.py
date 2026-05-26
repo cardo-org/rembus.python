@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import suppress
 import base64
-import json
+import orjson as json
 import logging
 import os
 from typing import Callable, Any, Optional, List
@@ -280,6 +280,11 @@ class Twin(Supervised):
     def router(self):
         """Return the top router associated with this twin."""
         return top_router(self._router)
+
+    @property
+    def ctx(self):
+        """Return the shared context associated with this twin."""
+        return top_router(self._router).shared
 
     @router.setter
     def router(self, plugin: Supervised):

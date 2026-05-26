@@ -7,7 +7,7 @@ import base64
 import os
 import logging
 from typing import Any, List
-import json
+import orjson as json
 import time
 import cbor2
 from cryptography.hazmat.primitives import serialization
@@ -266,7 +266,7 @@ class RpcReqMsg(RembusMsg):
                 "method": self.topic,
                 "params": self.data,
             }
-        )
+        ).decode()
 
 
 class ResMsg(RembusMsg):
@@ -304,7 +304,7 @@ class ResMsg(RembusMsg):
                     "data": self.data,
                 },
             }
-        )
+        ).decode()
 
 
 class PubSubMsg(RembusMsg):
@@ -344,7 +344,7 @@ class PubSubMsg(RembusMsg):
                     "method": self.topic,
                     "params": {"type": self.flags, "data": self.data},
                 }
-            )
+            ).decode()
         else:
             if self.slot is None:
                 if enc == CBOR:
@@ -358,7 +358,7 @@ class PubSubMsg(RembusMsg):
                         "method": self.topic,
                         "params": self.data,
                     }
-                )
+                ).decode()
             else:
                 self.flags |= SLOT_FLAG
                 mid = to_bytes(self.slot)
@@ -379,7 +379,7 @@ class PubSubMsg(RembusMsg):
                         "method": self.topic,
                         "params": self.data,
                     }
-                )
+                ).decode()
 
 
 class AckMsg(RembusMsg):
@@ -394,7 +394,7 @@ class AckMsg(RembusMsg):
 
         return json.dumps(
             {"jsonrpc": "2.0", "id": self.id, "result": {"type": TYPE_ACK}}
-        )
+        ).decode()
 
 
 class Ack2Msg(RembusMsg):
@@ -409,7 +409,7 @@ class Ack2Msg(RembusMsg):
 
         return json.dumps(
             {"jsonrpc": "2.0", "id": self.id, "result": {"type": TYPE_ACK2}}
-        )
+        ).decode()
 
 
 class AdminMsg(RembusMsg):
@@ -436,7 +436,7 @@ class AdminMsg(RembusMsg):
                 "method": self.topic,
                 "params": {"type": TYPE_ADMIN, "data": self.data},
             }
-        )
+        ).decode()
 
 
 class IdentityMsg(RembusMsg):
@@ -464,7 +464,7 @@ class IdentityMsg(RembusMsg):
                 "method": "__identity__",
                 "params": {"type": TYPE_IDENTITY, "cid": self.cid},
             }
-        )
+        ).decode()
 
 
 class AttestationMsg(RembusMsg):
@@ -494,7 +494,7 @@ class AttestationMsg(RembusMsg):
                     "signature": self.signature,
                 },
             }
-        )
+        ).decode()
 
 
 class RegisterMsg(RembusMsg):
@@ -532,7 +532,7 @@ class RegisterMsg(RembusMsg):
                     "key_type": self.type,
                 },
             }
-        )
+        ).decode()
 
 
 class UnregisterMsg(RembusMsg):
@@ -552,7 +552,7 @@ class UnregisterMsg(RembusMsg):
                 "method": "__unregister__",
                 "params": {"type": TYPE_UNREGISTER},
             }
-        )
+        ).decode()
 
 
 def isregistered(router_id, rid: str):

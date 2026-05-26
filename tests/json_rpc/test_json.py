@@ -1,11 +1,11 @@
-import json
+import orjson as json
 import time
 import pytest
 import rembus
 
 
 def my_service(x, y):
-    return x+y
+    return x + y
 
 
 def test_jsonrpc_rpc(server):
@@ -35,11 +35,7 @@ def test_jsonrpc_error(server):
 
 def test_jsonrpc_invalid_request():
     rb = rembus.node("mynode", enc=rembus.JSON)
-    pkt = {
-        "jsorpc": "2.0",
-        "id": 1234,
-        "params": {}
-    }
+    pkt = {"jsorpc": "2.0", "id": 1234, "params": {}}
 
     # Server-side throws an exception and close the connection.
     # The client detect the connection down and reconnect.
@@ -52,7 +48,7 @@ def test_jsonrpc_invalid_response():
     pkt = {
         "jsorpc": "2.0",
         "id": 1234,
-        "result": {"type": 999}  # the type field has an invalid value
+        "result": {"type": 999},  # the type field has an invalid value
     }
 
     # Server-side throws an exception and close the connection.
