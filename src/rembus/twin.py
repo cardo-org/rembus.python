@@ -91,6 +91,7 @@ async def init_twin(router, uid: RbURL, enc: int, isserver: bool):
         await builtins.load_callbacks(cmp)
         if not cmp.isbroker():
             if router.config.start_anyway:
+                cmp.handler["phase"] = lambda: "RECONNECTING"
                 await cmp.inbox.put("reconnect")
             else:
                 await cmp.connect()
@@ -1388,7 +1389,7 @@ class Twin(Supervised):
             If the loop times out while waiting for messages (only if `timeout`
             is set).
         """
-        if not self.isbroker():
+        if not self.isbroker() and self.handler["phase"]() != "RECONNECTING":
             await self.reactive()
         if self._supervisor_task is not None:
             try:
@@ -1631,6 +1632,9 @@ class MqttTwin(Twin):
         await client.connect(
             self.uid.hostname, self.uid.port or 1883, ssl=ssl_context
         )
+
+    async def reactive(self):
+        """The MQTT protocol does not implemebnt the reactive command."""
 
     async def send(self, msg: rp.RembusMsg):
         """

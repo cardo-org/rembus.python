@@ -17,6 +17,11 @@ def nowbucket(width: int = 900):
     """The start of current bucket expressed in seconds from epoch."""
     return (int(time.time()) // 900) * 900
 
+def env_bool(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 class Config:
     """Configuration values to modify the behavior of Rembus."""
@@ -42,7 +47,7 @@ class Config:
             "ws_ping_interval", def_ws_ping_interval
         )
         self.start_anyway = cfg.get(
-            "start_anyway", os.environ.get("REMBUS_START_ANYWAY", False)
+            "start_anyway", env_bool("REMBUS_START_ANYWAY", False)
         )
 
         # Max numbers of QOS1 and QOS2 Pub/Sub retrasmissions
