@@ -9,7 +9,7 @@
 project = "Rembus"
 copyright = "2026, Attilio Donà"
 author = "Attilio Donà"
-release = "0.8.8"
+release = "0.8.9"
 html_baseurl = "https://cardo-org.github.io/rembus.python/"
 
 # -- General configuration ---------------------------------------------------
