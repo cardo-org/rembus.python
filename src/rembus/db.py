@@ -233,11 +233,18 @@ def init_db(router, schema):
             router.handler[f"upsert_{tname}"] = partial(
                 rpc_upsert, router, tname
             )
-            router.handler[f"query_{tname}"] = partial(query, router, tname)
-            router.handler[f"delete_{tname}"] = partial(delete, router, tname)
-
+            expose_query_table(router, tname)
+            expose_delete_table(router, tname)
     return db
 
+
+def expose_query_table(router, table: str):
+    """Expose the query_table rpc method"""
+    router.handler[f"query_{table}"] = partial(query, router, table)
+
+def expose_delete_table(router, table: str):
+    """Expose the delete_table rpc method"""
+    router.handler[f"delete_{table}"] = partial(delete, router, table)
 
 def rpc_add_ts(table, obj):
     """Add recv_ts field if required by schema."""
@@ -284,7 +291,7 @@ def rpc_upsert(router, tname, obj, options=None, ctx=None, node=None):
         execute_upsert_df(con, table, col_names, indexes, batch_df, options)
     else:
         con.register("batch_view", batch_df)
-        con.execute(f"INSERT INTO {tname} SELECT * FROM batch_view")
+        con.execute(f"INSERT INTO '{tname}' SELECT * FROM batch_view")
         con.unregister("batch_view")
 
 
@@ -301,9 +308,9 @@ def delete(router, table, obj=None, ctx=None, node=None):
         cond_str = obj.get("where", None)
 
     if cond_str:
-        sql = f"DELETE FROM {table} WHERE {cond_str}"
+        sql = f"DELETE FROM '{table}' WHERE {cond_str}"
     else:
-        sql = f"DELETE FROM {table}"
+        sql = f"DELETE FROM '{table}'"
 
     logger.debug("db delete: %s", sql)
     router.db.execute(sql)
@@ -312,7 +319,7 @@ def delete(router, table, obj=None, ctx=None, node=None):
 def query(router, table, obj=None, ctx=None, node=None):
     """Select rows from `table` matching conditions in `obj`."""
     if obj is None:
-        sql = f"SELECT * FROM {table}"
+        sql = f"SELECT * FROM '{table}'"
     else:
         allowed = ("cols", "where", "when")
         bad = [k for k in obj.keys() if k not in allowed]
@@ -338,9 +345,9 @@ def query(router, table, obj=None, ctx=None, node=None):
                 cols_str = ", ".join(cols)
             else:
                 cols_str = str(cols)
-            sql = f"SELECT {cols_str} FROM {table} {at} {where_cond}"
+            sql = f"SELECT {cols_str} FROM '{table}' {at} {where_cond}"
         else:
-            sql = f"SELECT * FROM {table} {at} {where_cond}"
+            sql = f"SELECT * FROM '{table}' {at} {where_cond}"
 
     logger.debug("db query: %s", sql)
     return router.db.execute(sql).pl()
@@ -616,7 +623,7 @@ def execute_upsert_df(con, table, col_names, indexes, df, options=None):
     update_list = ", ".join(f"{c} = df_view.{c}" for c in update_cols)
 
     sql = f"""
-        MERGE INTO {tname}
+        MERGE INTO '{tname}'
         USING df_view
         ON {cond_str}
         WHEN MATCHED THEN UPDATE SET {update_list}
