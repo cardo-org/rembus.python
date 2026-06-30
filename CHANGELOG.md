@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Manage SQL tables with special chars.
 
+- Add expose_upsert_table, expose_query_table and expose_delete_table
+
 ## [0.8.9] 2026-06-15
 
 ### Fixed

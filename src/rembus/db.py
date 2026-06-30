@@ -230,21 +230,26 @@ def init_db(router, schema):
             logger.debug("creating table %s: %s", tname, sql)
             db.execute(sql)
             # Create the query, delete and upsert rpc topics
-            router.handler[f"upsert_{tname}"] = partial(
-                rpc_upsert, router, tname
-            )
+            expose_upsert_table(router, tname)
             expose_query_table(router, tname)
             expose_delete_table(router, tname)
     return db
+
+
+def expose_upsert_table(router, table: str):
+    """Expose the upsert_table rpc method"""
+    router.handler[f"upsert_{table}"] = partial(rpc_upsert, router, table)
 
 
 def expose_query_table(router, table: str):
     """Expose the query_table rpc method"""
     router.handler[f"query_{table}"] = partial(query, router, table)
 
+
 def expose_delete_table(router, table: str):
     """Expose the delete_table rpc method"""
     router.handler[f"delete_{table}"] = partial(delete, router, table)
+
 
 def rpc_add_ts(table, obj):
     """Add recv_ts field if required by schema."""
