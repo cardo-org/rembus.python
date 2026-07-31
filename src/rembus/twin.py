@@ -32,8 +32,8 @@ from rembus.core import (
     response_data,
     bytes_to_b64,
 )
-from rembus.router import bottom_router, top_router, twin_down
-from rembus.keyspace import KeySpaceRouter
+from rembus.router import bottom_router, top_router, twin_down, get_response
+from rembus.keyspace import KeySpaceRouter, build_space_re
 
 __all__ = [
     "Twin",
@@ -1558,6 +1558,8 @@ class MqttTwin(Twin):
     ):
         super().__init__(uid, router, isclient, enc)
         self.queue = asyncio.Queue(maxsize=10000)
+        # Wildcard topic subscriptions: topic pattern -> (regex, callback).
+        self.patterns: dict[str, Any] = {}
 
     @property
     def ismqtt(self):
@@ -1566,6 +1568,77 @@ class MqttTwin(Twin):
     def isbroker(self) -> bool:
         """Always False for the MqttTwin subclass."""
         return False
+
+    async def subscribe(
+        self,
+        fn: Callable[..., Any],
+        msgfrom: float = rp.Now,
+        topic: Optional[str] = None,
+    ):
+        """
+        Subscribe a callback function to a topic to receive published messages.
+
+        Unlike the base :class:`Twin` implementation, MQTT subscriptions do
+        not go through the broker's ``ADD_INTEREST`` admin handshake: the
+        MQTT client already subscribes to every topic (see :meth:`on_connect`)
+        and messages are dispatched locally based on the registered handler.
+
+        Parameters
+        ----------
+        fn : Callable[..., Any]
+            The function to be called for each received message.
+        msgfrom : float, optional
+            Unused for MQTT transport, kept for API compatibility.
+        topic : str, optional
+            The topic to subscribe to. If `None`, `fn.__name__` is used.
+            May contain wildcards: `*` matches a single path segment and
+            `**` matches zero or more segments (e.g. `"foo/*/device"` or
+            `"**/telemetry"`). When a wildcard topic matches, `fn` is
+            invoked as `fn(topic, *payload)`, with the originating topic
+            as the first argument.
+
+        Returns
+        -------
+        MqttTwin
+            self, to allow chaining.
+        """
+        if topic is None:
+            topic = fn.__name__
+
+        if "*" in topic:
+            # Wildcard topic (e.g. "foo/*/device" or "**/telemetry"): match
+            # against incoming topics with a compiled regex. The matched
+            # callback is invoked with the originating topic as first
+            # argument, followed by the message payload.
+            self.patterns[topic] = (build_space_re(topic), fn)
+        else:
+            self.router.handler[topic] = fn
+
+        return self
+
+    async def unsubscribe(self, fn: Callable[..., Any] | str):
+        """
+        Unsubscribe a callback function or topic name from receiving messages.
+
+        As with :meth:`subscribe`, no broker handshake is performed for MQTT
+        transport; the local handler registration is simply removed.
+
+        Parameters
+        ----------
+        fn : Callable[..., Any] or str
+            The callback function to remove, or the topic name to remove.
+
+        Returns
+        -------
+        MqttTwin
+            self, to allow chaining.
+        """
+        topic = fn if isinstance(fn, str) else fn.__name__
+        if topic in self.patterns:
+            self.patterns.pop(topic, None)
+        else:
+            self.router.handler.pop(topic, None)
+        return self
 
     def on_connect(self, client, flags, rc, properties):
         logger.debug("[MQTT] Connected to %s with result code %s", self.uid, rc)
@@ -1579,12 +1652,28 @@ class MqttTwin(Twin):
     async def process_message(self, topic, payload):
         try:
             data = json.loads(payload)
-            msg = rp.PubSubMsg(
-                topic=topic,
-                data=data if isinstance(data, list) else [data],
-                from_mqtt=True,
-            )
+            args = data if isinstance(data, list) else [data]
+            msg = rp.PubSubMsg(topic=topic, data=args, from_mqtt=True)
             await self._router.inbox.put(msg)
+
+            if topic not in self.router.handler:
+                # No exact-match subscriber: try wildcard patterns
+                # (e.g. "foo/*/device", "**/telemetry").
+                for regex, fn in self.patterns.values():
+                    if regex.match(topic):
+                        if self.router.shared is not None:
+
+                            await get_response(
+                                fn(
+                                    topic,
+                                    *args,
+                                    ctx=self.router.shared,
+                                    node=self
+                                )
+                            )
+                        else:
+                            await get_response(fn(topic, *args))
+                        break
         except Exception as e:
             logger.error("[MQTT] topic %s: %s", topic, e)
 

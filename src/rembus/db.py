@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 typemap = {
+    "BOOLEAN": pl.Boolean,
     "BLOB": pl.Binary,
     "TEXT": pl.Utf8,  # String
     "UTINYINT": pl.UInt8,
