@@ -1599,6 +1599,55 @@ to act as a publisher or subscriber connected to a MQTT broker.</p>
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="rembus.twin.MqttTwin.subscribe">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">subscribe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fn</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msgfrom</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">topic</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.MqttTwin.subscribe" title="Link to this definition">¶</a></dt>
+<dd><p>Subscribe a callback function to a topic to receive published messages.</p>
+<p>Unlike the base <a class="reference internal" href="#rembus.twin.Twin" title="rembus.twin.Twin"><code class="xref py py-class docutils literal notranslate"><span class="pre">Twin</span></code></a> implementation, MQTT subscriptions do
+not go through the broker’s <code class="docutils literal notranslate"><span class="pre">ADD_INTEREST</span></code> admin handshake: the
+MQTT client already subscribes to every topic (see <code class="xref py py-meth docutils literal notranslate"><span class="pre">on_connect()</span></code>)
+and messages are dispatched locally based on the registered handler.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>fn</strong> (<em>Callable</em><em>[</em><em>...</em><em>, </em><em>Any</em><em>]</em>) – The function to be called for each received message.</p></li>
+<li><p><strong>msgfrom</strong> (<em>float</em><em>, </em><em>optional</em>) – Unused for MQTT transport, kept for API compatibility.</p></li>
+<li><p><strong>topic</strong> (<em>str</em><em>, </em><em>optional</em>) – The topic to subscribe to. If <cite>None</cite>, <cite>fn.__name__</cite> is used.
+May contain wildcards: <cite>*</cite> matches a single path segment and
+<cite>**</cite> matches zero or more segments (e.g. <cite>“foo/*/device”</cite> or
+<cite>“**/telemetry”</cite>). When a wildcard topic matches, <cite>fn</cite> is
+invoked as <cite>fn(topic, *payload)</cite>, with the originating topic
+as the first argument.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>self, to allow chaining.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#rembus.twin.MqttTwin" title="rembus.twin.MqttTwin">MqttTwin</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="rembus.twin.MqttTwin.unsubscribe">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">unsubscribe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fn</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.MqttTwin.unsubscribe" title="Link to this definition">¶</a></dt>
+<dd><p>Unsubscribe a callback function or topic name from receiving messages.</p>
+<p>As with <a class="reference internal" href="#rembus.twin.MqttTwin.subscribe" title="rembus.twin.MqttTwin.subscribe"><code class="xref py py-meth docutils literal notranslate"><span class="pre">subscribe()</span></code></a>, no broker handshake is performed for MQTT
+transport; the local handler registration is simply removed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>fn</strong> (<em>Callable</em><em>[</em><em>...</em><em>, </em><em>Any</em><em>] or </em><em>str</em>) – The callback function to remove, or the topic name to remove.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>self, to allow chaining.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#rembus.twin.MqttTwin" title="rembus.twin.MqttTwin">MqttTwin</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="rembus.twin.MqttTwin.worker">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">worker</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.MqttTwin.worker" title="Link to this definition">¶</a></dt>
 <dd><p>Worker task to process messages from MQTT.</p>
@@ -2205,6 +2254,8 @@ If the topic is public the component is always authorized.</p>
 </li>
 <li><a class="reference internal" href="#rembus.twin.MqttTwin"><code class="docutils literal notranslate"><span class="pre">MqttTwin</span></code></a><ul>
 <li><a class="reference internal" href="#rembus.twin.MqttTwin.isbroker"><code class="docutils literal notranslate"><span class="pre">MqttTwin.isbroker()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.twin.MqttTwin.subscribe"><code class="docutils literal notranslate"><span class="pre">MqttTwin.subscribe()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.twin.MqttTwin.unsubscribe"><code class="docutils literal notranslate"><span class="pre">MqttTwin.unsubscribe()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.MqttTwin.worker"><code class="docutils literal notranslate"><span class="pre">MqttTwin.worker()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.MqttTwin.on_message"><code class="docutils literal notranslate"><span class="pre">MqttTwin.on_message()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.MqttTwin.connect"><code class="docutils literal notranslate"><span class="pre">MqttTwin.connect()</span></code></a></li>
