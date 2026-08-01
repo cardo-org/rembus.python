@@ -25,6 +25,66 @@ def wait_for_broker(port):
     raise RuntimeError(f"MQTT broker {mqtt_host}:{port} not ready")
 
 
+def mytopic(message):
+    """Log the received MQTT message."""
+    logging.info("Received MQTT message: %s", message)
+
+
+def myspace_ctx(topic, message, ctx, node):
+    """Store the message in the context."""
+    ctx[topic] = message
+
+def myspace(topic, message):
+    """Log the received MQTT message."""
+    logging.info("%s: %s", topic, message)
+
+
+async def test_component_subscribe():
+    """Create a rembus client component that subscribes to MQTT messages."""
+    cli = await rb.component(f"mqtt://{mqtt_host}:{mqtt_port}")
+    topic = "mytopic"
+    await cli.subscribe(mytopic)
+    await cli.reactive()
+
+    await publish_mqtt_message(topic, {"value": 100})
+    await asyncio.sleep(0.2)  # give broker time to deliver
+    await cli.unsubscribe(topic)
+    await cli.close()
+
+
+async def test_component_subscribe_keyspace():
+    """Create a rembus client component that subscribes to a keyspace."""
+    space = "myspace/*/metric"
+    cli = await rb.component(f"mqtt://{mqtt_host}:{mqtt_port}")
+    await cli.subscribe(myspace, topic=space)
+    await cli.reactive()
+
+    await publish_mqtt_message("myspace/a/metric", {"value": 1})
+    await publish_mqtt_message("myspace/b/metric", {"value": 2})
+    await asyncio.sleep(0.2)  # give broker time to deliver
+
+    await cli.close()
+
+async def test_component_subscribe_keyspace_ctx():
+    """Create a rembus client component that subscribes to a keyspace."""
+    space = "myspace/*/metric"
+    cli = await rb.component(f"mqtt://{mqtt_host}:{mqtt_port}")
+    await cli.subscribe(myspace_ctx, topic=space)
+    cli.inject({})
+    await cli.reactive()
+
+    await publish_mqtt_message("myspace/a/metric", {"value": 1})
+    await publish_mqtt_message("myspace/b/metric", {"value": 2})
+    await asyncio.sleep(0.2)  # give broker time to deliver
+
+    ctx = cli.ctx
+    assert ctx["myspace/a/metric"] == {"value": 1}
+    assert ctx["myspace/b/metric"] == {"value": 2}
+
+    await cli.unsubscribe(space)
+    await cli.close()
+
+
 async def publish_mqtt_message(topic, payload):
     client = MQTTClient("test-publisher")
     await client.connect("localhost", 1883)

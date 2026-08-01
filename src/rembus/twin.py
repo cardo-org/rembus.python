@@ -695,9 +695,6 @@ class Twin(Supervised):
 
         return None
 
-    async def torouter(self, topic: str, *data: Any, **kwargs):
-        """Publish a message to the router."""
-        await self._publish(True, topic, *data, **kwargs)
 
     async def publish(self, topic: str, *data: Any, **kwargs):
         """

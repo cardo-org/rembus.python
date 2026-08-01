@@ -3,6 +3,7 @@
 import logging
 import pytest
 import rembus.protocol as rp
+import rembus.settings as rs
 import rembus.core as rc
 from rembus.router import Router, twin_up
 from rembus.twin import WsTwin
@@ -80,3 +81,52 @@ async def test_ip_not_resolved():
     await twin_up(twin)
 
     await twin.close()
+
+
+def test_jsonrpc_request_invalid():
+    """Test handling of invalid JSON-RPC request."""
+    with pytest.raises(ValueError):
+        rp.jsonrpc_request(
+            '{"jsonrpc": "2.0", "method": "invalid_method"}',
+            msg_id=1,
+            params={})
+
+def test_jsonrpc_parse_invalid():
+    """Test handling of invalid JSON-RPC request."""
+    with pytest.raises(ValueError):
+        rp.jsonrpc_parse(
+            '{"jsonrpc": "2.0", "id": 1, "method": "invalid_method"}',
+        )
+
+
+def test_jsonrpc_response_invalid():
+    """Test handling of invalid JSON-RPC response."""
+    with pytest.raises(ValueError):
+        rp.jsonrpc_response(
+            '{"jsonrpc": "2.0", "method": "invalid_method"}',
+            msg_id=1,
+            result={"type": "invalid"})
+
+
+def test_env_bool():
+    """Test the env_bool function for environment variable parsing."""
+    import os
+
+    os.environ["TEST_BOOL_TRUE"] = "true"
+    os.environ["TEST_BOOL_FALSE"] = "false"
+    os.environ["TEST_BOOL_YES"] = "yes"
+    os.environ["TEST_BOOL_NO"] = "no"
+    os.environ["TEST_BOOL_ON"] = "on"
+    os.environ["TEST_BOOL_OFF"] = "off"
+    os.environ["TEST_BOOL_1"] = "1"
+    os.environ["TEST_BOOL_0"] = "0"
+
+    assert rs.env_bool("TEST_BOOL_TRUE") is True
+    assert rs.env_bool("TEST_BOOL_FALSE") is False
+    assert rs.env_bool("TEST_BOOL_YES") is True
+    assert rs.env_bool("TEST_BOOL_NO") is False
+    assert rs.env_bool("TEST_BOOL_ON") is True
+    assert rs.env_bool("TEST_BOOL_OFF") is False
+    assert rs.env_bool("TEST_BOOL_1") is True
+    assert rs.env_bool("TEST_BOOL_0") is False
+    assert rs.env_bool("NON_EXISTENT_VAR", default=True) is True

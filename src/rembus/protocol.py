@@ -569,7 +569,7 @@ def tohex(bs: bytes):
     return " ".join(f"0x{x:02x}" for x in bs)
 
 
-def jsonprc_request(pkt, msg_id, params) -> RembusMsg:
+def jsonrpc_request(pkt, msg_id, params) -> RembusMsg:
     """Parse a JSON_RPC request"""
     if isinstance(params, list):
         # Default to RPC request
@@ -610,7 +610,7 @@ def jsonprc_request(pkt, msg_id, params) -> RembusMsg:
         raise ValueError(f"{pkt}:invalid JSON-RPC request")
 
 
-def jsonprc_response(pkt, msg_id, result) -> RembusMsg:
+def jsonrpc_response(pkt, msg_id, result) -> RembusMsg:
     """Parse a JSON_RPC success response"""
 
     msg_type = result.get("type")
@@ -633,15 +633,15 @@ def jsonrpc_parse(payload) -> RembusMsg:
         # request-response message
         params = pkt.get("params")
         if params is not None:
-            return jsonprc_request(pkt, msg_id, params)
+            return jsonrpc_request(pkt, msg_id, params)
 
         result = pkt.get("result")
         if result:
-            return jsonprc_response(pkt, msg_id, result)
+            return jsonrpc_response(pkt, msg_id, result)
 
         err = pkt.get("error")
         if err:
-            return jsonprc_response(pkt, msg_id, err)
+            return jsonrpc_response(pkt, msg_id, err)
 
     else:
         return PubSubMsg(topic=pkt["method"], data=pkt.get("data"))
