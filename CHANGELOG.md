@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Improve shutdown logic.
 
+- Fix cleanup when handling OS signals.
+
 ## [0.8.11] 2026-08-01
 
 ### Added

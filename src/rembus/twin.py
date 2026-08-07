@@ -239,6 +239,7 @@ class Twin(Supervised):
         self.isreactive: bool = False
         self.msg_from: dict[str, float] = {}
         self.mark: int = 0
+        self._signal_shutdown_task: Optional[asyncio.Task[None]] = None
 
     def __str__(self):
         return self.__repr__()
@@ -385,12 +386,14 @@ class Twin(Supervised):
         """
         if sys.platform != "win32":
             loop = asyncio.get_running_loop()
-            loop.add_signal_handler(
-                signal.SIGINT, lambda: asyncio.create_task(self.close())
-            )
-            loop.add_signal_handler(
-                signal.SIGTERM, lambda: asyncio.create_task(self.close())
-            )
+
+            def _handle_signal():
+                self._signal_shutdown_task = asyncio.create_task(
+                    self.close()
+                )
+
+            loop.add_signal_handler(signal.SIGINT, _handle_signal)
+            loop.add_signal_handler(signal.SIGTERM, _handle_signal)
 
     async def _shutdown(self):
         """Twin cleanup logic when shutting down."""
@@ -1394,6 +1397,17 @@ class Twin(Supervised):
                     self.register_shutdown()
                 await asyncio.wait([self._supervisor_task], timeout=timeout)
             finally:
+                # The supervisor task may complete as soon as its inner
+                # task finishes, which can happen before the shutdown
+                # triggered by a signal handler has run its full cleanup
+                # (e.g. closing the database). Wait for it to finish so
+                # resources are released before returning.
+                if (
+                    self._signal_shutdown_task is not None
+                    and not self._signal_shutdown_task.done()
+                ):
+                    with suppress(asyncio.CancelledError):
+                        await self._signal_shutdown_task
                 await self.shutdown()
 
 
