@@ -421,6 +421,7 @@ class Router(Supervised):
             match msg:
                 case "shutdown":
                     logger.debug("[%s] router shutting down", self)
+                    rdb.save_data_at_rest(self)
                     break
                 case "save_messages":
                     # save messages to the database periodically

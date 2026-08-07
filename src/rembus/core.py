@@ -217,11 +217,12 @@ class Supervised:
         if self._should_run:
             self._should_run = False
 
-            await self._shutdown()
-
             if self._task and not self._task.done():
                 await shutdown_message(self)
                 await self._task
+
+            await self._shutdown()
+
 
             if self._supervisor_task and not self._supervisor_task.done():
                 self._supervisor_task.cancel()
