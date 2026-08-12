@@ -446,11 +446,16 @@ class Router(Supervised):
     async def evaluate(self, twin, topic: str, data: Any) -> Any:
         """Invoke the handler associate with the message topic."""
         if self.shared is not None:
+            if "repl" in self.id_twin:
+                target = self.id_twin["repl"]
+            else:
+                target = twin
+                
             output = await get_response(
                 self.handler[topic](
                     *getargs(data),
                     ctx=self.shared,
-                    node=twin,
+                    node=target,
                 )
             )
         else:
