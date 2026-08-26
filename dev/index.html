@@ -289,8 +289,8 @@ bin/broker
 <input checked="True" class="tab-input" id="tab-set--1-input--1" name="tab-set--1" type="radio" /><label class="tab-label" for="tab-set--1-input--1">sync</label><div class="tab-content docutils container">
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">rembus</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">rb</span>
 
-<span class="n">cli</span> <span class="o">=</span> <span class="n">rb</span><span class="o">.</span><span class="n">node</span><span class="p">(</span><span class="s2">&quot;mynode&quot;</span><span class="p">)</span>
-<span class="n">cli</span><span class="o">.</span><span class="n">rpc</span><span class="p">(</span><span class="s2">&quot;version&quot;</span><span class="p">)</span>
+<span class="n">cli</span> <span class="o">=</span> <span class="n">rb</span><span class="o">.</span><span class="n">node</span><span class="p">(</span><span class="s2">"mynode"</span><span class="p">)</span>
+<span class="n">cli</span><span class="o">.</span><span class="n">rpc</span><span class="p">(</span><span class="s2">"version"</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -298,8 +298,8 @@ bin/broker
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">rembus</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">rb</span>
 
 <span class="k">async</span> <span class="n">main</span><span class="p">():</span>
-   <span class="n">cli</span> <span class="o">=</span> <span class="k">await</span> <span class="n">rb</span><span class="o">.</span><span class="n">component</span><span class="p">(</span><span class="s2">&quot;mynode&quot;</span><span class="p">)</span>
-   <span class="k">await</span> <span class="n">cli</span><span class="o">.</span><span class="n">rpc</span><span class="p">(</span><span class="s2">&quot;version&quot;</span><span class="p">)</span>
+   <span class="n">cli</span> <span class="o">=</span> <span class="k">await</span> <span class="n">rb</span><span class="o">.</span><span class="n">component</span><span class="p">(</span><span class="s2">"mynode"</span><span class="p">)</span>
+   <span class="k">await</span> <span class="n">cli</span><span class="o">.</span><span class="n">rpc</span><span class="p">(</span><span class="s2">"version"</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>

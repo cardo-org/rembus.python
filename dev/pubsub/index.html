@@ -255,8 +255,8 @@
 <input checked="True" class="tab-input" id="tab-set--0-input--1" name="tab-set--0" type="radio" /><label class="tab-label" for="tab-set--0-input--1">sync</label><div class="tab-content docutils container">
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">rembus</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">rb</span>
 
-<span class="n">cli</span> <span class="o">=</span> <span class="n">rb</span><span class="o">.</span><span class="n">node</span><span class="p">(</span><span class="s2">&quot;mynode&quot;</span><span class="p">)</span>
-<span class="n">cli</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="s2">&quot;mytopic&quot;</span><span class="p">,</span> <span class="s2">&quot;mydata&quot;</span><span class="p">)</span>
+<span class="n">cli</span> <span class="o">=</span> <span class="n">rb</span><span class="o">.</span><span class="n">node</span><span class="p">(</span><span class="s2">"mynode"</span><span class="p">)</span>
+<span class="n">cli</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="s2">"mytopic"</span><span class="p">,</span> <span class="s2">"mydata"</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -264,8 +264,8 @@
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">rembus</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">rb</span>
 
 <span class="k">async</span> <span class="n">main</span><span class="p">():</span>
-   <span class="n">cli</span> <span class="o">=</span> <span class="k">await</span> <span class="n">rb</span><span class="o">.</span><span class="n">component</span><span class="p">(</span><span class="s2">&quot;mynode&quot;</span><span class="p">)</span>
-   <span class="k">await</span> <span class="n">cli</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="s2">&quot;mytopic&quot;</span><span class="p">,</span> <span class="s2">&quot;mydata&quot;</span><span class="p">)</span>
+   <span class="n">cli</span> <span class="o">=</span> <span class="k">await</span> <span class="n">rb</span><span class="o">.</span><span class="n">component</span><span class="p">(</span><span class="s2">"mynode"</span><span class="p">)</span>
+   <span class="k">await</span> <span class="n">cli</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="s2">"mytopic"</span><span class="p">,</span> <span class="s2">"mydata"</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -278,9 +278,9 @@
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">rembus</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">rb</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">mytopic</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Received data:&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">"Received data:"</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
 
-<span class="n">sub</span> <span class="o">=</span> <span class="n">rb</span><span class="o">.</span><span class="n">node</span><span class="p">(</span><span class="s2">&quot;mynode&quot;</span><span class="p">)</span>
+<span class="n">sub</span> <span class="o">=</span> <span class="n">rb</span><span class="o">.</span><span class="n">node</span><span class="p">(</span><span class="s2">"mynode"</span><span class="p">)</span>
 <span class="n">sub</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">mytopic</span><span class="p">)</span>
 <span class="n">sub</span><span class="o">.</span><span class="n">reactive</span><span class="p">()</span>
 <span class="n">sub</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
@@ -291,10 +291,10 @@
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">rembus</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">rb</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">mytopic</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Received data:&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">"Received data:"</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
 
 <span class="k">async</span> <span class="n">main</span><span class="p">():</span>
-    <span class="n">sub</span> <span class="o">=</span> <span class="k">await</span> <span class="n">rb</span><span class="o">.</span><span class="n">component</span><span class="p">(</span><span class="s2">&quot;mynode&quot;</span><span class="p">)</span>
+    <span class="n">sub</span> <span class="o">=</span> <span class="k">await</span> <span class="n">rb</span><span class="o">.</span><span class="n">component</span><span class="p">(</span><span class="s2">"mynode"</span><span class="p">)</span>
     <span class="k">await</span> <span class="n">sub</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">mytopic</span><span class="p">)</span>
     <span class="k">await</span> <span class="n">sub</span><span class="o">.</span><span class="n">reactive</span><span class="p">()</span>
     <span class="k">await</span> <span class="n">sub</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>

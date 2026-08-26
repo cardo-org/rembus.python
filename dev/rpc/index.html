@@ -255,8 +255,8 @@
 <input checked="True" class="tab-input" id="tab-set--0-input--1" name="tab-set--0" type="radio" /><label class="tab-label" for="tab-set--0-input--1">sync</label><div class="tab-content docutils container">
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">rembus</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">rb</span>
 
-<span class="n">cli</span> <span class="o">=</span> <span class="n">rb</span><span class="o">.</span><span class="n">node</span><span class="p">(</span><span class="s2">&quot;mynode&quot;</span><span class="p">)</span>
-<span class="n">cli</span><span class="o">.</span><span class="n">rpc</span><span class="p">(</span><span class="s2">&quot;myservice&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+<span class="n">cli</span> <span class="o">=</span> <span class="n">rb</span><span class="o">.</span><span class="n">node</span><span class="p">(</span><span class="s2">"mynode"</span><span class="p">)</span>
+<span class="n">cli</span><span class="o">.</span><span class="n">rpc</span><span class="p">(</span><span class="s2">"myservice"</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -264,8 +264,8 @@
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">rembus</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">rb</span>
 
 <span class="k">async</span> <span class="n">main</span><span class="p">():</span>
-   <span class="n">cli</span> <span class="o">=</span> <span class="k">await</span> <span class="n">rb</span><span class="o">.</span><span class="n">component</span><span class="p">(</span><span class="s2">&quot;mynode&quot;</span><span class="p">)</span>
-   <span class="k">await</span> <span class="n">cli</span><span class="o">.</span><span class="n">rpc</span><span class="p">(</span><span class="s2">&quot;myservice&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+   <span class="n">cli</span> <span class="o">=</span> <span class="k">await</span> <span class="n">rb</span><span class="o">.</span><span class="n">component</span><span class="p">(</span><span class="s2">"mynode"</span><span class="p">)</span>
+   <span class="k">await</span> <span class="n">cli</span><span class="o">.</span><span class="n">rpc</span><span class="p">(</span><span class="s2">"myservice"</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -280,7 +280,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">myservice</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
 
-<span class="n">srv</span> <span class="o">=</span> <span class="n">rb</span><span class="o">.</span><span class="n">node</span><span class="p">(</span><span class="s2">&quot;mynode&quot;</span><span class="p">)</span>
+<span class="n">srv</span> <span class="o">=</span> <span class="n">rb</span><span class="o">.</span><span class="n">node</span><span class="p">(</span><span class="s2">"mynode"</span><span class="p">)</span>
 <span class="n">srv</span><span class="o">.</span><span class="n">expose</span><span class="p">(</span><span class="n">myservice</span><span class="p">)</span>
 <span class="n">srv</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
 </pre></div>
@@ -293,7 +293,7 @@
     <span class="k">return</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
 
 <span class="k">async</span> <span class="n">main</span><span class="p">():</span>
-    <span class="n">srv</span> <span class="o">=</span> <span class="k">await</span> <span class="n">rb</span><span class="o">.</span><span class="n">component</span><span class="p">(</span><span class="s2">&quot;mynode&quot;</span><span class="p">)</span>
+    <span class="n">srv</span> <span class="o">=</span> <span class="k">await</span> <span class="n">rb</span><span class="o">.</span><span class="n">component</span><span class="p">(</span><span class="s2">"mynode"</span><span class="p">)</span>
     <span class="k">await</span> <span class="n">srv</span><span class="o">.</span><span class="n">expose</span><span class="p">(</span><span class="n">mytopic</span><span class="p">)</span>
     <span class="k">await</span> <span class="n">srv</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
 </pre></div>
