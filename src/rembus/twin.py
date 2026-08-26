@@ -1571,6 +1571,7 @@ class MqttTwin(Twin):
         self.queue = asyncio.Queue(maxsize=10000)
         # Wildcard topic subscriptions: topic pattern -> (regex, callback).
         self.patterns: dict[str, Any] = {}
+        self.workers = []
 
     @property
     def ismqtt(self):
