@@ -1654,7 +1654,7 @@ class MqttTwin(Twin):
 
     def on_connect(self, client, flags, rc, properties):
         logger.debug("[MQTT] Connected to %s with result code %s", self.uid, rc)
-        base_topic = os.getenv("REMBUS_MQTT_BASE_TOPIC", "#")
+        base_topic = os.getenv("REMBUS_MQTT_TOPIC_FILTER", "#")
         logger.debug(
             "[MQTT] Subscribing to %s with topic '%s'", self.uid, base_topic
         )
