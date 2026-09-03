@@ -414,8 +414,20 @@ class Twin(Supervised):
         await self._cancel_task("reconnect_task")
 
     async def _shutdown_router(self):
-        if self.router:
-            await self.router.shutdown()
+        """Shut down every Supervised router in the chain bound to this twin.
+
+        ``self._router`` may point to a plugin (e.g. a ``KeySpaceRouter``)
+        installed in front of the core router by :func:`add_plugin`. Only
+        shutting down ``self.router`` (the core router) would leave such
+        plugins' supervisor tasks running forever, so walk the whole
+        downstream chain instead.
+        """
+        router = self._router
+        seen: set[int] = set()
+        while router is not None and id(router) not in seen:
+            seen.add(id(router))
+            await router.shutdown()
+            router = router.downstream
 
     async def _close_socket(self):
         self.socket = None

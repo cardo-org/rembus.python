@@ -155,6 +155,9 @@ class KeySpaceRouter(rc.Supervised):
         while True:
             msg = await self.inbox.get()
             logger.debug("[%s] recv: %s", self, msg)
+            if msg == "shutdown":
+                logger.debug("[%s] keyspace router shutting down", self)
+                break
             if isinstance(msg, rp.AdminMsg) and rp.COMMAND in msg.data:
                 if msg.data[rp.COMMAND] == rp.ADD_INTEREST:
                     await self.subscribe_handler(msg.twin, msg.topic)
