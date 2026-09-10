@@ -363,7 +363,7 @@ class Router(Supervised):
             except Exception as e:  # pylint: disable=broad-exception-caught
                 status = rp.STS_METHOD_EXCEPTION
                 output = f"{e}"
-                logger.error("%s exception: %s", msg.twin, e)
+                logger.error("%s exception: %s", msg.twin, e, exc_info=True)
             outmsg = rp.ResMsg(id=msg.id, status=status, data=rp.df2tag(output))
             await msg.twin.send(outmsg)
         elif topic in self.exposers and self.isauthorized(topic, msg.twin):
