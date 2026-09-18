@@ -320,12 +320,15 @@ def node(
     uid = node_url(url)
 
     if uid in _registry and not uid.isbroker():
-        handle = _registry[uid]
-    else:
-        handle = Node(
-            url, name, port, secure, policy, schema, enc, keyspace, mqtt, thread
-        )
-        if not uid.isbroker():
-            _registry[uid] = handle
+        # Instead of reusing the existing node, close it first.
+        # In this way calling node() will always create a fresh instance.
+        # Think of it as a connection reset.
+        _registry[uid].close()
+
+    handle = Node(
+        url, name, port, secure, policy, schema, enc, keyspace, mqtt, thread
+    )
+    if not uid.isbroker():
+        _registry[uid] = handle
 
     return handle
