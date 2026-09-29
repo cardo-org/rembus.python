@@ -21,6 +21,7 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa, ec
 import polars as pl
 import websockets
 from gmqtt import Client as MQTTClient
+from gmqtt.mqtt.constants import MQTTv50
 import rembus.protocol as rp
 import rembus.settings as rs
 import rembus.builtins as builtins
@@ -1766,7 +1767,12 @@ class MqttTwin(Twin):
         if isinstance(msg, rp.PubSubMsg):
             # If data has a single item, send just that item
             data_to_send = msg.data if len(msg.data) > 1 else msg.data[0]
-            self.socket.publish(msg.topic, json.dumps(data_to_send))
+            publish_kwargs = {}
+            if self.socket.protocol_version == MQTTv50:
+                publish_kwargs["content_type"] = "application/json"
+            self.socket.publish(
+                msg.topic, json.dumps(data_to_send), **publish_kwargs
+            )
 
     def isopen(self) -> bool:
         """
