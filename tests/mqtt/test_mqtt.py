@@ -121,6 +121,7 @@ def test_mqtt_subscribe():
 
     cli = rb.node("mysubscriber")
     cli.subscribe(mqtt_topic)
+    cli.reactive()
 
     asyncio.run(publish_wrong_payload())
 
@@ -150,6 +151,7 @@ def test_mqtt_space_subscribe():
     cli = rb.node("mysubscriber")
     cli.subscribe(consume_alarms, topic="*/alarm")
     cli.subscribe(consume_list, topic="*/sequence")
+    cli.reactive()
 
     asyncio.run(publish_mqtt_message("home/alarm", {"status": "on"}))
 

@@ -232,6 +232,99 @@ async def test_publish_slot():
     await server.close()
 
 
+def component_retro_topic(ctx, node):
+    """A pubsub method that increments a per-subscriber counter."""
+    ctx[node.rid] += 1
+
+
+@pytest.mark.asyncio
+async def test_reactive():
+    """Test that reactive() triggers delivery of messages stored while the
+    subscriber was not yet listening, honoring the `msgfrom` subscription
+    window.
+    """
+    port = 8009
+    server = await start_server(port=port)
+
+    pub = await rembus.component(f"ws://:{port}/pub.net")
+    await pub.publish("component_retro_topic")
+    # Wait for the periodic archiver to persist the message to disk
+    # (REMBUS_ARCHIVER_INTERVAL defaults to 1 second).
+    await asyncio.sleep(1.2)
+    await pub.close()
+
+    ctx = {"sub.net": 0}
+
+    # A subscription window too narrow to include the already published
+    # message: reactive() must not deliver it.
+    sub = await rembus.component(f"ws://:{port}/sub.net")
+    sub.inject(ctx)
+    await sub.subscribe(
+        component_retro_topic,
+        msgfrom=900_000_000,
+        topic="component_retro_topic",
+    )
+    await sub.reactive()
+    await asyncio.sleep(0.2)
+    assert ctx["sub.net"] == 0
+    await sub.close()
+
+    # Subscribing with LastReceived requests every stored message: reactive()
+    # must deliver the message published earlier.
+    sub = await rembus.component(f"ws://:{port}/sub.net")
+    sub.inject(ctx)
+    await sub.subscribe(
+        component_retro_topic,
+        msgfrom=rp.LastReceived,
+        topic="component_retro_topic",
+    )
+    await sub.reactive()
+    await asyncio.sleep(0.2)
+    assert ctx["sub.net"] == 1
+    await sub.close()
+
+    await server.close()
+
+
+def unreactive_topic(ctx, node):
+    """A pubsub method that increments a per-subscriber counter."""
+    ctx[node.rid] += 1
+
+
+@pytest.mark.asyncio
+async def test_unreactive_does_not_receive_published_messages():
+    """Test that a subscriber for which isreactive is False does not
+    receive messages published while it is not reactive.
+    """
+    port = 8010
+    server = await start_server(port=port)
+    sub = None
+    pub = None
+    try:
+        ctx = {"sub.net": 0}
+        sub = await rembus.component(f"ws://:{port}/sub.net")
+        sub.inject(ctx)
+        await sub.subscribe(unreactive_topic, topic="unreactive_topic")
+        await sub.unreactive()
+        assert sub.isreactive is False
+
+        pub = await rembus.component(f"ws://:{port}/pub.net")
+        await pub.publish("unreactive_topic")
+        await asyncio.sleep(0.3)
+
+        # An unreactive subscriber must not receive published messages.
+        assert ctx["sub.net"] == 0
+    finally:
+        # Ensure connections are always closed, even if an assertion above
+        # fails, so a failing assert cannot leak open connections into
+        # other tests.
+        if pub is not None:
+            await pub.close()
+        if sub is not None:
+            await sub.close()
+        await server.close()
+
+
 @pytest.mark.asyncio
 async def test_cancel_server_task():
     """Test shutdown in case of task cancellation"""
