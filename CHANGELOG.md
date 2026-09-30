@@ -5,8 +5,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.8.20] 2026-
 
--  Pub/Sub messages are only delivered to reactive subscribers whose 
-   t.domain == twin.domain  (same tenant as the publisher)
+-  Pub/Sub messages are only delivered to reactive subscribers with same tenant
+   as the publisher.
+
+- Broker-to-subscriber fan-out (`_broadcast`) now performs a full Ack/Ack2
+  handshake with retries for QOS1/QOS2 messages, mirroring the
+  publisher-to-broker hop, instead of a fire-and-forget send. QOS0 delivery
+  is unaffected.
 
 ## [0.8.19] 2026-09-29
 

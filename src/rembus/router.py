@@ -255,6 +255,9 @@ class Router(Supervised):
                 await self.evaluate(twin, topic, data)
 
             subs = self.subscribers.get(topic, [])
+            qos = msg.flags & rp.QOS2
+            targets = []
+            tasks = []
             for t in subs:
                 # Do not send back to publisher, only deliver to
                 # subscribers that opted-in with reactive(), and only
@@ -265,8 +268,29 @@ class Router(Supervised):
                     and t.domain == twin.domain
                     and self.isauthorized(topic, t)
                 ):
-                    await t.send(msg)
-                    t.mark = msg.recvts
+                    targets.append(t)
+                    if qos > rp.QOS0:
+                        # QOS1/QOS2: mirror the publisher->broker hop
+                        # with a full Ack/Ack2 handshake, retrying on
+                        # timeout, instead of a fire-and-forget send.
+                        tasks.append(t.deliver_with_ack(msg))
+                    else:
+                        tasks.append(t.send(msg))
+
+            if tasks:
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                for t, result in zip(targets, results):
+                    if isinstance(result, Exception):
+                        logger.warning(
+                            "[%s] failed to deliver message on topic "
+                            "%s to %s: %s",
+                            self,
+                            topic,
+                            t,
+                            result,
+                        )
+                    else:
+                        t.mark = msg.recvts
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.warning("[%s] error in method invocation: %s", self, e)

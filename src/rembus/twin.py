@@ -589,6 +589,31 @@ class Twin(Supervised):
         self.outreq[msgid] = futreq
         return futreq
 
+    async def deliver_with_ack(self, msg: rp.PubSubMsg):
+        """Deliver a QOS1/QOS2 pubsub message to this twin, retrying
+        until a full Ack/Ack2 handshake completes (or retries are
+        exhausted).
+
+        This mirrors the retry/ack-wait logic that :meth:`_qos_publish`
+        performs for the publisher->broker hop, applied here to the
+        broker->subscriber hop performed by the broker's fan-out.
+        """
+        max_retries = self.router.config.send_retries
+        retries = 0
+        while True:
+            retries += 1
+            try:
+                futreq = self._qos_send(msg.id, msg)
+                async with async_timeout.timeout(
+                    self.router.config.ack_timeout
+                ):
+                    done = await futreq.future
+                if done:
+                    return
+            except TimeoutError as e:
+                if retries > max_retries:
+                    raise rp.RembusTimeout() from e
+
     async def _send_message(self, builder: Callable, data: Any = None) -> Any:
         """Send a message and wait for a response."""
         reqid = rp.msgid()
