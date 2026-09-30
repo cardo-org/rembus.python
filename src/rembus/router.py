@@ -256,9 +256,15 @@ class Router(Supervised):
 
             subs = self.subscribers.get(topic, [])
             for t in subs:
-                # Do not send back to publisher, and only deliver to
-                # subscribers that opted-in with reactive().
-                if t != twin and t.isreactive and self.isauthorized(topic, t):
+                # Do not send back to publisher, only deliver to
+                # subscribers that opted-in with reactive(), and only
+                # to twins belonging to the same tenant as the publisher.
+                if (
+                    t != twin
+                    and t.isreactive
+                    and t.domain == twin.domain
+                    and self.isauthorized(topic, t)
+                ):
                     await t.send(msg)
                     t.mark = msg.recvts
 
