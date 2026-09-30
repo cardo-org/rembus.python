@@ -991,6 +991,22 @@ or terminated.</p>
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="rembus.twin.Twin.deliver_with_ack">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">deliver_with_ack</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">msg</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.Twin.deliver_with_ack" title="Link to this definition">¶</a></dt>
+<dd><p>Deliver a QOS1/QOS2 pubsub message to this twin, retrying
+until a full Ack/Ack2 handshake completes (or retries are
+exhausted).</p>
+<p>This mirrors the retry/ack-wait logic that <code class="xref py py-meth docutils literal notranslate"><span class="pre">_qos_publish()</span></code>
+performs for the publisher-&gt;broker hop, applied here to the
+broker-&gt;subscriber hop performed by the broker’s fan-out.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>msg</strong> (<a class="reference internal" href="#rembus.protocol.PubSubMsg" title="rembus.protocol.PubSubMsg"><em>PubSubMsg</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="rembus.twin.Twin.send_task">
 <span class="sig-name descname"><span class="pre">send_task</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">msg</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.Twin.send_task" title="Link to this definition">¶</a></dt>
 <dd><p>Send an RPC request and return a future representing its response.</p>
@@ -2212,6 +2228,7 @@ If the topic is public the component is always authorized.</p>
 <li><a class="reference internal" href="#rembus.twin.Twin.twin_receiver"><code class="docutils literal notranslate"><span class="pre">Twin.twin_receiver()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.future_request"><code class="docutils literal notranslate"><span class="pre">Twin.future_request()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.send"><code class="docutils literal notranslate"><span class="pre">Twin.send()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.twin.Twin.deliver_with_ack"><code class="docutils literal notranslate"><span class="pre">Twin.deliver_with_ack()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.send_task"><code class="docutils literal notranslate"><span class="pre">Twin.send_task()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.wait_response"><code class="docutils literal notranslate"><span class="pre">Twin.wait_response()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.login"><code class="docutils literal notranslate"><span class="pre">Twin.login()</span></code></a></li>
