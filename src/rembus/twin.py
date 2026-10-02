@@ -1704,6 +1704,7 @@ class MqttTwin(Twin):
             data = json.loads(payload)
             args = data if isinstance(data, list) else [data]
             msg = rp.PubSubMsg(topic=topic, data=args, from_mqtt=True)
+            msg.twin = self
             await self._router.inbox.put(msg)
 
             if topic not in self.router.handler:
