@@ -21,6 +21,7 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa, ec
 import polars as pl
 import websockets
 from gmqtt import Client as MQTTClient
+from gmqtt import Subscription
 from gmqtt.mqtt.constants import MQTTv50
 import rembus.protocol as rp
 import rembus.settings as rs
@@ -1692,12 +1693,16 @@ class MqttTwin(Twin):
 
     def on_connect(self, client, flags, rc, properties):
         logger.debug("[MQTT] Connected to %s with result code %s", self.uid, rc)
-        base_topic = os.getenv("REMBUS_MQTT_TOPIC_FILTER", "#")
+        topic_filter = os.getenv("REMBUS_MQTT_TOPIC_FILTER", "#")
+        topics = [t.strip() for t in topic_filter.split(",") if t.strip()]
         logger.debug(
-            "[MQTT] Subscribing to %s with topic '%s'", self.uid, base_topic
+            "[MQTT] Subscribing to %s with topics %s", self.uid, topics
         )
         self.workers = [asyncio.create_task(self.worker()) for _ in range(20)]
-        client.subscribe(base_topic, qos=1, no_local=True)
+        subscriptions = [
+            Subscription(topic, qos=1, no_local=True) for topic in topics
+        ]
+        client.subscribe(subscriptions)
 
     async def process_message(self, topic, payload):
         try:

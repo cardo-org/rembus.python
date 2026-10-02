@@ -5,6 +5,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.8.20] 2026-
 
+- `REMBUS_MQTT_TOPIC_FILTER` now accepts a comma separated list of topic
+  filters to subscribe to.
+
 -  Pub/Sub messages are only delivered to reactive subscribers with same tenant
    as the publisher.
 
