@@ -14,11 +14,9 @@ async def test_publish_unknow_topic(mocker, ws_mock):
             "reply": lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
         },
         {
-            # subscribe
-            "reply": lambda req: [rp.TYPE_RESPONSE, req[1], rp.STS_OK, None]
-        },
-        {
-            # publish
+            # publish (QOS0 publish packets carry no id/reply, so no
+            # "reply" entry is needed here; this step is only consumed
+            # to keep the mock's step counter aligned)
         },
     ]
 
