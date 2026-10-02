@@ -118,21 +118,23 @@ def test_mqtt_subscribe():
     wait_for_broker(mqtt_port)
 
     bro = rb.node(mqtt=f"mqtt://{mqtt_host}:{mqtt_port}", port=8338)
+    try:
+        cli = rb.node("mysubscriber")
+        try:
+            cli.subscribe(mqtt_topic)
+            cli.reactive()
 
-    cli = rb.node("mysubscriber")
-    cli.subscribe(mqtt_topic)
-    cli.reactive()
+            asyncio.run(publish_wrong_payload())
 
-    asyncio.run(publish_wrong_payload())
+            # publish a mqtt message using a MQTT client.
+            payload = {"name": "rembus", "value": 42}
+            asyncio.run(publish_mqtt_message("mqtt_topic", payload))
 
-    # publish a mqtt message using a MQTT client.
-    payload = {"name": "rembus", "value": 42}
-    asyncio.run(publish_mqtt_message("mqtt_topic", payload))
-
-    asyncio.run(asyncio.wait_for(received.wait(), timeout=2))
-
-    cli.close()
-    bro.close()
+            asyncio.run(asyncio.wait_for(received.wait(), timeout=2))
+        finally:
+            cli.close()
+    finally:
+        bro.close()
 
 
 def consume_list(topic, x, y):
@@ -147,22 +149,24 @@ def test_mqtt_space_subscribe():
         received.set()
 
     bro = rb.node(mqtt=f"mqtt://{mqtt_host}:{mqtt_port}", port=8338)
+    try:
+        cli = rb.node("mysubscriber")
+        try:
+            cli.subscribe(consume_alarms, topic="*/alarm")
+            cli.subscribe(consume_list, topic="*/sequence")
+            cli.reactive()
 
-    cli = rb.node("mysubscriber")
-    cli.subscribe(consume_alarms, topic="*/alarm")
-    cli.subscribe(consume_list, topic="*/sequence")
-    cli.reactive()
+            asyncio.run(publish_mqtt_message("home/alarm", {"status": "on"}))
 
-    asyncio.run(publish_mqtt_message("home/alarm", {"status": "on"}))
+            # if the payload is a list the elements become arguments of
+            # the subscribed callback, see consume_list signature.
+            asyncio.run(publish_mqtt_message("home/sequence", [1, 2]))
 
-    # if the payload is a list the elements become arguments of
-    # the subscribed callback, see consume_list signature.
-    asyncio.run(publish_mqtt_message("home/sequence", [1, 2]))
-
-    asyncio.run(asyncio.wait_for(received.wait(), timeout=2))
-
-    cli.close()
-    bro.close()
+            asyncio.run(asyncio.wait_for(received.wait(), timeout=2))
+        finally:
+            cli.close()
+    finally:
+        bro.close()
 
 
 @pytest.mark.asyncio
@@ -181,27 +185,29 @@ async def test_mqtt_publish():
         received.set()
 
     bro = await rb.component(mqtt=f"mqtt://{mqtt_host}:{mqtt_port}", port=8338)
+    try:
+        # --- MQTT subscriber
+        sub = MQTTClient("mqtt-subscriber")
+        sub.on_message = on_message
+        await sub.connect("localhost", 1883)
+        sub.subscribe("#", qos=0)
+        try:
+            cli = await rb.component("mypublisher")
+            try:
+                await cli.publish("mqtt_topic", {"value": 42})
+                await asyncio.wait_for(received.wait(), timeout=2)
+                assert received_payload["topic"] == "mqtt_topic"
+                assert received_payload["data"] == {"value": 42}
 
-    # --- MQTT subscriber
-    sub = MQTTClient("mqtt-subscriber")
-    sub.on_message = on_message
-    await sub.connect("localhost", 1883)
-    sub.subscribe("#", qos=0)
+                received.clear()
+                await cli.publish("a/b/c", 1, 2)
 
-    cli = await rb.component("mypublisher")
-
-    await cli.publish("mqtt_topic", {"value": 42})
-    await asyncio.wait_for(received.wait(), timeout=2)
-    assert received_payload["topic"] == "mqtt_topic"
-    assert received_payload["data"] == {"value": 42}
-
-    received.clear()
-    await cli.publish("a/b/c", 1, 2)
-
-    await asyncio.wait_for(received.wait(), timeout=2)
-    assert received_payload["topic"] == "a/b/c"
-    assert received_payload["data"] == [1, 2]
-
-    await sub.disconnect()
-    await cli.close()
-    await bro.close()
+                await asyncio.wait_for(received.wait(), timeout=2)
+                assert received_payload["topic"] == "a/b/c"
+                assert received_payload["data"] == [1, 2]
+            finally:
+                await cli.close()
+        finally:
+            await sub.disconnect()
+    finally:
+        await bro.close()
