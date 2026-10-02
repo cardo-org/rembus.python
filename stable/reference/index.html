@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://cardo-org.github.io/rembus.python/reference/index.html">
 
     <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>API Reference - Rembus 0.8.19 documentation</title>
+        <title>API Reference - Rembus 0.8.20 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/tabs.css?v=4c969af8" />
@@ -169,7 +169,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">Rembus 0.8.19 documentation</div></a>
+      <a href="../index.html"><div class="brand">Rembus 0.8.20 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -190,7 +190,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
-  <span class="sidebar-brand-text">Rembus 0.8.19 documentation</span>
+  <span class="sidebar-brand-text">Rembus 0.8.20 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -986,6 +986,22 @@ or terminated.</p>
 <a class="reference internal" href="#rembus.protocol.RembusMsg" title="rembus.protocol.RembusMsg"><code class="xref py py-class docutils literal notranslate"><span class="pre">RembusMsg</span></code></a>
 (e.g., <a class="reference internal" href="#rembus.protocol.RpcReqMsg" title="rembus.protocol.RpcReqMsg"><code class="xref py py-class docutils literal notranslate"><span class="pre">RpcReqMsg</span></code></a>,
 <a class="reference internal" href="#rembus.protocol.PubSubMsg" title="rembus.protocol.PubSubMsg"><code class="xref py py-class docutils literal notranslate"><span class="pre">PubSubMsg</span></code></a>, etc.).</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="rembus.twin.Twin.deliver_with_ack">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">deliver_with_ack</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">msg</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.Twin.deliver_with_ack" title="Link to this definition">¶</a></dt>
+<dd><p>Deliver a QOS1/QOS2 pubsub message to this twin, retrying
+until a full Ack/Ack2 handshake completes (or retries are
+exhausted).</p>
+<p>This mirrors the retry/ack-wait logic that <code class="xref py py-meth docutils literal notranslate"><span class="pre">_qos_publish()</span></code>
+performs for the publisher-&gt;broker hop, applied here to the
+broker-&gt;subscriber hop performed by the broker’s fan-out.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>msg</strong> (<a class="reference internal" href="#rembus.protocol.PubSubMsg" title="rembus.protocol.PubSubMsg"><em>PubSubMsg</em></a>)</p>
 </dd>
 </dl>
 </dd></dl>
@@ -2212,6 +2228,7 @@ If the topic is public the component is always authorized.</p>
 <li><a class="reference internal" href="#rembus.twin.Twin.twin_receiver"><code class="docutils literal notranslate"><span class="pre">Twin.twin_receiver()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.future_request"><code class="docutils literal notranslate"><span class="pre">Twin.future_request()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.send"><code class="docutils literal notranslate"><span class="pre">Twin.send()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.twin.Twin.deliver_with_ack"><code class="docutils literal notranslate"><span class="pre">Twin.deliver_with_ack()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.send_task"><code class="docutils literal notranslate"><span class="pre">Twin.send_task()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.wait_response"><code class="docutils literal notranslate"><span class="pre">Twin.wait_response()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.login"><code class="docutils literal notranslate"><span class="pre">Twin.login()</span></code></a></li>
@@ -2299,7 +2316,7 @@ If the topic is public the component is always authorized.</p>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=b9e6b5ec"></script>
+</div><script src="../_static/documentation_options.js?v=935d7236"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
