@@ -6,7 +6,7 @@ to the transport layer.
 import base64
 import os
 import logging
-from typing import Any, List
+from typing import Any, List, Optional
 import orjson as json
 import time
 import cbor2
@@ -444,10 +444,17 @@ class IdentityMsg(RembusMsg):
 
     This message is sent by the component to identify itself
     to the remote peer.
+
+    ``meta`` is a mapping of protocol name (e.g. "ws", "tcp", "zmq") to the
+    corresponding listening port of the connecting node. It is used by a
+    broker to discover the node's endpoints when building the mesh network
+    topology, and is empty for nodes that are not eligible to become a
+    broker.
     """
 
     id: int
     cid: str
+    meta: Optional[dict] = None
 
     def __str__(self):
         return f"IdentityMsg:{self.cid}"
@@ -455,24 +462,37 @@ class IdentityMsg(RembusMsg):
     def to_payload(self, enc: int) -> bytes | str:
         """Serialize the Identity message."""
         if enc == CBOR:
-            return cbor2.dumps([TYPE_IDENTITY, to_bytes(self.id), self.cid])
+            return cbor2.dumps(
+                [TYPE_IDENTITY, to_bytes(self.id), self.cid, self.meta or {}]
+            )
 
         return json.dumps(
             {
                 "jsonrpc": "2.0",
                 "id": self.id,
                 "method": "__identity__",
-                "params": {"type": TYPE_IDENTITY, "cid": self.cid},
+                "params": {
+                    "type": TYPE_IDENTITY,
+                    "cid": self.cid,
+                    "meta": self.meta or {},
+                },
             }
         ).decode()
 
 
 class AttestationMsg(RembusMsg):
-    """Attestation message."""
+    """Attestation message.
+
+    ``meta`` is a mapping of protocol name (e.g. "ws", "tcp", "zmq") to the
+    corresponding listening port of the connecting node, used by a broker
+    to discover the node's endpoints when building the mesh network
+    topology.
+    """
 
     id: int
     cid: str
     signature: bytes | str
+    meta: Optional[dict] = None
 
     def __str__(self):
         return f"AttestationMsg:{self.cid}"
@@ -481,7 +501,13 @@ class AttestationMsg(RembusMsg):
         """Serialize the Attestation message."""
         if enc == CBOR:
             return cbor2.dumps(
-                [TYPE_ATTESTATION, to_bytes(self.id), self.cid, self.signature]
+                [
+                    TYPE_ATTESTATION,
+                    to_bytes(self.id),
+                    self.cid,
+                    self.signature,
+                    self.meta or {},
+                ]
             )
 
         return json.dumps(
@@ -492,6 +518,7 @@ class AttestationMsg(RembusMsg):
                 "params": {
                     "type": TYPE_ATTESTATION,
                     "signature": self.signature,
+                    "meta": self.meta or {},
                 },
             }
         ).decode()
@@ -584,14 +611,21 @@ def jsonrpc_request(pkt, msg_id, params) -> RembusMsg:
                 flags=msg_type,
             )
         elif msg_type == TYPE_IDENTITY:
-            return IdentityMsg(id=msg_id, cid=params["cid"])
+            return IdentityMsg(
+                id=msg_id, cid=params["cid"], meta=params.get("meta")
+            )
         elif msg_type == TYPE_ADMIN:
             return AdminMsg(
                 id=msg_id, topic=pkt["method"], data=params.get("data")
             )
         elif msg_type == TYPE_ATTESTATION:
             sig = params.get("signature")
-            return AttestationMsg(id=msg_id, cid=pkt["method"], signature=sig)
+            return AttestationMsg(
+                id=msg_id,
+                cid=pkt["method"],
+                signature=sig,
+                meta=params.get("meta"),
+            )
         elif msg_type == TYPE_REGISTER:
             pubkey = params.get("key_val")
             if isinstance(pubkey, str):
@@ -686,9 +720,16 @@ def cbor_parse(pkt) -> RembusMsg:
         TYPE_ADMIN: lambda: AdminMsg(
             id=from_bytes(pkt[1]), topic=pkt[2], data=pkt[3]
         ),
-        TYPE_IDENTITY: lambda: IdentityMsg(id=from_bytes(pkt[1]), cid=pkt[2]),
+        TYPE_IDENTITY: lambda: IdentityMsg(
+            id=from_bytes(pkt[1]),
+            cid=pkt[2],
+            meta=pkt[3] if len(pkt) > 3 else None,
+        ),
         TYPE_ATTESTATION: lambda: AttestationMsg(
-            id=from_bytes(pkt[1]), cid=pkt[2], signature=pkt[3]
+            id=from_bytes(pkt[1]),
+            cid=pkt[2],
+            signature=pkt[3],
+            meta=pkt[4] if len(pkt) > 4 else None,
         ),
         TYPE_REGISTER: lambda: RegisterMsg(
             id=from_bytes(pkt[1]),

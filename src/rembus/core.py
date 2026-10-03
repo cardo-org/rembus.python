@@ -8,7 +8,8 @@ import asyncio
 import base64
 import logging
 import os
-from typing import Any, Optional
+from dataclasses import dataclass, field
+from typing import Any, List, Optional
 from urllib.parse import urlparse
 import uuid
 import rembus.protocol as rp
@@ -18,6 +19,8 @@ __all__ = [
     "bytes_to_b64",
     "domain",
     "FutureResponse",
+    "Node",
+    "mesh_nodes",
     "RbURL",
     "Supervised",
     "response_data",
@@ -55,6 +58,60 @@ def domain(s: str) -> str:
         return s[dot_index + 1 :]
 
     return "."
+
+
+@dataclass
+class Node:
+    """
+    A node (peer broker) of the Rembus mesh network.
+
+    A node is discovered when a connecting component advertises, through
+    the ``meta`` field of an :class:`~rembus.protocol.IdentityMsg` or
+    :class:`~rembus.protocol.AttestationMsg`, the set of protocols and
+    ports it is listening on. Peer brokers use this information to
+    discover each other's endpoints and build the mesh network topology.
+    """
+
+    cid: str
+    protocol: str
+    host: str
+    port: int
+    status: str = "up"
+    tenant: str = field(init=False)
+
+    def __post_init__(self):
+        self.tenant = domain(self.cid)
+
+    def __repr__(self):
+        return (
+            f"{self.cid} -> {self.protocol}://{self.host}:{self.port} "
+            f"[{self.status}]"
+        )
+
+
+def mesh_nodes(
+    cid: str, source_address: str, portmap: Optional[dict]
+) -> List[Node]:
+    """
+    Build the list of mesh :class:`Node` advertised by a connecting peer.
+
+    Parameters
+    ----------
+    cid : str
+        The component id of the connecting peer.
+    source_address : str
+        The remote host address of the connecting peer.
+    portmap : dict | None
+        A mapping of protocol name (e.g. "ws", "tcp", "zmq") to the
+        listening port advertised by the peer.
+    """
+    if not portmap:
+        return []
+
+    return [
+        Node(cid=cid, protocol=str(proto), host=source_address, port=port)
+        for proto, port in portmap.items()
+    ]
 
 
 class FutureResponse:

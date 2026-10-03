@@ -666,6 +666,20 @@ class Twin(Supervised):
         except TimeoutError as e:
             raise rp.RembusTimeout() from e
 
+    def mesh_meta(self) -> dict:
+        """
+        Return the protocol->port map this twin advertises for mesh
+        network topology discovery.
+
+        Empty when the component is not also listening for downstream
+        connections (i.e. is not eligible to become a broker).
+        """
+        port = self.router.wsport
+        if port:
+            return {self.router.wsprotocol: port}
+
+        return {}
+
     async def login(self):
         """
         Perform the login handshake with the remote peer.
@@ -687,7 +701,9 @@ class Twin(Supervised):
             If the remote peer does not respond within the expected time.
         """
         futreq = await self._send_message(
-            lambda id: rp.IdentityMsg(id=id, cid=self.uid.id)
+            lambda id: rp.IdentityMsg(
+                id=id, cid=self.uid.id, meta=self.mesh_meta()
+            )
         )
         response = await self.wait_response(futreq)
         challenge = response_data(response)
@@ -712,6 +728,7 @@ class Twin(Supervised):
                     id=id,
                     cid=self.uid.id,
                     signature=bytes_to_b64(signature, self.enc),
+                    meta=self.mesh_meta(),
                 )
             )
             response = await self.wait_response(futreq)

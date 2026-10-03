@@ -59,6 +59,22 @@ persistent storage tables, used to structure and persist messages at rest.
 * **Data at Rest**: broker capability to persist published messages into DuckDB
 tables defined by a schema, enabling historical queries and analytics.
 
+* **Mesh Network**: since a component can simultaneously act as a broker
+(`port=` connecting "upstream" to another broker while also accepting its
+own "downstream" connections), multiple brokers can be chained together
+into a mesh network. When a node joins the mesh it advertises, through the
+identity/authentication handshake, the protocols and ports it is listening
+on; the upstream broker collects this into `router.network`, a list of
+`rembus.core.Node`, to keep track of the mesh topology:
+
+```python
+server = rembus.node(port=8338)
+mynode = rembus.node("ws://myhost:8338/mynode", port=9000)
+
+print(server.router.network)
+# [mynode -> ws://127.0.0.1:9000 [up]]
+```
+
 ## Getting Started
 
 Install the package:

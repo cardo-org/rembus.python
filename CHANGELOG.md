@@ -3,6 +3,14 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- Added mesh network topology discovery: a connecting node advertises, via
+  the `meta` field of the Identity/Attestation handshake, the protocols and
+  ports it listens on. The upstream broker collects this information into
+  `router.network`, a list of `rembus.core.Node`, enabling brokers to be
+  chained into a mesh network.
+
 ## [0.8.20] 2026-10-02
 
 - `REMBUS_MQTT_TOPIC_FILTER` now accepts a comma separated list of topic

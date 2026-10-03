@@ -22,7 +22,7 @@ import rembus.db as rdb
 import rembus.builtins as builtins
 from . import __version__
 from .admin import admin_command
-from .core import Supervised, RbURL, domain, bytes_to_b64
+from .core import Supervised, RbURL, domain, bytes_to_b64, Node, mesh_nodes
 
 
 logger = logging.getLogger(__name__)
@@ -153,6 +153,8 @@ class Router(Supervised):
     ):
         super().__init__()
         self.wsport = None
+        self.wsprotocol = "ws"
+        self.network: List[Node] = []
         self.id = name
         self.admins: dict = {}
         self.id_twin: dict = {}
@@ -514,6 +516,7 @@ class Router(Supervised):
     async def serve_ws(self, port: int, issecure: bool = False):
         """Start a WebSocket server to handle incoming connections."""
         self.wsport = port
+        self.wsprotocol = "wss" if issecure else "ws"
         ssl_context = None
         if issecure:
             trust_store = rs.keystore_dir()
@@ -544,7 +547,7 @@ class Router(Supervised):
         except FileNotFoundError:
             return False
 
-    async def _update_twin(self, twin, identity):
+    async def _update_twin(self, twin, identity, meta: Optional[dict] = None):
         logger.debug("[%s] setting name: [%s]", twin, identity)
         self.id_twin.pop(twin.twkey, twin)
         twin.rid = identity
@@ -554,6 +557,16 @@ class Router(Supervised):
             load_twin(twin)
             if twin.router.upstream:
                 await twin.router.upstream.setup_twin(twin)
+
+        if meta:
+            self.network.extend(
+                mesh_nodes(identity, self._remote_host(twin), meta)
+            )
+
+    def _remote_host(self, twin) -> str:
+        """Return the remote host address of the connecting twin's socket."""
+        addr = getattr(twin.socket, "remote_address", None)
+        return addr[0] if addr else "unknown"
 
     async def _verify_signature(self, msg: rp.AttestationMsg):
         """Verify the signature of the attestation message."""
@@ -576,7 +589,7 @@ class Router(Supervised):
             elif isinstance(pubkey, ec.EllipticCurvePublicKey):
                 pubkey.verify(signature, plain, ec.ECDSA(hashes.SHA256()))
 
-            await self._update_twin(twin, msg.cid)
+            await self._update_twin(twin, msg.cid, msg.meta)
             return rp.STS_OK
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("verification failed: %s (%s)", e, type(e))
@@ -602,7 +615,7 @@ class Router(Supervised):
             # Component is provisioned, send the challenge
             response = self._challenge(msg)
         else:
-            await self._update_twin(twin, identity)
+            await self._update_twin(twin, identity, msg.meta)
             response = rp.ResMsg(id=msg.id, status=rp.STS_OK)
 
         await twin.send(response)
