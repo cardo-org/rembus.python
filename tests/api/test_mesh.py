@@ -68,7 +68,7 @@ def service(x, y):
 def test_mesh_pubsub_forwarding():
     """A publisher on broker A reaches a subscriber connected to a
     second broker (meshb) chained behind A, with no direct link between
-    them: the ``ADD_INTEREST`` admin command issued by the subscriber is
+    them: the ``SUBSCRIBE_CMD`` admin command issued by the subscriber is
     flooded upstream (`mark_and_broadcast`/`admin_broadcast`) so that A's
     `subscribers` table routes the message towards `meshb`, which then
     delivers it locally.
@@ -106,9 +106,9 @@ def test_mesh_pubsub_forwarding():
 
 def test_mesh_rpc_forwarding():
     """An RPC request issued against broker A is routed to an exposer
-    connected to the chained broker `meshb`: `EXPOSE_CMD`-equivalent
-    (`ADD_IMPL`) propagation populates A's `exposers` table with the twin
-    towards `meshb`, and `Router.find_implementor` selects it hop by hop.
+    connected to the chained broker `meshb`: `EXPOSE_CMD` propagation
+    populates A's `exposers` table with the twin towards `meshb`, and
+    `Router.find_implementor` selects it hop by hop.
     """
     broker_a = rembus.node(name="rpc_a", port=9203)
     meshb = rembus.node("ws://:9203/meshb", name="rpc_meshb", port=9204)
@@ -128,3 +128,45 @@ def test_mesh_rpc_forwarding():
         expo.close()
         meshb.close()
         broker_a.close()
+
+
+def test_reconnect_resyncs_exposed_topics():
+    """After a client's connection to its broker drops and reconnects,
+    `Twin.setup` replays its exposed topics via `SETUP_CMD` so the
+    broker's `exposers` routing table is resynchronized without the user
+    having to call `expose()` again (see `rembus.admin.admin_command`'s
+    `SETUP_CMD` branch and `Twin._reconnect`).
+    """
+    broker = rembus.node(name="reconnect_broker", port=9205)
+    client = rembus.node(
+        "ws://:9205/reconnect_client", name="reconnect_client"
+    )
+    client.expose(service)
+
+    caller = rembus.node("ws://:9205/reconnect_caller", name="reconnect_caller")
+
+    try:
+        wait_for(lambda: "service" in broker.router.exposers)
+        assert caller.rpc("service", 2, 3) == 5
+
+        # Simulate a transient network failure: force-close the
+        # client's own socket (without calling client.close()) so its
+        # receiver loop detects the drop and triggers `_reconnect`.
+        client.exec(client._rb.socket.close)
+
+        # Give the reconnect loop time to reconnect and replay SETUP_CMD.
+        wait_for(
+            lambda: (
+                "service" in broker.router.exposers
+                and any(
+                    t.isopen() for t in broker.router.exposers["service"]
+                )
+            ),
+            timeout=5.0,
+        )
+
+        assert caller.rpc("service", 4, 5) == 9
+    finally:
+        caller.close()
+        client.close()
+        broker.close()

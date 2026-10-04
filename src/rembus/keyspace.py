@@ -159,9 +159,9 @@ class KeySpaceRouter(rc.Supervised):
                 logger.debug("[%s] keyspace router shutting down", self)
                 break
             if isinstance(msg, rp.AdminMsg) and rp.COMMAND in msg.data:
-                if msg.data[rp.COMMAND] == rp.ADD_INTEREST:
+                if msg.data[rp.COMMAND] == rp.SUBSCRIBE_CMD:
                     await self.subscribe_handler(msg.twin, msg.topic)
-                elif msg.data[rp.COMMAND] == rp.REMOVE_INTEREST:
+                elif msg.data[rp.COMMAND] == rp.UNSUBSCRIBE_CMD:
                     await self.unsubscribe_handler(msg.twin, msg.topic)
             elif isinstance(msg, rp.PubSubMsg):
                 await self.publish_interceptor(msg)

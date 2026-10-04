@@ -370,7 +370,7 @@ class Twin(Supervised):
         while True:
             try:
                 await self.connect()
-                await self.reactive()
+                await self.setup()
                 self.reconnect_task = None
                 break
             except Exception as e:  # pylint: disable=broad-exception-caught
@@ -693,6 +693,12 @@ class Twin(Supervised):
         If no challenge is returned, the connection proceeds in *free mode*
         (unauthenticated access).
 
+        On success, the peer's final response carries its own mesh exports
+        view (see :meth:`rembus.router.Router.get_topics`), applied locally
+        with :meth:`rembus.router.Router.update_tables` so this twin can
+        immediately route towards topics the peer already knows about,
+        without waiting for individual admin commands to propagate.
+
         Raises
         ------
         RembusError
@@ -732,9 +738,16 @@ class Twin(Supervised):
                 )
             )
             response = await self.wait_response(futreq)
-            response_data(response)
+            exports = response_data(response)
+            self.router.update_tables(self, exports)
         else:
             logger.debug("[%s]: free mode access", self)
+            # In free mode, the identity response already carries the
+            # peer's exports view (see Router._auth_identity), applied
+            # the same way as the attestation response (see
+            # Router.update_tables) so this twin can immediately route
+            # towards topics the peer already knows about.
+            self.router.update_tables(self, challenge)
 
     async def _publish(self, torouter: bool, topic: str, *data: Any, **kwargs):
         slot = kwargs.get("slot", None)
@@ -1121,6 +1134,43 @@ class Twin(Supervised):
         await self.broker_setting("reactive", {"status": False})
         return self
 
+    async def setup(self) -> bool:
+        """
+        Resynchronize this twin's mesh routing state with its upstream
+        broker.
+
+        Sends the explicit ``SETUP_CMD`` admin command carrying this
+        node's full set of currently-exposed/subscribed topics (see
+        :meth:`rembus.router.Router.local_exports`), instead of relying
+        on the individual ``expose``/``subscribe`` commands that
+        originally registered them. Used after a reconnection (see
+        :meth:`_reconnect`), since the broker may have lost all prior
+        incremental state for this specific link; a successful setup
+        also re-enables reactive delivery on the link (see
+        :func:`rembus.admin.admin_command`).
+
+        Returns
+        -------
+        bool
+            `True` if the broker acknowledged the resync, `False` if
+            there is no active upstream connection to resync with.
+
+        Raises
+        ------
+        RembusError
+            If the broker rejects the setup request.
+        RembusTimeout
+            If no response is received within the configured timeout.
+        """
+        if not self.socket:
+            return False
+
+        exposers, subscribers = self.router.local_exports()
+        await self.broker_setting(
+            rp.SETUP_CMD, {"exposers": exposers, "subscribers": subscribers}
+        )
+        return True
+
     async def private_topic(self, topic: str):
         """
         Mark a topic as private.
@@ -1146,7 +1196,7 @@ class Twin(Supervised):
         RembusTimeout
             If no response is received within the configured timeout.
         """
-        await self.setting(topic, rp.PRIVATE_TOPIC)
+        await self.setting(topic, rp.PRIVATE_TOPIC_CMD)
 
     async def public_topic(self, topic: str):
         """
@@ -1172,7 +1222,7 @@ class Twin(Supervised):
         RembusTimeout
             If no response is received within the configured timeout.
         """
-        await self.setting(topic, rp.PUBLIC_TOPIC)
+        await self.setting(topic, rp.PUBLIC_TOPIC_CMD)
 
     async def authorize(self, component: str, topic: str):
         """
@@ -1200,7 +1250,7 @@ class Twin(Supervised):
         RembusTimeout
             If no response is received within the configured timeout.
         """
-        await self.setting(topic, rp.AUTHORIZE, {rp.CID: component})
+        await self.setting(topic, rp.AUTHORIZE_CMD, {rp.CID: component})
 
     async def unauthorize(self, component: str, topic: str):
         """
@@ -1228,7 +1278,7 @@ class Twin(Supervised):
         RembusTimeout
             If no response is received within the configured timeout.
         """
-        await self.setting(topic, rp.UNAUTHORIZE, {rp.CID: component})
+        await self.setting(topic, rp.UNAUTHORIZE_CMD, {rp.CID: component})
 
     async def subscribe(
         self,
@@ -1275,9 +1325,10 @@ class Twin(Supervised):
             if isinstance(self._router, KeySpaceRouter):
                 await self._router.subscribe_handler(self, topic)
         else:
-            await self.setting(topic, rp.ADD_INTEREST, {"msg_from": msgfrom})
+            await self.setting(topic, rp.SUBSCRIBE_CMD, {"msg_from": msgfrom})
 
         self.router.handler[topic] = fn
+        self.router.local_subscriber[topic] = msgfrom
         return self
 
     async def unsubscribe(self, fn: Callable[..., Any] | str):
@@ -1315,9 +1366,10 @@ class Twin(Supervised):
             if isinstance(self._router, KeySpaceRouter):
                 await self._router.unsubscribe_handler(self, topic)
         else:
-            await self.setting(topic, rp.REMOVE_INTEREST)
+            await self.setting(topic, rp.UNSUBSCRIBE_CMD)
 
         self.router.handler.pop(topic, None)
+        self.router.local_subscriber.pop(topic, None)
         return self
 
     async def expose(self, fn: Callable[..., Any], topic: Optional[str] = None):
@@ -1355,7 +1407,7 @@ class Twin(Supervised):
             topic = fn.__name__
 
         self.router.handler[topic] = fn
-        await self.setting(topic, rp.ADD_IMPL)
+        await self.setting(topic, rp.EXPOSE_CMD)
 
     async def unexpose(
         self, fn: Callable[..., Any] | str, topic: Optional[str] = None
@@ -1392,7 +1444,7 @@ class Twin(Supervised):
             topic = fn.__name__
 
         self.router.handler.pop(topic, None)
-        await self.setting(topic, rp.REMOVE_IMPL)
+        await self.setting(topic, rp.UNEXPOSE_CMD)
 
     async def close(self):
         """
@@ -1652,7 +1704,7 @@ class MqttTwin(Twin):
         Subscribe a callback function to a topic to receive published messages.
 
         Unlike the base :class:`Twin` implementation, MQTT subscriptions do
-        not go through the broker's ``ADD_INTEREST`` admin handshake: the
+        not go through the broker's ``SUBSCRIBE_CMD`` admin handshake: the
         MQTT client already subscribes to every topic (see :meth:`on_connect`)
         and messages are dispatched locally based on the registered handler.
 

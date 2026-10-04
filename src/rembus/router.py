@@ -22,11 +22,19 @@ import rembus.settings as rs
 import rembus.db as rdb
 import rembus.builtins as builtins
 from . import __version__
-from .admin import admin_command
+from .admin import admin_command, add_exposer, add_subscriber, ismultipath
 from .core import Supervised, RbURL, domain, bytes_to_b64, Node, mesh_nodes
 
 
 logger = logging.getLogger(__name__)
+
+BUILTIN_TOPICS = frozenset({"rid", "version", "uptime"})
+"""
+Topic names registered in `Router.handler` that are built-in admin
+methods (see `Router._builtins`), excluded from the mesh exports a node
+advertises to its peers (see `Router.local_exports`/`topic_impls`/
+`topic_interests`). Mirrors Rembus.jl's `isbuiltin`.
+"""
 
 __all__ = ["bottom_router", "top_router", "Router"]
 
@@ -170,6 +178,15 @@ class Router(Supervised):
         self.handler: dict[str, Callable[..., Any]] = {}
         self.exposers: dict = {}
         self.subscribers: dict = {}
+        self.local_subscriber: dict[str, float] = {}
+        """
+        `msg_from` timestamp of every topic this node has *directly*
+        subscribed to (via :meth:`Twin.subscribe`), keyed by topic. Used
+        to tell apart, among the non-builtin keys of `self.handler`,
+        which ones are local subscriber callbacks versus local RPC
+        exposers (see `local_exports`/`topic_impls`/`topic_interests`).
+        Mirrors Rembus.jl's `router.local_subscriber`.
+        """
         self.private_topics: dict = {}
         self.last_invoked: dict[str, int] = {}
         self.shared: Any = None
@@ -376,8 +393,8 @@ class Router(Supervised):
         """Pick the twin that should execute an RPC request for `topic`.
 
         Mirrors Rembus.jl's `find_implementor`/`select_twin`: `topic_impls`
-        (here `self.exposers`) is populated mesh-wide by `ADD_IMPL`/
-        `REMOVE_IMPL` propagation (see `rembus.admin.mark_and_broadcast`),
+        (here `self.exposers`) is populated mesh-wide by `EXPOSE_CMD`/
+        `UNEXPOSE_CMD` propagation (see `rembus.admin.mark_and_broadcast`),
         so the implementor returned may be a local component or the twin
         representing a neighbor broker, in which case the request simply
         keeps hopping: the neighbor router receives it as an ordinary
@@ -403,6 +420,93 @@ class Router(Supervised):
             return None, rp.STS_METHOD_UNAVAILABLE
 
         return target_twin, rp.STS_OK
+
+    def local_exports(self):
+        """Return this router's own directly-registered topics.
+
+        Splits the non-builtin keys of `self.handler` into
+        `(exposers, subscribers)`, using `self.local_subscriber` to tell
+        a locally-subscribed topic apart from a locally-exposed one.
+
+        Mirrors Rembus.jl's `twin_configuration`: used to rebuild the
+        `SETUP_CMD` payload a twin replays to its upstream broker after a
+        reconnection (see `Twin.setup`), since that broker may have lost
+        all prior incremental `expose`/`subscribe` state for the link.
+        """
+        exposers = [
+            topic
+            for topic in self.handler
+            if topic not in BUILTIN_TOPICS and topic not in self.local_subscriber
+        ]
+        subscribers = list(self.local_subscriber)
+        return exposers, subscribers
+
+    def _topics(self, results: set, target, topic_map: dict) -> list:
+        """Extend `results` with every key of `topic_map` (`self.exposers`
+        or `self.subscribers`) that has at least one twin other than
+        `target` associated with it, then return it as a sorted list.
+
+        Mirrors Rembus.jl's `_topics`: excluding `target` ensures a peer
+        is never told about its own topic, relevant when the attestation
+        response is computed for the very twin whose link is being
+        (re)established.
+        """
+        for topic, twins in topic_map.items():
+            if any(t.rid != target.rid for t in twins):
+                results.add(topic)
+        return sorted(results)
+
+    def topic_impls(self, target) -> list:
+        """Topics `target` should be told this router implements (or
+        knows an implementor for): local non-builtin, non-subscriber
+        handlers (see `local_exports`) unioned with every topic in
+        `self.exposers` reachable through some twin other than `target`.
+
+        Used to build the exports sent back in the attestation response,
+        see `get_topics`.
+        """
+        exposers, _ = self.local_exports()
+        return self._topics(set(exposers), target, self.exposers)
+
+    def topic_interests(self, target) -> list:
+        """Topics `target` should be told this router (or some twin
+        reachable through it) is subscribed to: local subscriber
+        callbacks (see `local_exports`) unioned with every topic in
+        `self.subscribers` reachable through some twin other than
+        `target`.
+
+        Used to build the exports sent back in the attestation response,
+        see `get_topics`.
+        """
+        _, subscribers = self.local_exports()
+        return self._topics(set(subscribers), target, self.subscribers)
+
+    def get_topics(self, target) -> list:
+        """Return `[topic_impls(target), topic_interests(target)]`: this
+        router's own exports view, sent back to `target` as the
+        attestation response payload (see `_handle_attestation`/
+        `_auth_identity`) and applied by the peer with `update_tables`.
+        """
+        return [self.topic_impls(target), self.topic_interests(target)]
+
+    def update_tables(self, twin, exports) -> None:
+        """Register `exports` (the `[topic_impls, topic_interests]` pair
+        returned by the peer's `get_topics` in the attestation response)
+        into this router's own mesh routing tables for `twin`.
+
+        Lets this router immediately forward RPC requests and Pub/Sub
+        messages towards `twin` without waiting for individual
+        `expose`/`subscribe` admin commands to propagate. No-op if
+        `exports` is falsy or `ismultipath` gates it off.
+        """
+        if not exports or not ismultipath(self):
+            return
+
+        implementors, interests = exports
+        for topic in implementors:
+            add_exposer(self, twin, topic)
+        for topic in interests:
+            add_subscriber(self, twin, topic, rp.Now)
 
     def isauthorized(self, topic: str, twin):
         """Check if the component is authorized.
@@ -477,7 +581,8 @@ class Router(Supervised):
 
     async def _handle_attestation(self, msg: rp.AttestationMsg) -> None:
         sts = await self._verify_signature(msg)
-        await msg.twin.response(sts, msg)
+        data = self.get_topics(msg.twin) if sts == rp.STS_OK else None
+        await msg.twin.response(sts, msg, data)
 
     async def _handle_admin(self, msg: rp.AdminMsg) -> None:
         logger.debug("[%s] admin: %s", self, msg)
@@ -662,7 +767,9 @@ class Router(Supervised):
             response = self._challenge(msg)
         else:
             await self._update_twin(twin, identity, msg.meta)
-            response = rp.ResMsg(id=msg.id, status=rp.STS_OK)
+            response = rp.ResMsg(
+                id=msg.id, status=rp.STS_OK, data=self.get_topics(twin)
+            )
 
         await twin.send(response)
 

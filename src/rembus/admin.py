@@ -181,7 +181,14 @@ async def admin_command(msg: rp.AdminMsg):
 
     Mesh-routing-relevant commands:
 
-    - `ADD_INTEREST` / `ADD_IMPL` / `REMOVE_INTEREST` / `REMOVE_IMPL`:
+    - `SETUP_CMD`: bulk-register `twin`'s already-known `"subscribers"`
+      and `"exposers"` (see `Router.local_exports`) into
+      `router.subscribers`/`router.exposers`, then re-enable reactive
+      delivery on this link. Used to (re)synchronize a link's full state
+      in one shot, typically on reconnection (see `Twin.setup`), since
+      the broker may have lost all prior incremental `subscribe`/
+      `expose` state for that specific link.
+    - `SUBSCRIBE_CMD` / `EXPOSE_CMD` / `UNSUBSCRIBE_CMD` / `UNEXPOSE_CMD`:
       after an `Router.isauthorized` check, propagate the change
       mesh-wide via `mark_and_broadcast` and, only if that router had not
       already processed this command, apply the corresponding local
@@ -201,7 +208,14 @@ async def admin_command(msg: rp.AdminMsg):
 
     router = twin.router
     cmd = msg.data[rp.COMMAND]
-    if cmd == rp.ADD_IMPL:
+    if cmd == rp.SETUP_CMD:
+        if ismultipath(router):
+            for implemented_topic in msg.data.get("exposers", []):
+                add_exposer(router, twin, implemented_topic)
+            for subscribed_topic in msg.data.get("subscribers", []):
+                add_subscriber(router, twin, subscribed_topic, rp.Now)
+            await reactive(router, twin, True)
+    elif cmd == rp.EXPOSE_CMD:
         if router.isauthorized(topic, twin):
             if ismultipath(router) and await mark_and_broadcast(
                 router, twin, msg
@@ -209,7 +223,7 @@ async def admin_command(msg: rp.AdminMsg):
                 add_exposer(router, twin, topic)
         else:
             return await twin.response(rp.STS_ERROR, msg, "unauthorized")
-    elif cmd == rp.REMOVE_IMPL:
+    elif cmd == rp.UNEXPOSE_CMD:
         if router.isauthorized(topic, twin):
             if ismultipath(router) and await mark_and_broadcast(
                 router, twin, msg
@@ -217,7 +231,7 @@ async def admin_command(msg: rp.AdminMsg):
                 remove_exposer(router, twin, topic)
         else:
             return await twin.response(rp.STS_ERROR, msg, "unauthorized")
-    elif cmd == rp.ADD_INTEREST:
+    elif cmd == rp.SUBSCRIBE_CMD:
         if router.isauthorized(topic, twin):
             if ismultipath(router) and await mark_and_broadcast(
                 router, twin, msg
@@ -226,7 +240,7 @@ async def admin_command(msg: rp.AdminMsg):
                 add_subscriber(router, twin, topic, msgfrom)
         else:
             return await twin.response(rp.STS_ERROR, msg, "unauthorized")
-    elif cmd == rp.REMOVE_INTEREST:
+    elif cmd == rp.UNSUBSCRIBE_CMD:
         if router.isauthorized(topic, twin):
             if ismultipath(router) and await mark_and_broadcast(
                 router, twin, msg
@@ -236,7 +250,7 @@ async def admin_command(msg: rp.AdminMsg):
             return await twin.response(rp.STS_ERROR, msg, "unauthorized")
     elif cmd == rp.REACTIVE_CMD:
         await reactive(router, twin, msg.data[rp.STATUS])
-    elif cmd == rp.PRIVATE_TOPIC:
+    elif cmd == rp.PRIVATE_TOPIC_CMD:
         if twin.isadmin():
             logger.debug("[%s] set private topic [%s]", twin, topic)
             set_private_topic(twin, topic)
@@ -247,7 +261,7 @@ async def admin_command(msg: rp.AdminMsg):
                 topic,
             )
             return await twin.response(rp.STS_ERROR, msg)
-    elif cmd == rp.PUBLIC_TOPIC:
+    elif cmd == rp.PUBLIC_TOPIC_CMD:
         if twin.isadmin():
             logger.debug("[%s] set public topic [%s]", twin, topic)
             set_public_topic(twin, topic)
@@ -256,7 +270,7 @@ async def admin_command(msg: rp.AdminMsg):
                 "[%s] is not admin: unable to lower [%s] to public", twin, topic
             )
             return await twin.response(rp.STS_ERROR, msg)
-    elif cmd == rp.AUTHORIZE:
+    elif cmd == rp.AUTHORIZE_CMD:
         cid = msg.data[rp.CID]
         if twin.isadmin():
             authorize(twin, cid, topic)
@@ -268,7 +282,7 @@ async def admin_command(msg: rp.AdminMsg):
                 topic,
             )
             return await twin.response(rp.STS_ERROR, msg)
-    elif cmd == rp.UNAUTHORIZE:
+    elif cmd == rp.UNAUTHORIZE_CMD:
         cid = msg.data[rp.CID]
         if twin.isadmin():
             unauthorize(twin, cid, topic)
