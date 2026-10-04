@@ -12,6 +12,7 @@ import traceback
 from typing import Callable, Any, Optional, List, cast
 import socket
 import ssl
+import uuid
 from websockets.asyncio.server import serve
 import cbor2
 from cryptography.hazmat.primitives import hashes
@@ -156,6 +157,14 @@ class Router(Supervised):
         self.wsprotocol = "ws"
         self.network: List[Node] = []
         self.id = name
+        self.eid = uuid.uuid4().int
+        """
+        Ephemeral id of this router instance, used to stamp mesh-wide
+        admin commands (``rmark``) so that a flood of
+        ``subscribe``/``expose``/``unsubscribe``/``unexpose`` never loops
+        back and gets re-applied to the same router twice (see
+        :func:`rembus.admin.mark_and_broadcast`).
+        """
         self.admins: dict = {}
         self.id_twin: dict = {}
         self.handler: dict[str, Callable[..., Any]] = {}
@@ -347,14 +356,53 @@ class Router(Supervised):
                     fut.future.set_result(data)
                 break
 
-    def _select_twin(self, topic):
-        twins = self.exposers[topic]
+    def _select_twin(self, topic, twins=None):
+        """Apply the configured load-balancing policy to pick an implementor.
+
+        `twins` defaults to `self.exposers[topic]` but callers performing
+        mesh-wide routing (see `find_implementor`) pass an already-filtered
+        candidate list, e.g. with the requestor removed to avoid loopbacks.
+        """
+        if twins is None:
+            twins = self.exposers[topic]
         if self.policy == Policy.FIRST_UP:
             return next((t for t in twins if t.isopen()), None)
         elif self.policy == Policy.ROUND_ROBIN:
             return round_robin(self, domain(topic), topic, twins)
         elif self.policy == Policy.LESS_BUSY:
             return less_busy(domain(topic), twins)
+
+    def find_implementor(self, requestor, topic: str):
+        """Pick the twin that should execute an RPC request for `topic`.
+
+        Mirrors Rembus.jl's `find_implementor`/`select_twin`: `topic_impls`
+        (here `self.exposers`) is populated mesh-wide by `ADD_IMPL`/
+        `REMOVE_IMPL` propagation (see `rembus.admin.mark_and_broadcast`),
+        so the implementor returned may be a local component or the twin
+        representing a neighbor broker, in which case the request simply
+        keeps hopping: the neighbor router receives it as an ordinary
+        `RpcReqMsg` and repeats this same lookup against its own
+        `exposers` table.
+
+        Returns a tuple `(twin, status)`: `status` is `rp.STS_OK` when a
+        twin was found, `rp.STS_METHOD_LOOPBACK` when the only candidate
+        was the requestor itself (the call would otherwise call itself
+        through a loopback route), or `rp.STS_METHOD_UNAVAILABLE` when no
+        implementor is currently reachable.
+        """
+        implementors = self.exposers.get(topic, [])
+        candidates = [t for t in implementors if t.rid != requestor.rid]
+        if not candidates:
+            if implementors:
+                # The only implementor was the requestor itself.
+                return None, rp.STS_METHOD_LOOPBACK
+            return None, rp.STS_METHOD_UNAVAILABLE
+
+        target_twin = self._select_twin(topic, candidates)
+        if target_twin is None:
+            return None, rp.STS_METHOD_UNAVAILABLE
+
+        return target_twin, rp.STS_OK
 
     def isauthorized(self, topic: str, twin):
         """Check if the component is authorized.
@@ -400,12 +448,10 @@ class Router(Supervised):
             outmsg = rp.ResMsg(id=msg.id, status=status, data=rp.df2tag(output))
             await msg.twin.send(outmsg)
         elif topic in self.exposers and self.isauthorized(topic, msg.twin):
-            target_twin = self._select_twin(topic)
+            target_twin, sts = self.find_implementor(msg.twin, topic)
             logger.debug("[%s] target twin: %s", self, target_twin)
             if target_twin is None:
-                outmsg = rp.ResMsg(
-                    id=msg.id, status=rp.STS_METHOD_UNAVAILABLE, data=topic
-                )
+                outmsg = rp.ResMsg(id=msg.id, status=sts, data=topic)
                 await msg.twin.send(outmsg)
             else:
                 logger.debug("[%s] sending to [%s]", self, target_twin)

@@ -1089,7 +1089,12 @@ class Twin(Supervised):
         RembusTimeout
             If no response is received within the configured timeout.
         """
-        if self.isclient:
+        if self.socket:
+            # Guard on having an actual upstream link rather than
+            # `isclient`: a mesh node (isserver=True) still owns an
+            # upstream connection to its parent broker and must be able
+            # to request reactive delivery on it, exactly like any plain
+            # client twin.
             await self.broker_setting("reactive", {"status": True})
         return self
 

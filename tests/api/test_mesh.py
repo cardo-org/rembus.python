@@ -5,6 +5,13 @@ listening ``port``) advertises its reachable protocols/ports through the
 ``meta`` field of the Identity/Attestation handshake. The upstream broker
 collects this information into ``router.network`` as a list of
 :class:`~rembus.core.Node`, enabling discovery of the mesh topology.
+
+The tests below also exercise the actual routing/dispatch logic
+(``rembus.admin.mark_and_broadcast``/``admin_broadcast`` and
+``rembus.router.Router.find_implementor``): a chain of brokers
+``pub/rpc_caller -> A -> meshb -> subc/exposer`` forwards Pub/Sub messages
+and RPC requests hop by hop, exactly as described in
+``docs/src/mesh_routing.md`` of Rembus.jl.
 """
 
 import time
@@ -51,3 +58,73 @@ def test_plain_client_does_not_join_mesh():
 
     plain.close()
     server.close()
+
+
+def service(x, y):
+    """RPC handler exposed on the leaf node of the mesh chain."""
+    return x + y
+
+
+def test_mesh_pubsub_forwarding():
+    """A publisher on broker A reaches a subscriber connected to a
+    second broker (meshb) chained behind A, with no direct link between
+    them: the ``ADD_INTEREST`` admin command issued by the subscriber is
+    flooded upstream (`mark_and_broadcast`/`admin_broadcast`) so that A's
+    `subscribers` table routes the message towards `meshb`, which then
+    delivers it locally.
+    """
+    received = []
+
+    def on_temperature(value):
+        received.append(value)
+
+    broker_a = rembus.node(name="pubsub_a", port=9201)
+    meshb = rembus.node("ws://:9201/meshb", name="pubsub_meshb", port=9202)
+    # The uplink twin must be reactive for broker A to forward messages
+    # onto it, exactly like any other subscribing component.
+    meshb.reactive()
+
+    subc = rembus.node("ws://:9202/subc", name="pubsub_subc")
+    subc.subscribe(on_temperature, topic="temperature")
+    subc.reactive()
+
+    pub = rembus.node("ws://:9201/pub", name="pubsub_pub")
+
+    try:
+        wait_for(lambda: "temperature" in broker_a.router.subscribers)
+        wait_for(lambda: "temperature" in meshb.router.subscribers)
+
+        pub.publish("temperature", 21.5)
+
+        assert wait_for(lambda: received == [21.5])
+    finally:
+        pub.close()
+        subc.close()
+        meshb.close()
+        broker_a.close()
+
+
+def test_mesh_rpc_forwarding():
+    """An RPC request issued against broker A is routed to an exposer
+    connected to the chained broker `meshb`: `EXPOSE_CMD`-equivalent
+    (`ADD_IMPL`) propagation populates A's `exposers` table with the twin
+    towards `meshb`, and `Router.find_implementor` selects it hop by hop.
+    """
+    broker_a = rembus.node(name="rpc_a", port=9203)
+    meshb = rembus.node("ws://:9203/meshb", name="rpc_meshb", port=9204)
+    meshb.reactive()
+
+    expo = rembus.node("ws://:9204/expo", name="rpc_expo")
+    expo.expose(service)
+
+    caller = rembus.node("ws://:9203/caller", name="rpc_caller")
+
+    try:
+        wait_for(lambda: "service" in broker_a.router.exposers)
+
+        assert caller.rpc("service", 2, 3) == 5
+    finally:
+        caller.close()
+        expo.close()
+        meshb.close()
+        broker_a.close()
