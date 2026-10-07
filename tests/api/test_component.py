@@ -211,6 +211,48 @@ async def test_publish():
 
 
 @pytest.mark.asyncio
+async def test_broker_publish_single_dict_payload():
+    """A broker publishing a single non-list argument in-process (e.g. a
+    dict) must deliver it to subscribers unwrapped, not as a 1-element
+    tuple.
+
+    ``Twin.publish``'s ``*data`` always captures its positional arguments
+    as a tuple, and when the publisher is the broker itself the message is
+    delivered in-process via ``Router._broadcast``/``Router.evaluate``
+    without ever going through ``df2tag``/wire (de)serialization, which is
+    what normally normalizes a single argument's tuple into a list. See
+    :func:`rembus.router.getargs`.
+    """
+    port = 8011
+    server = await rembus.component(port=port, keyspace=False)
+    await asyncio.sleep(0.2)
+    assert server.isbroker() is True
+
+    # ``ReplTwin.isopen()`` (and therefore whether ``publish`` takes the
+    # in-process ``torouter`` path at all) is true only when at least one
+    # other twin is connected to the broker -- mirroring a real deployment
+    # where other components (e.g. edge connections) are always attached.
+    other = await rembus.component(f"ws://:{port}/other.net")
+    await asyncio.sleep(0.2)
+
+    received = []
+
+    def on_payload(payload):
+        received.append(payload)
+
+    await server.subscribe(on_payload, topic="single.dict.topic")
+
+    payload = {"status": "ERROR", "error_code": "APP_DOES_NOT_EXIST"}
+    await server.publish("single.dict.topic", payload)
+    await asyncio.sleep(0.2)
+
+    assert received == [payload]
+
+    await other.close()
+    await server.close()
+
+
+@pytest.mark.asyncio
 async def test_publish_slot():
     """Test the slot option of the publish api."""
     port = 8007

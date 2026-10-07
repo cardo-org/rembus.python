@@ -58,8 +58,16 @@ async def get_response(obj: Any) -> Any:
 def getargs(data):
     """
     Return arguments list from the data.
+
+    ``data`` already represents multiple positional arguments when it is a
+    ``list`` (e.g. messages decoded off the wire, see
+    :meth:`~rembus.twin.MqttTwin.process_message`) or a ``tuple`` (e.g.
+    in-process :class:`~rembus.protocol.PubSubMsg` payloads built from
+    ``Twin.publish``'s ``*data``, see :meth:`~rembus.twin.Twin._publish`).
+    In both cases the items should be unpacked as separate positional
+    arguments; any other value is treated as a single argument.
     """
-    if isinstance(data, list):
+    if isinstance(data, (list, tuple)):
         return data
     else:
         return [data]
