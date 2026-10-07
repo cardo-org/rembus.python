@@ -7,7 +7,7 @@
         <link rel="canonical" href="https://cardo-org.github.io/rembus.python/reference/index.html">
 
     <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>API Reference - Rembus 0.8.20 documentation</title>
+        <title>API Reference - Rembus 0.8.21 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/tabs.css?v=4c969af8" />
@@ -169,7 +169,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">Rembus 0.8.20 documentation</div></a>
+      <a href="../index.html"><div class="brand">Rembus 0.8.21 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -190,7 +190,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
-  <span class="sidebar-brand-text">Rembus 0.8.20 documentation</span>
+  <span class="sidebar-brand-text">Rembus 0.8.21 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -398,6 +398,10 @@ It is available in all subclasses of <cite>RembusMsg</cite> such as
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">rembus.protocol.</span></span><span class="sig-name descname"><span class="pre">AttestationMsg</span></span><a class="headerlink" href="#rembus.protocol.AttestationMsg" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#rembus.protocol.RembusMsg" title="rembus.protocol.RembusMsg"><code class="xref py py-class docutils literal notranslate"><span class="pre">RembusMsg</span></code></a></p>
 <p>Attestation message.</p>
+<p><code class="docutils literal notranslate"><span class="pre">meta</span></code> is a mapping of protocol name (e.g. “ws”, “tcp”, “zmq”) to the
+corresponding listening port of the connecting node, used by a broker
+to discover the node’s endpoints when building the mesh network
+topology.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="rembus.protocol.AttestationMsg.id">
 <span class="sig-name descname"><span class="pre">id</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><a class="headerlink" href="#rembus.protocol.AttestationMsg.id" title="Link to this definition">¶</a></dt>
@@ -411,6 +415,11 @@ It is available in all subclasses of <cite>RembusMsg</cite> such as
 <dl class="py attribute">
 <dt class="sig sig-object py" id="rembus.protocol.AttestationMsg.signature">
 <span class="sig-name descname"><span class="pre">signature</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bytes</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#rembus.protocol.AttestationMsg.signature" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="rembus.protocol.AttestationMsg.meta">
+<span class="sig-name descname"><span class="pre">meta</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#rembus.protocol.AttestationMsg.meta" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -436,6 +445,11 @@ It is available in all subclasses of <cite>RembusMsg</cite> such as
 <p>Identity message.</p>
 <p>This message is sent by the component to identify itself
 to the remote peer.</p>
+<p><code class="docutils literal notranslate"><span class="pre">meta</span></code> is a mapping of protocol name (e.g. “ws”, “tcp”, “zmq”) to the
+corresponding listening port of the connecting node. It is used by a
+broker to discover the node’s endpoints when building the mesh network
+topology, and is empty for nodes that are not eligible to become a
+broker.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="rembus.protocol.IdentityMsg.id">
 <span class="sig-name descname"><span class="pre">id</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><a class="headerlink" href="#rembus.protocol.IdentityMsg.id" title="Link to this definition">¶</a></dt>
@@ -444,6 +458,11 @@ to the remote peer.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="rembus.protocol.IdentityMsg.cid">
 <span class="sig-name descname"><span class="pre">cid</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#rembus.protocol.IdentityMsg.cid" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="rembus.protocol.IdentityMsg.meta">
+<span class="sig-name descname"><span class="pre">meta</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#rembus.protocol.IdentityMsg.meta" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -690,6 +709,18 @@ RbURL and Supervised concept.</p>
 </dd></dl>
 
 <dl class="py class">
+<dt class="sig sig-object py" id="rembus.core.Node">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">rembus.core.</span></span><span class="sig-name descname"><span class="pre">Node</span></span><a class="headerlink" href="#rembus.core.Node" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>A node (peer broker) of the Rembus mesh network.</p>
+<p>A node is discovered when a connecting component advertises, through
+the <code class="docutils literal notranslate"><span class="pre">meta</span></code> field of an <a class="reference internal" href="#rembus.protocol.IdentityMsg" title="rembus.protocol.IdentityMsg"><code class="xref py py-class docutils literal notranslate"><span class="pre">IdentityMsg</span></code></a> or
+<a class="reference internal" href="#rembus.protocol.AttestationMsg" title="rembus.protocol.AttestationMsg"><code class="xref py py-class docutils literal notranslate"><span class="pre">AttestationMsg</span></code></a>, the set of protocols and
+ports it is listening on. Peer brokers use this information to
+discover each other’s endpoints and build the mesh network topology.</p>
+</dd></dl>
+
+<dl class="py class">
 <dt class="sig sig-object py" id="rembus.core.RbURL">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">rembus.core.</span></span><span class="sig-name descname"><span class="pre">RbURL</span></span><a class="headerlink" href="#rembus.core.RbURL" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
@@ -795,6 +826,25 @@ JSON encoding is requested, otherwise returns <code class="docutils literal notr
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="rembus.core.mesh_nodes">
+<span class="sig-prename descclassname"><span class="pre">rembus.core.</span></span><span class="sig-name descname"><span class="pre">mesh_nodes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cid</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">source_address</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">portmap</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.core.mesh_nodes" title="Link to this definition">¶</a></dt>
+<dd><p>Build the list of mesh <a class="reference internal" href="#rembus.core.Node" title="rembus.core.Node"><code class="xref py py-class docutils literal notranslate"><span class="pre">Node</span></code></a> advertised by a connecting peer.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cid</strong> (<em>str</em>) – The component id of the connecting peer.</p></li>
+<li><p><strong>source_address</strong> (<em>str</em>) – The remote host address of the connecting peer.</p></li>
+<li><p><strong>portmap</strong> (<em>dict</em><em> | </em><em>None</em>) – A mapping of protocol name (e.g. “ws”, “tcp”, “zmq”) to the
+listening port advertised by the peer.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>List</em>[<a class="reference internal" href="#rembus.core.Node" title="rembus.core.Node"><em>Node</em></a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -1034,6 +1084,20 @@ given message is received.</p>
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="rembus.twin.Twin.mesh_meta">
+<span class="sig-name descname"><span class="pre">mesh_meta</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.Twin.mesh_meta" title="Link to this definition">¶</a></dt>
+<dd><p>Return the protocol-&gt;port map this twin advertises for mesh
+network topology discovery.</p>
+<p>Empty when the component is not also listening for downstream
+connections (i.e. is not eligible to become a broker).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="rembus.twin.Twin.login">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">login</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.Twin.login" title="Link to this definition">¶</a></dt>
 <dd><p>Perform the login handshake with the remote peer.</p>
@@ -1044,6 +1108,11 @@ key and an <a class="reference internal" href="#rembus.protocol.AttestationMsg" 
 complete the authentication process.</p>
 <p>If no challenge is returned, the connection proceeds in <em>free mode</em>
 (unauthenticated access).</p>
+<p>On success, the peer’s final response carries its own mesh exports
+view (see <a class="reference internal" href="#rembus.router.Router.get_topics" title="rembus.router.Router.get_topics"><code class="xref py py-meth docutils literal notranslate"><span class="pre">rembus.router.Router.get_topics()</span></code></a>), applied locally
+with <a class="reference internal" href="#rembus.router.Router.update_tables" title="rembus.router.Router.update_tables"><code class="xref py py-meth docutils literal notranslate"><span class="pre">rembus.router.Router.update_tables()</span></code></a> so this twin can
+immediately route towards topics the peer already knows about,
+without waiting for individual admin commands to propagate.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Raises<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -1305,6 +1374,37 @@ query the broker directly.</p>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><ul class="simple">
 <li><p><strong>RembusError</strong> – If the broker rejects the unreactive request.</p></li>
+<li><p><strong>RembusTimeout</strong> – If no response is received within the configured timeout.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="rembus.twin.Twin.setup">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">setup</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.Twin.setup" title="Link to this definition">¶</a></dt>
+<dd><p>Resynchronize this twin’s mesh routing state with its upstream
+broker.</p>
+<p>Sends the explicit <code class="docutils literal notranslate"><span class="pre">SETUP_CMD</span></code> admin command carrying this
+node’s full set of currently-exposed/subscribed topics (see
+<a class="reference internal" href="#rembus.router.Router.local_exports" title="rembus.router.Router.local_exports"><code class="xref py py-meth docutils literal notranslate"><span class="pre">rembus.router.Router.local_exports()</span></code></a>), instead of relying
+on the individual <code class="docutils literal notranslate"><span class="pre">expose</span></code>/<code class="docutils literal notranslate"><span class="pre">subscribe</span></code> commands that
+originally registered them. Used after a reconnection (see
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">_reconnect()</span></code>), since the broker may have lost all prior
+incremental state for this specific link; a successful setup
+also re-enables reactive delivery on the link (see
+<code class="xref py py-func docutils literal notranslate"><span class="pre">rembus.admin.admin_command()</span></code>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><cite>True</cite> if the broker acknowledged the resync, <cite>False</cite> if
+there is no active upstream connection to resync with.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>bool</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>RembusError</strong> – If the broker rejects the setup request.</p></li>
 <li><p><strong>RembusTimeout</strong> – If no response is received within the configured timeout.</p></li>
 </ul>
 </dd>
@@ -1605,7 +1705,7 @@ to act as a publisher or subscriber connected to a MQTT broker.</p>
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">subscribe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fn</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msgfrom</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">topic</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.MqttTwin.subscribe" title="Link to this definition">¶</a></dt>
 <dd><p>Subscribe a callback function to a topic to receive published messages.</p>
 <p>Unlike the base <a class="reference internal" href="#rembus.twin.Twin" title="rembus.twin.Twin"><code class="xref py py-class docutils literal notranslate"><span class="pre">Twin</span></code></a> implementation, MQTT subscriptions do
-not go through the broker’s <code class="docutils literal notranslate"><span class="pre">ADD_INTEREST</span></code> admin handshake: the
+not go through the broker’s <code class="docutils literal notranslate"><span class="pre">SUBSCRIBE_CMD</span></code> admin handshake: the
 MQTT client already subscribes to every topic (see <code class="xref py py-meth docutils literal notranslate"><span class="pre">on_connect()</span></code>)
 and messages are dispatched locally based on the registered handler.</p>
 <dl class="field-list simple">
@@ -1894,6 +1994,16 @@ by a <a class="reference internal" href="#rembus.twin.Twin" title="rembus.twin.T
 </dl>
 </dd></dl>
 
+<dl class="py attribute">
+<dt class="sig sig-object py" id="rembus.router.Router.eid">
+<span class="sig-name descname"><span class="pre">eid</span></span><a class="headerlink" href="#rembus.router.Router.eid" title="Link to this definition">¶</a></dt>
+<dd><p>Ephemeral id of this router instance, used to stamp mesh-wide
+admin commands (<code class="docutils literal notranslate"><span class="pre">rmark</span></code>) so that a flood of
+<code class="docutils literal notranslate"><span class="pre">subscribe</span></code>/<code class="docutils literal notranslate"><span class="pre">expose</span></code>/<code class="docutils literal notranslate"><span class="pre">unsubscribe</span></code>/<code class="docutils literal notranslate"><span class="pre">unexpose</span></code> never loops
+back and gets re-applied to the same router twice (see
+<code class="xref py py-func docutils literal notranslate"><span class="pre">rembus.admin.mark_and_broadcast()</span></code>).</p>
+</dd></dl>
+
 <dl class="py method">
 <dt class="sig sig-object py" id="rembus.router.Router.evaluate">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">twin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">topic</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.router.Router.evaluate" title="Link to this definition">¶</a></dt>
@@ -1907,6 +2017,44 @@ by a <a class="reference internal" href="#rembus.twin.Twin" title="rembus.twin.T
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><em>Any</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="rembus.router.Router.find_implementor">
+<span class="sig-name descname"><span class="pre">find_implementor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">requestor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">topic</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.router.Router.find_implementor" title="Link to this definition">¶</a></dt>
+<dd><p>Pick the twin that should execute an RPC request for <cite>topic</cite>.</p>
+<p>Mirrors Rembus.jl’s <cite>find_implementor</cite>/<cite>select_twin</cite>: <cite>topic_impls</cite>
+(here <cite>self.exposers</cite>) is populated mesh-wide by <cite>EXPOSE_CMD</cite>/
+<cite>UNEXPOSE_CMD</cite> propagation (see <cite>rembus.admin.mark_and_broadcast</cite>),
+so the implementor returned may be a local component or the twin
+representing a neighbor broker, in which case the request simply
+keeps hopping: the neighbor router receives it as an ordinary
+<cite>RpcReqMsg</cite> and repeats this same lookup against its own
+<cite>exposers</cite> table.</p>
+<p>Returns a tuple <cite>(twin, status)</cite>: <cite>status</cite> is <cite>rp.STS_OK</cite> when a
+twin was found, <cite>rp.STS_METHOD_LOOPBACK</cite> when the only candidate
+was the requestor itself (the call would otherwise call itself
+through a loopback route), or <cite>rp.STS_METHOD_UNAVAILABLE</cite> when no
+implementor is currently reachable.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>topic</strong> (<em>str</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="rembus.router.Router.get_topics">
+<span class="sig-name descname"><span class="pre">get_topics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.router.Router.get_topics" title="Link to this definition">¶</a></dt>
+<dd><p>Return <cite>[topic_impls(target), topic_interests(target)]</cite>: this
+router’s own exports view, sent back to <cite>target</cite> as the
+attestation response payload (see <cite>_handle_attestation</cite>/
+<cite>_auth_identity</cite>) and applied by the peer with <cite>update_tables</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>list</p>
 </dd>
 </dl>
 </dd></dl>
@@ -1949,6 +2097,30 @@ If the topic is public the component is always authorized.</p>
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="rembus.router.Router.local_exports">
+<span class="sig-name descname"><span class="pre">local_exports</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#rembus.router.Router.local_exports" title="Link to this definition">¶</a></dt>
+<dd><p>Return this router’s own directly-registered topics.</p>
+<p>Splits the non-builtin keys of <cite>self.handler</cite> into
+<cite>(exposers, subscribers)</cite>, using <cite>self.local_subscriber</cite> to tell
+a locally-subscribed topic apart from a locally-exposed one.</p>
+<p>Mirrors Rembus.jl’s <cite>twin_configuration</cite>: used to rebuild the
+<cite>SETUP_CMD</cite> payload a twin replays to its upstream broker after a
+reconnection (see <cite>Twin.setup</cite>), since that broker may have lost
+all prior incremental <cite>expose</cite>/<cite>subscribe</cite> state for the link.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="rembus.router.Router.local_subscriber">
+<span class="sig-name descname"><span class="pre">local_subscriber</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#rembus.router.Router.local_subscriber" title="Link to this definition">¶</a></dt>
+<dd><p><cite>msg_from</cite> timestamp of every topic this node has <em>directly</em>
+subscribed to (via <code class="xref py py-meth docutils literal notranslate"><span class="pre">Twin.subscribe()</span></code>), keyed by topic. Used
+to tell apart, among the non-builtin keys of <cite>self.handler</cite>,
+which ones are local subscriber callbacks versus local RPC
+exposers (see <cite>local_exports</cite>/<cite>topic_impls</cite>/<cite>topic_interests</cite>).
+Mirrors Rembus.jl’s <cite>router.local_subscriber</cite>.</p>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="rembus.router.Router.send_message">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">send_message</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">msg</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.router.Router.send_message" title="Link to this definition">¶</a></dt>
 <dd><p>Send message to remote node using a twin from the pool of twins</p>
@@ -1968,10 +2140,60 @@ If the topic is public the component is always authorized.</p>
 </dl>
 </dd></dl>
 
+<dl class="py method">
+<dt class="sig sig-object py" id="rembus.router.Router.topic_impls">
+<span class="sig-name descname"><span class="pre">topic_impls</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.router.Router.topic_impls" title="Link to this definition">¶</a></dt>
+<dd><p>Topics <cite>target</cite> should be told this router implements (or
+knows an implementor for): local non-builtin, non-subscriber
+handlers (see <cite>local_exports</cite>) unioned with every topic in
+<cite>self.exposers</cite> reachable through some twin other than <cite>target</cite>.</p>
+<p>Used to build the exports sent back in the attestation response,
+see <cite>get_topics</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="rembus.router.Router.topic_interests">
+<span class="sig-name descname"><span class="pre">topic_interests</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.router.Router.topic_interests" title="Link to this definition">¶</a></dt>
+<dd><p>Topics <cite>target</cite> should be told this router (or some twin
+reachable through it) is subscribed to: local subscriber
+callbacks (see <cite>local_exports</cite>) unioned with every topic in
+<cite>self.subscribers</cite> reachable through some twin other than
+<cite>target</cite>.</p>
+<p>Used to build the exports sent back in the attestation response,
+see <cite>get_topics</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
 <dl class="py property">
 <dt class="sig sig-object py" id="rembus.router.Router.twins">
 <span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">twins</span></span><a class="headerlink" href="#rembus.router.Router.twins" title="Link to this definition">¶</a></dt>
 <dd><p>Return the twins connected to.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="rembus.router.Router.update_tables">
+<span class="sig-name descname"><span class="pre">update_tables</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">twin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exports</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.router.Router.update_tables" title="Link to this definition">¶</a></dt>
+<dd><p>Register <cite>exports</cite> (the <cite>[topic_impls, topic_interests]</cite> pair
+returned by the peer’s <cite>get_topics</cite> in the attestation response)
+into this router’s own mesh routing tables for <cite>twin</cite>.</p>
+<p>Lets this router immediately forward RPC requests and Pub/Sub
+messages towards <cite>twin</cite> without waiting for individual
+<cite>expose</cite>/<cite>subscribe</cite> admin commands to propagate. No-op if
+<cite>exports</cite> is falsy or <cite>ismultipath</cite> gates it off.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
@@ -2133,12 +2355,14 @@ If the topic is public the component is always authorized.</p>
 <li><a class="reference internal" href="#rembus.protocol.AttestationMsg.id"><code class="docutils literal notranslate"><span class="pre">AttestationMsg.id</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.AttestationMsg.cid"><code class="docutils literal notranslate"><span class="pre">AttestationMsg.cid</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.AttestationMsg.signature"><code class="docutils literal notranslate"><span class="pre">AttestationMsg.signature</span></code></a></li>
+<li><a class="reference internal" href="#rembus.protocol.AttestationMsg.meta"><code class="docutils literal notranslate"><span class="pre">AttestationMsg.meta</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.AttestationMsg.to_payload"><code class="docutils literal notranslate"><span class="pre">AttestationMsg.to_payload()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#rembus.protocol.IdentityMsg"><code class="docutils literal notranslate"><span class="pre">IdentityMsg</span></code></a><ul>
 <li><a class="reference internal" href="#rembus.protocol.IdentityMsg.id"><code class="docutils literal notranslate"><span class="pre">IdentityMsg.id</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.IdentityMsg.cid"><code class="docutils literal notranslate"><span class="pre">IdentityMsg.cid</span></code></a></li>
+<li><a class="reference internal" href="#rembus.protocol.IdentityMsg.meta"><code class="docutils literal notranslate"><span class="pre">IdentityMsg.meta</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.IdentityMsg.to_payload"><code class="docutils literal notranslate"><span class="pre">IdentityMsg.to_payload()</span></code></a></li>
 </ul>
 </li>
@@ -2188,6 +2412,7 @@ If the topic is public the component is always authorized.</p>
 </li>
 <li><a class="reference internal" href="#module-rembus.core"><code class="xref py py-mod docutils literal notranslate"><span class="pre">core</span></code></a><ul>
 <li><a class="reference internal" href="#rembus.core.FutureResponse"><code class="docutils literal notranslate"><span class="pre">FutureResponse</span></code></a></li>
+<li><a class="reference internal" href="#rembus.core.Node"><code class="docutils literal notranslate"><span class="pre">Node</span></code></a></li>
 <li><a class="reference internal" href="#rembus.core.RbURL"><code class="docutils literal notranslate"><span class="pre">RbURL</span></code></a><ul>
 <li><a class="reference internal" href="#rembus.core.RbURL.isbroker"><code class="docutils literal notranslate"><span class="pre">RbURL.isbroker()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.core.RbURL.netlink"><code class="docutils literal notranslate"><span class="pre">RbURL.netlink</span></code></a></li>
@@ -2203,6 +2428,7 @@ If the topic is public the component is always authorized.</p>
 </li>
 <li><a class="reference internal" href="#rembus.core.bytes_to_b64"><code class="docutils literal notranslate"><span class="pre">bytes_to_b64()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.core.domain"><code class="docutils literal notranslate"><span class="pre">domain()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.core.mesh_nodes"><code class="docutils literal notranslate"><span class="pre">mesh_nodes()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.core.randname"><code class="docutils literal notranslate"><span class="pre">randname()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.core.response_data"><code class="docutils literal notranslate"><span class="pre">response_data()</span></code></a></li>
 </ul>
@@ -2231,6 +2457,7 @@ If the topic is public the component is always authorized.</p>
 <li><a class="reference internal" href="#rembus.twin.Twin.deliver_with_ack"><code class="docutils literal notranslate"><span class="pre">Twin.deliver_with_ack()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.send_task"><code class="docutils literal notranslate"><span class="pre">Twin.send_task()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.wait_response"><code class="docutils literal notranslate"><span class="pre">Twin.wait_response()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.twin.Twin.mesh_meta"><code class="docutils literal notranslate"><span class="pre">Twin.mesh_meta()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.login"><code class="docutils literal notranslate"><span class="pre">Twin.login()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.publish"><code class="docutils literal notranslate"><span class="pre">Twin.publish()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.put"><code class="docutils literal notranslate"><span class="pre">Twin.put()</span></code></a></li>
@@ -2242,6 +2469,7 @@ If the topic is public the component is always authorized.</p>
 <li><a class="reference internal" href="#rembus.twin.Twin.unregister"><code class="docutils literal notranslate"><span class="pre">Twin.unregister()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.reactive"><code class="docutils literal notranslate"><span class="pre">Twin.reactive()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.unreactive"><code class="docutils literal notranslate"><span class="pre">Twin.unreactive()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.twin.Twin.setup"><code class="docutils literal notranslate"><span class="pre">Twin.setup()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.private_topic"><code class="docutils literal notranslate"><span class="pre">Twin.private_topic()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.public_topic"><code class="docutils literal notranslate"><span class="pre">Twin.public_topic()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.authorize"><code class="docutils literal notranslate"><span class="pre">Twin.authorize()</span></code></a></li>
@@ -2287,13 +2515,21 @@ If the topic is public the component is always authorized.</p>
 <li><a class="reference internal" href="#module-rembus.router"><code class="xref py py-mod docutils literal notranslate"><span class="pre">router</span></code></a><ul>
 <li><a class="reference internal" href="#rembus.router.Router"><code class="docutils literal notranslate"><span class="pre">Router</span></code></a><ul>
 <li><a class="reference internal" href="#rembus.router.Router.append_message"><code class="docutils literal notranslate"><span class="pre">Router.append_message()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.router.Router.eid"><code class="docutils literal notranslate"><span class="pre">Router.eid</span></code></a></li>
 <li><a class="reference internal" href="#rembus.router.Router.evaluate"><code class="docutils literal notranslate"><span class="pre">Router.evaluate()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.router.Router.find_implementor"><code class="docutils literal notranslate"><span class="pre">Router.find_implementor()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.router.Router.get_topics"><code class="docutils literal notranslate"><span class="pre">Router.get_topics()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.router.Router.get_twin"><code class="docutils literal notranslate"><span class="pre">Router.get_twin()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.router.Router.isauthorized"><code class="docutils literal notranslate"><span class="pre">Router.isauthorized()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.router.Router.isconnected"><code class="docutils literal notranslate"><span class="pre">Router.isconnected()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.router.Router.local_exports"><code class="docutils literal notranslate"><span class="pre">Router.local_exports()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.router.Router.local_subscriber"><code class="docutils literal notranslate"><span class="pre">Router.local_subscriber</span></code></a></li>
 <li><a class="reference internal" href="#rembus.router.Router.send_message"><code class="docutils literal notranslate"><span class="pre">Router.send_message()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.router.Router.serve_ws"><code class="docutils literal notranslate"><span class="pre">Router.serve_ws()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.router.Router.topic_impls"><code class="docutils literal notranslate"><span class="pre">Router.topic_impls()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.router.Router.topic_interests"><code class="docutils literal notranslate"><span class="pre">Router.topic_interests()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.router.Router.twins"><code class="docutils literal notranslate"><span class="pre">Router.twins</span></code></a></li>
+<li><a class="reference internal" href="#rembus.router.Router.update_tables"><code class="docutils literal notranslate"><span class="pre">Router.update_tables()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.router.Router.uptime"><code class="docutils literal notranslate"><span class="pre">Router.uptime()</span></code></a></li>
 </ul>
 </li>
@@ -2316,7 +2552,7 @@ If the topic is public the component is always authorized.</p>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=935d7236"></script>
+</div><script src="../_static/documentation_options.js?v=3725f62f"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
