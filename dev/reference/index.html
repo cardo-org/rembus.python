@@ -1144,6 +1144,34 @@ acknowledgment unless explicitly configured (e.g., via QoS settings).</p>
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="rembus.twin.Twin.torouter">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">torouter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">topic</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.Twin.torouter" title="Link to this definition">¶</a></dt>
+<dd><p>Publish a message directly to this twin’s own router inbox.</p>
+<p>Unlike <a class="reference internal" href="#rembus.twin.Twin.publish" title="rembus.twin.Twin.publish"><code class="xref py py-meth docutils literal notranslate"><span class="pre">publish()</span></code></a>, this always takes the in-process
+delivery path (as if <code class="docutils literal notranslate"><span class="pre">isbroker()</span> <span class="pre">and</span> <span class="pre">isopen()</span></code> were true),
+regardless of whether any other twin is currently connected to
+this twin’s router. This is useful for a “hub” <cite>ReplTwin</cite> that
+other components reference as their <code class="docutils literal notranslate"><span class="pre">ctx</span></code> (see
+<code class="docutils literal notranslate"><span class="pre">Twin.inject</span></code>) but that has no connected peers of its own:
+normally such a twin can never satisfy <code class="docutils literal notranslate"><span class="pre">isopen()</span></code> (which
+requires at least one other open twin on the same router), so
+<cite>publish</cite> always raises <cite>RembusConnectionClosed</cite> even though
+local subscribers registered directly on this twin (e.g. via
+<cite>subscribe</cite>) are ready to receive the message.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>topic</strong> (<em>str</em>) – The name of the topic to publish to.</p></li>
+<li><p><strong>*data</strong> (<em>Any</em>) – Positional payload values to include in the published
+message, delivered to subscribers as the message content.</p></li>
+<li><p><strong>**kwargs</strong> (<em>Any</em>) – Optional keyword arguments controlling publication
+behavior (e.g., QoS level, slot).</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="rembus.twin.Twin.put">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">put</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">topic</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.Twin.put" title="Link to this definition">¶</a></dt>
 <dd><p>Publish a message to a topic namespaced with the component ID.</p>
@@ -2460,6 +2488,7 @@ messages towards <cite>twin</cite> without waiting for individual
 <li><a class="reference internal" href="#rembus.twin.Twin.mesh_meta"><code class="docutils literal notranslate"><span class="pre">Twin.mesh_meta()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.login"><code class="docutils literal notranslate"><span class="pre">Twin.login()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.publish"><code class="docutils literal notranslate"><span class="pre">Twin.publish()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.twin.Twin.torouter"><code class="docutils literal notranslate"><span class="pre">Twin.torouter()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.put"><code class="docutils literal notranslate"><span class="pre">Twin.put()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.broker_setting"><code class="docutils literal notranslate"><span class="pre">Twin.broker_setting()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.setting"><code class="docutils literal notranslate"><span class="pre">Twin.setting()</span></code></a></li>
