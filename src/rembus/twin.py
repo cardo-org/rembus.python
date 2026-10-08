@@ -36,6 +36,7 @@ from rembus.core import (
 )
 from rembus.router import bottom_router, top_router, twin_down, get_response
 from rembus.keyspace import KeySpaceRouter, build_space_re
+from rembus.db import with_lock_retry
 
 __all__ = [
     "Twin",
@@ -135,10 +136,9 @@ def sync_table(
         db.sql(f"INSERT INTO {table_name} SELECT * FROM df")
 
 
-def sync_twin(
+def _sync_twin_once(
     db, router_name: str, twin_name: str, table_name: str, new_df: pl.DataFrame
 ):
-    """Synchronize a twin's data in a specific table."""
     current_df = db.sql(
         f"""
         SELECT * FROM {table_name} 
@@ -148,6 +148,23 @@ def sync_twin(
     ).pl()
 
     sync_table(db, table_name, current_df, new_df)
+
+
+def sync_twin(
+    db, router_name: str, twin_name: str, table_name: str, new_df: pl.DataFrame
+):
+    """Synchronize a twin's data in a specific table.
+
+    The whole read-diff-write sequence is retried (via
+    `with_lock_retry`) as a unit on transient `database is locked`
+    errors: an independent component's connection may be touching the
+    same on-disk DuckLake catalog concurrently, and since the
+    read-then-diff logic always recomputes against the current table
+    contents, retrying the entire operation is safe/idempotent.
+    """
+    with_lock_retry(
+        _sync_twin_once, db, router_name, twin_name, table_name, new_df
+    )
 
 
 def exposed_topics_for_twin(router, twin) -> List[str]:
@@ -403,6 +420,18 @@ class Twin(Supervised):
         if self.db is not None:
             if self.uid.hasname and self.socket:
                 await twin_down(self)
+            # `save_twin` below runs a synchronous query against
+            # `self.db` (== `self.router.db`). If the router's periodic
+            # `data_at_rest` archiver is still writing to that same
+            # connection in a background thread (see
+            # `Router._save_data_at_rest_in_background`), wait for it
+            # to finish first so the two never touch the connection at
+            # the same time (DuckDB connections are not safe for
+            # concurrent use, and the DuckLake catalog's SQLite-backed
+            # metadata file raises "database is locked" otherwise).
+            pending_save = getattr(self.router, "_data_at_rest_task", None)
+            if pending_save is not None and not pending_save.done():
+                await pending_save
             save_twin(self)
 
         if self.uid.isbroker():
@@ -790,6 +819,36 @@ class Twin(Supervised):
         """
         torouter = self.isbroker() and self.isopen()
         await self._publish(torouter, topic, *data, **kwargs)
+        return None
+
+    async def torouter(self, topic: str, *data: Any, **kwargs):
+        """
+        Publish a message directly to this twin's own router inbox.
+
+        Unlike :meth:`publish`, this always takes the in-process
+        delivery path (as if ``isbroker() and isopen()`` were true),
+        regardless of whether any other twin is currently connected to
+        this twin's router. This is useful for a "hub" `ReplTwin` that
+        other components reference as their ``ctx`` (see
+        ``Twin.inject``) but that has no connected peers of its own:
+        normally such a twin can never satisfy ``isopen()`` (which
+        requires at least one other open twin on the same router), so
+        `publish` always raises `RembusConnectionClosed` even though
+        local subscribers registered directly on this twin (e.g. via
+        `subscribe`) are ready to receive the message.
+
+        Parameters
+        ----------
+        topic : str
+            The name of the topic to publish to.
+        *data : Any
+            Positional payload values to include in the published
+            message, delivered to subscribers as the message content.
+        **kwargs : Any
+            Optional keyword arguments controlling publication
+            behavior (e.g., QoS level, slot).
+        """
+        await self._publish(True, topic, *data, **kwargs)
         return None
 
     async def put(self, topic: str, *args: Any, **kwargs):
@@ -1873,7 +1932,7 @@ class MqttTwin(Twin):
             # If data has a single item, send just that item
             data_to_send = msg.data if len(msg.data) > 1 else msg.data[0]
             publish_kwargs = {}
-            if self.socket.protocol_version == MQTTv50:
+            if self.socket._connection_state.protocol_version == MQTTv50:
                 publish_kwargs["content_type"] = "application/json"
             self.socket.publish(
                 msg.topic, json.dumps(data_to_send), **publish_kwargs

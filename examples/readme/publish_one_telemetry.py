@@ -4,7 +4,7 @@ import rembus as rb
 
 now = time.time()
 
-parser = argparse.ArgumentParser(description="campobase broker")
+parser = argparse.ArgumentParser(description="rembus broker")
 parser.add_argument("-p", "--port", default=8338, help="broker port")
 parser.add_argument(
     "-T", "--temperature", default=21.0, help="temperature reading"

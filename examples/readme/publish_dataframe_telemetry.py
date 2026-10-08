@@ -2,7 +2,7 @@ import argparse
 import polars as pl
 import rembus as rb
 
-parser = argparse.ArgumentParser(description="campobase broker")
+parser = argparse.ArgumentParser(description="rembus broker")
 parser.add_argument("-p", "--port", default=8338, help="broker port")
 args = parser.parse_args()
 

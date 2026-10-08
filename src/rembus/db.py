@@ -2,6 +2,8 @@ from datetime import datetime
 from functools import partial
 import os
 import subprocess
+import threading
+import time
 from pathlib import Path
 import logging
 import shutil
@@ -19,6 +21,77 @@ from rembus.settings import broker_dir, rembus_dir, db_attach
 from rembus.protocol import tag2df, df2tag, timestamp, PubSubMsg
 
 logger = logging.getLogger(__name__)
+
+# Process-wide lock guarding every `with_lock_retry`-wrapped DuckLake
+# touchpoint (message/table persistence, twin/subscriber/exposer/mark
+# sync). Different `rembus` components within the *same* process each
+# have their own independent DuckDB connection but commonly attach the
+# same DuckLake catalog; this lock fully serializes those
+# same-process writers (no two can ever race each other), which is the
+# common case (e.g. an application hosting several
+# components). It intentionally does *not* help against a genuinely
+# separate OS process touching the same catalog concurrently -- that
+# residual case is handled by `with_lock_retry`'s retry-with-backoff.
+_db_write_lock = threading.Lock()
+
+
+def with_lock_retry(
+    fn,
+    *args,
+    retries: int = 12,
+    base_delay: float = 0.1,
+    max_delay: float = 2.0,
+):
+    """Call `fn(*args)`, retrying with capped exponential backoff if it
+    raises a `duckdb.Error` whose message mentions "database is locked"
+    (SQLite catalog only).
+
+    Acquires the process-wide `_db_write_lock` first, so concurrent
+    callers *within this process* (e.g. several `rembus` components
+    each with their own DuckDB connection, all attached to the same
+    DuckLake catalog) never race each other in the first
+    place; the retry loop below is a secondary safety net for lock
+    contention coming from genuinely separate OS processes, which the
+    in-process lock cannot prevent.
+
+    DuckLake's catalog metadata may be stored in a SQLite file or in a
+    PostgreSQL database (see `DUCKLAKE_URL`). More than one independent
+    `rembus` component (each with its own DuckDB connection) may
+    legitimately touch the catalog around the same time (e.g. several
+    components shutting down together, each persisting its own
+    twin/subscriber state, while the periodic `data_at_rest` archiver
+    of another, completely independent component is still mid-write in
+    its own background thread).
+
+    The retry targets the SQLite catalog, whose locking semantics don't
+    tolerate concurrent writers well: transient lock contention
+    ("database is locked") is treated as retryable, the same way one
+    would handle SQLITE_BUSY. A PostgreSQL catalog handles concurrent
+    writers through its own MVCC/row locking and does not raise that
+    error, so with PostgreSQL this wrapper only serializes same-process
+    writers via `_db_write_lock` and never retries. The default retry
+    budget (up to ~17s cumulative, capped at 2s per sleep) is sized to
+    outlast a full DuckLake archiver write/commit on another
+    connection, not just a sub-second contention blip."""
+    attempt = 0
+    while True:
+        try:
+            with _db_write_lock:
+                return fn(*args)
+        except duckdb.Error as e:
+            attempt += 1
+            if attempt > retries or "database is locked" not in str(e):
+                raise
+            delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+            logger.debug(
+                "retrying after DuckLake lock contention (attempt %d/%d, "
+                "sleeping %.2fs): %s",
+                attempt,
+                retries,
+                delay,
+                e,
+            )
+            time.sleep(delay)
 
 
 typemap = {
@@ -114,10 +187,19 @@ def reset_db(broker_name):
     dl_url = os.environ.get("DUCKLAKE_URL")
 
     if dl_url:
-        _, _, _, db = parse_dburl()
+        user, password, host, db = parse_dburl()
         if dl_url.startswith("ducklake:postgres"):
-            subprocess.run(["dropdb", db, "--if-exists"], check=False)
-            subprocess.run(["createdb", db], check=True)
+            env = os.environ.copy()
+            if user:
+                env["PGUSER"] = user
+            if password:
+                env["PGPASSWORD"] = password
+            if host:
+                env["PGHOST"] = host
+            subprocess.run(
+                ["dropdb", db, "--if-exists"], check=False, env=env
+            )
+            subprocess.run(["createdb", db], check=True, env=env)
 
         elif dl_url.startswith("ducklake:sqlite"):
             logger.debug("removing db %s", db)
@@ -756,25 +838,93 @@ def msg_table(router, msg: PubSubMsg):
             break
 
 
-def save_data_at_rest(router):
-    """Save cached messages to the database."""
-    # logger.debug("[%s] saving %d messages", router, len(router.msg_cache))
+def _insert_message_batch(db, router_id, msgs):
+    batch = build_message_batch(router_id, msgs)
+    db.from_arrow(batch).insert_into("message")
+
+
+def _sync_topic_cache(db, tables, topic_cache):
+    for topic, topic_msgs in topic_cache.items():
+        table = tables[topic]
+        if table.keys:
+            upsert(db, table, topic_msgs)
+        else:
+            append(db, table, topic_msgs)
+
+
+def save_data_at_rest(router, db=None):
+    """Save cached messages to the database.
+
+    Snapshots (and atomically replaces) `router.msg_cache` /
+    `router.msg_topic_cache` with fresh, empty containers *before*
+    doing any (slow, blocking) database work. This function may run in
+    a worker thread (see `Router._save_data_at_rest_in_background`)
+    concurrently with the router's own asyncio task still appending
+    newly-arrived messages to `router.msg_cache`/`msg_topic_cache`; by
+    swapping the attributes up front (a single, GIL-atomic assignment)
+    rather than mutating/clearing them afterwards, the background
+    thread only ever reads/writes its own local snapshot, so there is
+    no risk of a message being lost or double-saved, nor any need to
+    coordinate with the main thread's list/dict mutations.
+
+    `db` defaults to `router.db` (safe for the synchronous,
+    inline-on-the-event-loop-thread "shutdown" call site in
+    `Router._task_impl`), but callers running this in a *background
+    thread* (`Router._save_data_at_rest_in_background`) MUST pass a
+    dedicated `router.db.cursor()` instead: DuckDB connections are not
+    safe for concurrent use from multiple threads, and reusing the
+    same raw connection object from a worker thread while the main
+    event-loop thread may still be issuing other queries against it
+    (e.g. `Twin`/`Router` shutdown sequences, or cursor-based
+    accessors in the application) can leave the shared
+    connection in a permanently broken state (persistent
+    `database is locked` errors that no amount of retrying resolves).
+    A fresh `cursor()` does not inherit the parent connection's
+    `USE rl` default-schema setting (see `dbconnect`), so when an
+    explicit `db` is passed, this re-applies `USE rl` on it first.
+
+    Transient `database is locked` errors (another independent
+    component's connection touching the same DuckLake catalog at the
+    same time, see `with_lock_retry`) are retried; if retries are
+    exhausted, the snapshotted messages are merged back into
+    `router.msg_cache`/`msg_topic_cache` (newest-first is not
+    preserved, but no data is dropped) so the next periodic save picks
+    them up instead of silently losing them.
+    """
+    if db is None:
+        db = router.db
+    else:
+        db.sql("USE rl")
     msgs = router.msg_cache
+    topic_cache = router.msg_topic_cache
     if not msgs:
         return
+    router.msg_cache = []
+    router.msg_topic_cache = {}
 
-    batch = build_message_batch(router.id, msgs)
-    (router.db.from_arrow(batch).insert_into("message"))
-
-    for topic, msgs in router.msg_topic_cache.items():
-        table = router.tables[topic]
-        if table.keys:
-            upsert(router.db, table, msgs)
-        else:
-            append(router.db, table, msgs)
-
-    router.msg_cache.clear()
-    router.msg_topic_cache.clear()
+    try:
+        with_lock_retry(_insert_message_batch, db, router.id, msgs)
+        with_lock_retry(_sync_topic_cache, db, router.tables, topic_cache)
+    except duckdb.Error:
+        logger.exception(
+            "[%s] failed to save %d cached messages to disk; keeping "
+            "them cached for the next periodic save",
+            router,
+            len(msgs),
+        )
+        # Best-effort: merges the failed snapshot back ahead of
+        # whatever has accumulated in the meantime. When this runs in
+        # a background thread (the common case) there is a narrow,
+        # accepted race with the main thread concurrently appending to
+        # `router.msg_cache`/`msg_topic_cache`; this only matters after
+        # `with_lock_retry` has already exhausted its retries, an
+        # already-degraded, rare path, so losing at most one
+        # concurrently-appended message here is preferred over the
+        # complexity of locking every cache mutation for this edge
+        # case.
+        router.msg_cache = msgs + router.msg_cache
+        for topic, topic_msgs in topic_cache.items():
+            router.msg_topic_cache.setdefault(topic, []).extend(topic_msgs)
 
 
 async def send_messages(twin, df, ts):

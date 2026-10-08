@@ -3,6 +3,64 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.22] 2026-10-08
+
+### Added
+
+- `Twin.torouter(topic, *data, **kwargs)`: publish a message directly
+  into this twin's own router inbox for in-process delivery to local
+  subscribers, bypassing `publish`'s `isbroker() and isopen()` gate.
+  `publish` only takes its in-process delivery path when at least one
+  *other* twin is currently connected to the same router (`isopen()`);
+  a `ReplTwin` acting purely as an injected "hub" `ctx` for other
+  in-process twins (e.g. a main application component referenced via
+  `Twin.inject` by several independently-connected MQTT/WS twins, each
+  on its *own* separate router, as in a multi-edge gateway topology)
+  can never satisfy that condition even though its own locally
+  registered subscribers are ready to receive messages — `publish`
+  would always raise `RembusConnectionClosed` in that shape. `torouter`
+  unconditionally takes the in-process path instead, matching a
+  previously-removed method of the same name/behavior.
+
+### Fixed
+
+- `Router._task_impl` processed every message (pub/sub delivery, RPC,
+  admin, etc.) through a single sequential inbox, and the periodic
+  `data_at_rest` archiver write (`rdb.save_data_at_rest`, a synchronous
+  DuckDB/DuckLake write of cached messages) ran inline on that same
+  loop. Under real traffic the write can take multiple seconds,
+  queuing up and delaying delivery of unrelated messages (e.g. a
+  pending RPC/pub-sub response) behind it. The periodic save now runs
+  in a background thread (`asyncio.to_thread`), with `msg_cache`/
+  `msg_topic_cache` atomically swapped for fresh containers before the
+  write starts so the main loop keeps accumulating new messages
+  without racing the background write; at most one save runs at a
+  time, and a graceful shutdown still awaits any in-flight save before
+  closing the database connection.
+- Backgrounding that archiver write surfaced two related DuckLake/
+  DuckDB concurrency bugs, now also fixed:
+  - `Twin._shutdown()` could call `save_twin()` on `self.db` while a
+    background archiver write for the *same* router was still mid-write
+    on that same connection object (DuckDB connections aren't safe for
+    concurrent use from multiple threads); it now awaits any in-flight
+    `router._data_at_rest_task` first. The background write itself now
+    uses a dedicated `router.db.cursor()` (with `USE rl` re-applied,
+    since a fresh cursor doesn't inherit the parent connection's
+    default-schema setting) rather than the raw shared connection, so
+    it can safely run concurrently with other queries on `router.db`
+    from the event-loop thread.
+  - Multiple independent `rembus` components within the same process
+    (e.g. several `gateway_mqtt`-style components, each with its own
+    DuckDB connection) commonly attach the same on-disk DuckLake
+    catalog; concurrent writes from two such components (e.g. two
+    components shutting down together) could collide with persistent
+    `database is locked` errors. All DuckLake write/sync touchpoints
+    (`save_data_at_rest`, `sync_twin`) now go through a new
+    `with_lock_retry` helper that (a) serializes same-process writers
+    via a process-wide lock and (b) retries with capped exponential
+    backoff on any residual `database is locked` error from a
+    genuinely separate OS process.
+
 ## [0.8.21] 2026-10-07
 
 ### Fixed

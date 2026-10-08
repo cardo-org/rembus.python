@@ -7,6 +7,7 @@ from enum import Enum
 from functools import partial
 import logging
 import os
+import time
 from datetime import datetime, timezone
 import traceback
 from typing import Callable, Any, Optional, List, cast
@@ -208,6 +209,26 @@ class Router(Supervised):
         self.msg_cache: list[rp.PubSubMsg] = []
         self.msg_topic_cache: dict[str, List[rp.PubSubMsg]] = {}
         self.tables: dict[str, rdb.Table] = {}
+        # Tracks the in-flight background `save_data_at_rest` thread (see
+        # `_task_impl`'s "save_messages" case): at most one runs at a
+        # time so concurrent threads never touch `self.db` together;
+        # while one is running, newly-cached messages simply accumulate
+        # for the next periodic save instead of blocking pub/sub
+        # dispatch on this (synchronous, potentially slow under real
+        # traffic) DuckLake write.
+        self._data_at_rest_task: Optional[asyncio.Task[None]] = None
+        # Strong references to in-flight local-RPC-handler tasks (see
+        # `_rpcreq_msg`'s local-handler branch): `_task_impl` is a
+        # single-consumer dispatch loop that also delivers every other
+        # queued message (including pub/sub responses a handler itself
+        # may be waiting on, e.g. an application-level command request), so a
+        # locally-exposed RPC handler must never be `await`ed inline
+        # there -- doing so can self-deadlock whenever the handler
+        # blocks on something only deliverable by this same loop.
+        # Tracked here (rather than only via the task's own return
+        # value) so these fire-and-forget tasks aren't garbage
+        # collected mid-flight.
+        self._rpc_tasks: set[asyncio.Task] = set()
         self._builtins()
         if data_at_rest:
             self.db = rdb.init_db(self, schema)
@@ -528,6 +549,23 @@ class Router(Supervised):
 
         return True
 
+    async def _run_local_rpc_handler(
+        self, msg: rp.RpcReqMsg, topic: str, data
+    ) -> None:
+        """`await self.evaluate(...)` for a locally-exposed RPC handler
+        and send its response, out-of-line from `_task_impl`'s
+        dispatch loop (see `_rpcreq_msg`'s local-handler branch for
+        why)."""
+        status = rp.STS_OK
+        try:
+            output = await self.evaluate(msg.twin, topic, data)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            status = rp.STS_METHOD_EXCEPTION
+            output = f"{e}"
+            logger.error("%s exception: %s", msg.twin, e, exc_info=True)
+        outmsg = rp.ResMsg(id=msg.id, status=status, data=rp.df2tag(output))
+        await msg.twin.send(outmsg)
+
     async def _rpcreq_msg(self, msg: rp.RpcReqMsg):
         """Handle an RPC request."""
         data = rp.tag2df(msg.data)
@@ -550,15 +588,25 @@ class Router(Supervised):
                 )
                 await msg.twin.send(outmsg)
         elif topic in self.handler and self.isauthorized(topic, msg.twin):
-            status = rp.STS_OK
-            try:
-                output = await self.evaluate(msg.twin, topic, data)
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                status = rp.STS_METHOD_EXCEPTION
-                output = f"{e}"
-                logger.error("%s exception: %s", msg.twin, e, exc_info=True)
-            outmsg = rp.ResMsg(id=msg.id, status=status, data=rp.df2tag(output))
-            await msg.twin.send(outmsg)
+            # Run the local handler as an independent task rather than
+            # `await`ing it inline: this coroutine runs on
+            # `_task_impl`'s single-consumer dispatch loop, which is
+            # also responsible for delivering every other queued
+            # message -- including, for example, a pub/sub response
+            # that a locally RPC-exposed handler itself blocks on
+            # waiting for. Awaiting the handler here would therefore
+            # self-deadlock: the router could never dispatch the very
+            # response the handler is waiting on until the handler
+            # itself returns (by timing out). Dispatching it instead
+            # lets the loop immediately go back to `inbox.get()` and
+            # process whatever is queued next, while this task runs
+            # concurrently and sends its response whenever it
+            # completes.
+            task = asyncio.create_task(
+                self._run_local_rpc_handler(msg, topic, data)
+            )
+            self._rpc_tasks.add(task)
+            task.add_done_callback(self._rpc_tasks.discard)
         elif topic in self.exposers and self.isauthorized(topic, msg.twin):
             target_twin, sts = self.find_implementor(msg.twin, topic)
             logger.debug("[%s] target twin: %s", self, target_twin)
@@ -605,19 +653,75 @@ class Router(Supervised):
             await asyncio.sleep(interval)
             await self.inbox.put("save_messages")
 
+    async def _save_data_at_rest_in_background(self) -> None:
+        """Run `rdb.save_data_at_rest` in a worker thread so the
+        (synchronous, potentially multi-second under real traffic)
+        DuckLake write never blocks this router's single pub/sub
+        dispatch loop (`_task_impl`). Only one such thread runs at a
+        time; see `self._data_at_rest_task`.
+
+        Uses a dedicated `self.db.cursor()` rather than the raw
+        `self.db` connection: DuckDB connections are not safe for
+        concurrent use from multiple threads, and the main event-loop
+        thread may still issue other queries against `self.db` while
+        this background thread is writing (e.g. a `Twin`/`Router`
+        shutdown sequence, or application cursor-based DB
+        accessors). Sharing the raw connection across threads can
+        leave it permanently stuck (persistent `database is locked`
+        errors no amount of retrying resolves), whereas a `cursor()`
+        is an independent, thread-safe handle onto the same
+        database."""
+        try:
+            await asyncio.to_thread(
+                rdb.save_data_at_rest, self, self.db.cursor()
+            )
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception("[%s] background data-at-rest save failed", self)
+
     async def _task_impl(self) -> None:
         """Switch messages between twins."""
         logger.debug("[%s] router started", self)
         while True:
             msg = await self.inbox.get()
+            # Time how long this single dispatch-loop iteration takes
+            # to fully `await` to completion. This loop processes
+            # exactly one queued message at a time (dequeuing the next
+            # only after the current one's handler has fully
+            # returned), so any case that's slow to `await` here
+            # delays delivery of every other message already queued
+            # behind it. Kept as a permanent early-warning signal
+            # (this exact symptom -- a locally RPC-exposed handler
+            # blocked waiting on a pub/sub response only this same
+            # loop could ever deliver -- is what caused the
+            # self-deadlock fixed by `_run_local_rpc_handler` below).
+            _dispatch_t0 = time.monotonic()
+            _dispatch_label = (
+                msg.topic if isinstance(msg, rp.PubSubMsg) else msg
+            )
             match msg:
                 case "shutdown":
                     logger.debug("[%s] router shutting down", self)
+                    if (
+                        self._data_at_rest_task is not None
+                        and not self._data_at_rest_task.done()
+                    ):
+                        await self._data_at_rest_task
                     rdb.save_data_at_rest(self)
                     break
                 case "save_messages":
-                    # save messages to the database periodically
-                    rdb.save_data_at_rest(self)
+                    # Save cached messages to the database periodically.
+                    # Offload to a background thread (fire-and-forget,
+                    # at most one in flight) so this synchronous
+                    # DuckLake write never delays delivery of other
+                    # queued messages (e.g. a pending command
+                    # response) behind it.
+                    if (
+                        self._data_at_rest_task is None
+                        or self._data_at_rest_task.done()
+                    ):
+                        self._data_at_rest_task = asyncio.create_task(
+                            self._save_data_at_rest_in_background()
+                        )
                 case rp.SendDataAtRest():
                     await rdb.send_data_at_rest(msg)
                 case rp.PubSubMsg():
@@ -634,6 +738,19 @@ class Router(Supervised):
                     await self._register_node(msg)
                 case rp.UnregisterMsg():
                     await self._unregister_node(msg)
+            # Log any dispatch iteration that took a suspiciously long
+            # time (see note above): pinpoints exactly which queued
+            # message/case is holding up this loop, should some other
+            # slow-to-`await` case be introduced in the future.
+            _dispatch_elapsed = time.monotonic() - _dispatch_t0
+            if _dispatch_elapsed > 0.5:
+                logger.warning(
+                    "[%s] router dispatch of %r took %.3fs "
+                    "(blocked delivery of anything queued behind it)",
+                    self,
+                    _dispatch_label,
+                    _dispatch_elapsed,
+                )
 
     async def evaluate(self, twin, topic: str, data: Any) -> Any:
         """Invoke the handler associate with the message topic."""
