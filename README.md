@@ -75,6 +75,15 @@ print(server.router.network)
 # [mynode -> ws://127.0.0.1:9000 [up]]
 ```
 
+  Beyond topology discovery, `subscribe`/`expose` (and their `unsubscribe`/
+  `unexpose` counterparts) are flooded across the mesh, so every broker on
+  the path learns which neighbor leads towards a given topic. This allows
+  pub/sub messages and RPC calls to be routed/forwarded across multiple
+  broker hops, not just between a broker and its directly connected
+  components. On (re)connection a node also resyncs its upstream broker
+  with its full set of exposed/subscribed topics, so no routing state is
+  lost across reconnections.
+
 ## Getting Started
 
 Install the package:
