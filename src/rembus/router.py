@@ -123,7 +123,16 @@ def round_robin(router, tenant, topic, implementors):
     return target
 
 
-async def init_router(router_name, policy, uid, port, secure, isserver, schema):
+async def init_router(
+    router_name,
+    policy,
+    uid,
+    port,
+    secure,
+    isserver,
+    schema,
+    relay: bool = True,
+):
     """Start the router"""
 
     if policy not in ["first_up", "less_busy", "round_robin"]:
@@ -132,7 +141,7 @@ async def init_router(router_name, policy, uid, port, secure, isserver, schema):
             "less_busy, round_robin"
         )
 
-    router = Router(router_name, policy, isserver, schema)
+    router = Router(router_name, policy, isserver, schema, relay)
     await router.start()
     logger.debug("component %s created, port: %s", uid.id, port)
     # start a websocket server
@@ -168,8 +177,13 @@ class Router(Supervised):
         policy: str = "first_up",
         data_at_rest: bool = True,
         schema: str | None = None,
+        relay: bool = True,
     ):
         super().__init__()
+        # False for a "server": RPC requests from ordinary components are
+        # resolved only by the server's own handlers and are not relayed
+        # to other connected components (see Rembus.jl server_task).
+        self.relay = relay
         self.wsport = None
         self.wsprotocol = "ws"
         self.network: List[Node] = []
@@ -607,7 +621,11 @@ class Router(Supervised):
             )
             self._rpc_tasks.add(task)
             task.add_done_callback(self._rpc_tasks.discard)
-        elif topic in self.exposers and self.isauthorized(topic, msg.twin):
+        elif (
+            topic in self.exposers
+            and (self.relay or msg.twin.isbroker())
+            and self.isauthorized(topic, msg.twin)
+        ):
             target_twin, sts = self.find_implementor(msg.twin, topic)
             logger.debug("[%s] target twin: %s", self, target_twin)
             if target_twin is None:
@@ -637,6 +655,7 @@ class Router(Supervised):
                 logger.debug(
                     "[%s] closing prior connection of [%s]", self, twin_id
                 )
+                prior.overwritten = True
                 await prior.close()
             else:
                 logger.warning(

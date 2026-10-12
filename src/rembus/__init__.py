@@ -4,7 +4,7 @@ from importlib.metadata import version
 __version__ = version("rembus")
 
 from .core import RbURL  # noqa: F401
-from .component import anonym, component, connect
+from .component import anonym, component, connect, server
 from .settings import (  # noqa: F401
     nowbucket,
     rembus_dir,
@@ -43,6 +43,7 @@ __all__ = [
     "component",
     "node",
     "register",
+    "server",
     "rembus_dir",
     "KeySpaceRouter",
     "RbURL",

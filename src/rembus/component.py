@@ -31,6 +31,7 @@ async def _component(
     enc: int = CBOR,
     keyspace: bool = True,
     mqtt: str | None = None,
+    relay: bool = True,
 ) -> Twin:
     """Return a Rembus component."""
     isserver = (url is None) or (port is not None)
@@ -51,7 +52,7 @@ async def _component(
 
     router_name = name if name else default_name
     router = await init_router(
-        router_name, policy, uid, port, secure, isserver, schema
+        router_name, policy, uid, port, secure, isserver, schema, relay
     )
     handle = await init_twin(router, uid, enc, isserver)
     if isinstance(url, list):
@@ -85,6 +86,33 @@ async def component(
         url, name, port, secure, policy, schema, enc, keyspace, mqtt
     )
     return handle
+
+
+async def server(
+    name: str | None = None,
+    port: int | None = None,
+    secure: bool = False,
+    schema: str | None = None,
+    enc: int = CBOR,
+    keyspace: bool = True,
+) -> Twin:
+    """Initialize a rembus server.
+
+    A server accepts connections but, unlike a broker, does not relay RPC
+    requests between connected components: a request is resolved only by
+    the methods exposed by the server itself.
+    """
+    return await _component(
+        None,
+        name,
+        port,
+        secure,
+        "first_up",
+        schema,
+        enc,
+        keyspace,
+        relay=False,
+    )
 
 
 @asynccontextmanager

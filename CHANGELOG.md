@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `rembus.server(name, port, ...)`: a "server" component, the equivalent
+  of Rembus.jl `server`. It accepts connections but, unlike a broker, does
+  not relay RPC requests between connected components: a request from an
+  ordinary component is resolved only by methods exposed by the server
+  itself (otherwise `STS_METHOD_NOT_FOUND`). Requests from broker peers
+  are still routed.
 - `overwrite_connection` setting (env `REMBUS_OVERWRITE_CONNECTION`,
   default `False`): when enabled, a new connection using the `cid` of an
   already connected component replaces the prior one, which is closed.

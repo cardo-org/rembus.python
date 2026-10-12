@@ -249,6 +249,7 @@ class Twin(Supervised):
         self._router = router
         self.socket: Any = None
         self.receiver = None
+        self.overwritten = False
         self.uid = uid
         self.handler: dict[str, Callable[..., Any]] = {}
         self.outreq: dict[int, FutureResponse] = {}
@@ -418,7 +419,9 @@ class Twin(Supervised):
         """Twin cleanup logic when shutting down."""
         logger.debug("[%s] twin shutdown", self)
         if self.db is not None:
-            if self.uid.hasname and self.socket:
+            # A replaced twin must not mark its successor as down.
+            replaced = self.router.id_twin.get(self.twkey) not in (None, self)
+            if self.uid.hasname and self.socket and not replaced:
                 await twin_down(self)
             # `save_twin` below runs a synchronous query against
             # `self.db` (== `self.router.db`). If the router's periodic
@@ -524,11 +527,23 @@ class Twin(Supervised):
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.warning("[%s] error: %s", self, e)
         finally:
+            if (
+                self.isclient
+                and getattr(self.socket, "close_code", None)
+                == rp.WS_CLOSE_OVERWRITTEN
+            ):
+                # Replaced by a newer connection with the same cid:
+                # reconnecting would just evict that one in turn.
+                logger.warning("[%s] connection overwritten", self)
+                self.handler["phase"] = lambda: "CLOSED"
             if self.isclient and self.handler["phase"]() == "CONNECTED":
                 logger.debug("[%s] twin_receiver done", self)
                 await self.inbox.put("reconnect")
             else:
-                self.router.id_twin.pop(self.twkey, None)
+                # A replaced twin must not evict its successor registered
+                # under the same key (see overwrite_connection).
+                if self.router.id_twin.get(self.twkey) is self:
+                    self.router.id_twin.pop(self.twkey, None)
                 await self.shutdown()
 
             self.receiver = None
@@ -1715,7 +1730,12 @@ class WsTwin(Twin):
 
     async def _close_socket(self):
         if self.socket:
-            await self.socket.close()
+            if self.overwritten:
+                await self.socket.close(
+                    rp.WS_CLOSE_OVERWRITTEN, "overwritten"
+                )
+            else:
+                await self.socket.close()
 
         self.socket = None
 

@@ -222,6 +222,12 @@ cli = await rb.component(rb.anonym(host="host", port=8338))
 A Component connects to a Broker using a URL-like formatted string that
 identifies the broker address and declare the name of the Component.
 
+### Server
+
+`rembus.server(port=8000)` starts a server: it accepts connections like a
+broker but does not route RPC requests between the connected components.
+A request is resolved only by the methods exposed by the server itself.
+
 ### Duplicate connections
 
 By default a broker rejects a connection whose name is already in use by a
