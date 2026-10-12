@@ -325,6 +325,11 @@ class Router(Supervised):
             if topic in self.handler and self.isauthorized(topic, twin):
                 await self.evaluate(twin, topic, data)
 
+            # A server relays to other components only the messages
+            # published by a broker peer (see Rembus.jl pubsub_msg).
+            if not self.relay and not twin.isbroker():
+                return
+
             subs = self.subscribers.get(topic, [])
             qos = msg.flags & rp.QOS2
             targets = []
@@ -587,6 +592,17 @@ class Router(Supervised):
         topic = msg.topic
         if msg.twin.isbroker():
             await self.send_message(msg)
+        elif (
+            msg.target is not None
+            and msg.target != self.id
+            and not self.relay
+        ):
+            outmsg = rp.ResMsg(
+                id=msg.id,
+                status=rp.STS_ERROR,
+                data="direct not permitted in server mode",
+            )
+            await msg.twin.send(outmsg)
         elif msg.target is not None and msg.target != self.id:
             target_url = RbURL(msg.target)
             target_url.port = self.wsport

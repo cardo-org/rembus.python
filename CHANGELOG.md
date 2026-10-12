@@ -11,8 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of Rembus.jl `server`. It accepts connections but, unlike a broker, does
   not relay RPC requests between connected components: a request from an
   ordinary component is resolved only by methods exposed by the server
-  itself (otherwise `STS_METHOD_NOT_FOUND`). Requests from broker peers
-  are still routed.
+  itself (otherwise `STS_METHOD_NOT_FOUND`). Direct RPCs to other
+  components are rejected with `STS_ERROR` ("direct not permitted in
+  server mode"), and published messages are delivered only to the
+  server's own subscribers, not broadcast to other components. Requests
+  and messages from broker peers are still routed.
 - `overwrite_connection` setting (env `REMBUS_OVERWRITE_CONNECTION`,
   default `False`): when enabled, a new connection using the `cid` of an
   already connected component replaces the prior one, which is closed.
@@ -22,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A connection attempt with an already connected `cid` is now rejected
   with an "already connected" error response (previously the new twin
   was closed silently). An empty `cid` is rejected with an error too.
+
+### Fixed
+
+- With `overwrite_connection`, a replaced component no longer reconnects
+  and evicts its successor: the server closes it with WebSocket close
+  code 4000 and the client stays closed. A replaced twin also no longer
+  removes its successor from the router or marks it as down.
 
 ## [0.8.22] 2026-10-08
 

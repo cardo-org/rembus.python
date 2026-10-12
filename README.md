@@ -225,8 +225,14 @@ identifies the broker address and declare the name of the Component.
 ### Server
 
 `rembus.server(port=8000)` starts a server: it accepts connections like a
-broker but does not route RPC requests between the connected components.
-A request is resolved only by the methods exposed by the server itself.
+broker but does not route messages between the connected components:
+
+* an RPC request is resolved only by the methods exposed by the server
+  itself, otherwise it fails with `STS_METHOD_NOT_FOUND`;
+* a direct RPC to another component fails with `STS_ERROR`
+  (`direct not permitted in server mode`);
+* a published message is delivered only to the server's own subscribers and
+  is not broadcast to the other connected components.
 
 ### Duplicate connections
 
