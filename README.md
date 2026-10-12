@@ -222,6 +222,18 @@ cli = await rb.component(rb.anonym(host="host", port=8338))
 A Component connects to a Broker using a URL-like formatted string that
 identifies the broker address and declare the name of the Component.
 
+### Duplicate connections
+
+By default a broker rejects a connection whose name is already in use by a
+connected Component (the new connection receives an "already connected"
+error). To let the new connection replace the prior one, which is closed,
+set `overwrite_connection` to `True` in the broker configuration or export
+`REMBUS_OVERWRITE_CONNECTION=true`:
+
+```shell
+REMBUS_OVERWRITE_CONNECTION=true python my_broker.py
+```
+
 ## Pub/Sub
 
 ### Publish

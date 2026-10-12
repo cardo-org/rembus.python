@@ -50,6 +50,13 @@ class Config:
             "start_anyway", env_bool("REMBUS_START_ANYWAY", False)
         )
 
+        # If True a new connection with an already connected cid replaces
+        # the prior one, otherwise it is rejected.
+        self.overwrite_connection = cfg.get(
+            "overwrite_connection",
+            env_bool("REMBUS_OVERWRITE_CONNECTION", False),
+        )
+
         # Max numbers of QOS1 and QOS2 Pub/Sub retrasmissions
         self.send_retries = cfg.get("send_retries", def_send_retries)
 

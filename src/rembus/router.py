@@ -626,14 +626,29 @@ class Router(Supervised):
 
     async def _handle_identity(self, msg: rp.IdentityMsg) -> None:
         twin_id = msg.cid
-        if self.isconnected(twin_id):
-            logger.warning(
-                "[%s] node with id [%s] is already connected", self, twin_id
-            )
-            await msg.twin.close()
-        else:
-            logger.debug("[%s] identity: %s", self, msg.cid)
-            await self._auth_identity(msg)
+        if not twin_id:
+            await msg.twin.response(rp.STS_ERROR, msg, "empty cid")
+            return
+
+        # twins are keyed by cid and the netlink of the listening endpoint
+        prior = self.id_twin.get(f"{twin_id}@{msg.twin.uid.netlink}")
+        if prior is not None and prior.isopen():
+            if self.config.overwrite_connection and prior is not msg.twin:
+                logger.debug(
+                    "[%s] closing prior connection of [%s]", self, twin_id
+                )
+                await prior.close()
+            else:
+                logger.warning(
+                    "[%s] node with id [%s] is already connected",
+                    self,
+                    twin_id,
+                )
+                await msg.twin.response(rp.STS_ERROR, msg, "already connected")
+                return
+
+        logger.debug("[%s] identity: %s", self, msg.cid)
+        await self._auth_identity(msg)
 
     async def _handle_attestation(self, msg: rp.AttestationMsg) -> None:
         sts = await self._verify_signature(msg)

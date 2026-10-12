@@ -3,6 +3,20 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `overwrite_connection` setting (env `REMBUS_OVERWRITE_CONNECTION`,
+  default `False`): when enabled, a new connection using the `cid` of an
+  already connected component replaces the prior one, which is closed.
+
+### Changed
+
+- A connection attempt with an already connected `cid` is now rejected
+  with an "already connected" error response (previously the new twin
+  was closed silently). An empty `cid` is rejected with an error too.
+
 ## [0.8.22] 2026-10-08
 
 ### Added
