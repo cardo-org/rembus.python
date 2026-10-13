@@ -44,7 +44,7 @@ def remove_tenant(tenant: str, broker_name: str = "broker"):
     try:
         db.execute(
             """
-        DELETE FROM tenant WHERE name=? and tenant=?)
+        DELETE FROM tenant WHERE name=? AND tenant=?
         """,
             (broker_name, tenant),
         )

@@ -80,6 +80,7 @@ for interacting with the broker.
    reference/index
    pubsub/index
    rpc/index
+   tenants/index
 
 Indices and tables
 ==================

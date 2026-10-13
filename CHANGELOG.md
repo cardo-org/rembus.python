@@ -22,12 +22,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- RPC routing selects exposers belonging to the tenant of the requester
+  (previously the tenant was derived from the topic name) and the
+  `first_up` policy now honours tenants, as in Rembus.jl.
+- `register` fails with "tenant [x] not enabled" when the tenant has no
+  secret configured.
 - A connection attempt with an already connected `cid` is now rejected
   with an "already connected" error response (previously the new twin
   was closed silently). An empty `cid` is rejected with an error too.
 
 ### Fixed
 
+- `tools/tenant.py`: `remove_tenant` SQL syntax error.
 - With `overwrite_connection`, a replaced component no longer reconnects
   and evicts its successor: the server closes it with WebSocket close
   code 4000 and the client stays closed. A replaced twin also no longer

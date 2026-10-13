@@ -74,6 +74,13 @@ def getargs(data):
         return [data]
 
 
+def first_up(tenant, implementors):
+    """Select the first open twin belonging to the tenant."""
+    return next(
+        (t for t in implementors if t.isopen() and t.domain == tenant), None
+    )
+
+
 def less_busy(tenant, implementors):
     """Select the twin with fewer outstanding requests."""
     up_and_running = [
@@ -421,21 +428,23 @@ class Router(Supervised):
                     fut.future.set_result(data)
                 break
 
-    def _select_twin(self, topic, twins=None):
+    def _select_twin(self, tenant, topic, twins=None):
         """Apply the configured load-balancing policy to pick an implementor.
 
-        `twins` defaults to `self.exposers[topic]` but callers performing
+        Only open twins belonging to `tenant` (the requestor's domain) are
+        eligible. `twins` defaults to `self.exposers[topic]` but callers performing
         mesh-wide routing (see `find_implementor`) pass an already-filtered
         candidate list, e.g. with the requestor removed to avoid loopbacks.
         """
         if twins is None:
             twins = self.exposers[topic]
         if self.policy == Policy.FIRST_UP:
-            return next((t for t in twins if t.isopen()), None)
+            return first_up(tenant, twins)
         elif self.policy == Policy.ROUND_ROBIN:
-            return round_robin(self, domain(topic), topic, twins)
+            return round_robin(self, tenant, topic, twins)
         elif self.policy == Policy.LESS_BUSY:
-            return less_busy(domain(topic), twins)
+            return less_busy(tenant, twins)
+        return None
 
     def find_implementor(self, requestor, topic: str):
         """Pick the twin that should execute an RPC request for `topic`.
@@ -463,7 +472,7 @@ class Router(Supervised):
                 return None, rp.STS_METHOD_LOOPBACK
             return None, rp.STS_METHOD_UNAVAILABLE
 
-        target_twin = self._select_twin(topic, candidates)
+        target_twin = self._select_twin(requestor.domain, topic, candidates)
         if target_twin is None:
             return None, rp.STS_METHOD_UNAVAILABLE
 
@@ -962,9 +971,12 @@ class Router(Supervised):
         """Provision a new node."""
         sts = rp.STS_ERROR
         reason = None
-        token = self._get_token(domain(msg.cid), msg.pin)
+        tenant = domain(msg.cid)
+        token = self._get_token(tenant, msg.pin)
         try:
-            if token is None:
+            if tenant not in self.tenants:
+                reason = f"tenant [{tenant}] not enabled"
+            elif token is None:
                 reason = "wrong tenant/pin"
             elif rp.isregistered(self.id, msg.cid):
                 sts = rp.STS_NAME_ALREADY_TAKEN
