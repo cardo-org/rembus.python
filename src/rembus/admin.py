@@ -294,5 +294,8 @@ async def admin_command(msg: rp.AdminMsg):
                 topic,
             )
             return await twin.response(rp.STS_ERROR, msg)
+    else:
+        logger.error("invalid admin command: %s", cmd)
+        return await twin.response(rp.STS_UNKNOWN_ADMIN_CMD, msg)
 
     await twin.response(rp.STS_OK, msg)
