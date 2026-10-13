@@ -925,6 +925,7 @@ class Router(Supervised):
                 pubkey.verify(signature, plain, ec.ECDSA(hashes.SHA256()))
 
             await self._update_twin(twin, msg.cid, msg.meta)
+            twin.isauth = True
             return rp.STS_OK
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("verification failed: %s (%s)", e, type(e))
@@ -995,9 +996,11 @@ class Router(Supervised):
         sts = rp.STS_ERROR
         reason = None
         try:
-            cid = msg.twin.rid
-            rp.remove_pubkey(self, cid)
-            sts = rp.STS_OK
+            if not msg.twin.isauth:
+                reason = "invalid operation"
+            else:
+                rp.remove_pubkey(self, msg.twin.rid)
+                sts = rp.STS_OK
         finally:
             await msg.twin.response(sts, msg, reason)
 

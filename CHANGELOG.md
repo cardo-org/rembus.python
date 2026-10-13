@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and evicts its successor: the server closes it with WebSocket close
   code 4000 and the client stays closed. A replaced twin also no longer
   removes its successor from the router or marks it as down.
+- `unregister` is now rejected (`STS_ERROR`, "invalid operation") when the
+  requesting component is not authenticated, as in Rembus.jl.
 - An unrecognized admin command now gets a `STS_UNKNOWN_ADMIN_CMD`
   response, as in Rembus.jl (previously it silently returned `STS_OK`).
 

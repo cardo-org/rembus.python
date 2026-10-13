@@ -127,6 +127,16 @@ def test_unregister():
     server.close()
 
 
+def test_unregister_unauthenticated():
+    """Unregister is rejected for a component that is not authenticated."""
+    server = rembus.node(port=8990)
+    rb = rembus.node(f"ws://:8990/{NAME}_free")
+    with pytest.raises(rp.RembusError):
+        rb.unregister()
+    rb.close()
+    server.close()
+
+
 def test_json_register():
     """Test the registration of a rembus node using JSON-RPC."""
     # cleanup the secrets

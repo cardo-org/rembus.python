@@ -250,6 +250,8 @@ class Twin(Supervised):
         self.socket: Any = None
         self.receiver = None
         self.overwritten = False
+        # True after the component has proved its identity (attestation).
+        self.isauth: bool = False
         self.uid = uid
         self.handler: dict[str, Callable[..., Any]] = {}
         self.outreq: dict[int, FutureResponse] = {}
