@@ -647,8 +647,13 @@ class Router(Supervised):
                 msg.target = None
                 await target_twin.inbox.put(msg)
             else:
+                status = (
+                    rp.STS_TARGET_DOWN
+                    if target_twin
+                    else rp.STS_TARGET_NOT_FOUND
+                )
                 outmsg = rp.ResMsg(
-                    id=msg.id, status=rp.STS_METHOD_UNAVAILABLE, data=topic
+                    id=msg.id, status=status, data=msg.target
                 )
                 await msg.twin.send(outmsg)
         elif topic in self.handler and self.isauthorized(topic, msg.twin):
