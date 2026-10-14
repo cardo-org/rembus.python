@@ -203,7 +203,7 @@ async def admin_command(msg: rp.AdminMsg):
     topic = msg.topic
     if not isinstance(msg.data, dict) or rp.COMMAND not in msg.data:
         logger.warning("admin error: expected cmd property (got: %s)", msg.data)
-        await twin.response(rp.STS_ERROR, msg)
+        await twin.response(rp.STS_GENERIC_ERROR, msg)
         return None
 
     router = twin.router
@@ -222,7 +222,7 @@ async def admin_command(msg: rp.AdminMsg):
             ):
                 add_exposer(router, twin, topic)
         else:
-            return await twin.response(rp.STS_ERROR, msg, "unauthorized")
+            return await twin.response(rp.STS_GENERIC_ERROR, msg, "unauthorized")
     elif cmd == rp.UNEXPOSE_CMD:
         if router.isauthorized(topic, twin):
             if ismultipath(router) and await mark_and_broadcast(
@@ -230,7 +230,7 @@ async def admin_command(msg: rp.AdminMsg):
             ):
                 remove_exposer(router, twin, topic)
         else:
-            return await twin.response(rp.STS_ERROR, msg, "unauthorized")
+            return await twin.response(rp.STS_GENERIC_ERROR, msg, "unauthorized")
     elif cmd == rp.SUBSCRIBE_CMD:
         if router.isauthorized(topic, twin):
             if ismultipath(router) and await mark_and_broadcast(
@@ -239,7 +239,7 @@ async def admin_command(msg: rp.AdminMsg):
                 msgfrom = msg.data.get(rp.MSG_FROM, rp.Now)
                 add_subscriber(router, twin, topic, msgfrom)
         else:
-            return await twin.response(rp.STS_ERROR, msg, "unauthorized")
+            return await twin.response(rp.STS_GENERIC_ERROR, msg, "unauthorized")
     elif cmd == rp.UNSUBSCRIBE_CMD:
         if router.isauthorized(topic, twin):
             if ismultipath(router) and await mark_and_broadcast(
@@ -247,7 +247,7 @@ async def admin_command(msg: rp.AdminMsg):
             ):
                 remove_subscriber(router, twin, topic)
         else:
-            return await twin.response(rp.STS_ERROR, msg, "unauthorized")
+            return await twin.response(rp.STS_GENERIC_ERROR, msg, "unauthorized")
     elif cmd == rp.REACTIVE_CMD:
         await reactive(router, twin, msg.data[rp.STATUS])
     elif cmd == rp.PRIVATE_TOPIC_CMD:
@@ -260,7 +260,7 @@ async def admin_command(msg: rp.AdminMsg):
                 twin,
                 topic,
             )
-            return await twin.response(rp.STS_ERROR, msg)
+            return await twin.response(rp.STS_GENERIC_ERROR, msg)
     elif cmd == rp.PUBLIC_TOPIC_CMD:
         if twin.isadmin():
             logger.debug("[%s] set public topic [%s]", twin, topic)
@@ -269,7 +269,7 @@ async def admin_command(msg: rp.AdminMsg):
             logger.error(
                 "[%s] is not admin: unable to lower [%s] to public", twin, topic
             )
-            return await twin.response(rp.STS_ERROR, msg)
+            return await twin.response(rp.STS_GENERIC_ERROR, msg)
     elif cmd == rp.AUTHORIZE_CMD:
         cid = msg.data[rp.CID]
         if twin.isadmin():
@@ -281,7 +281,7 @@ async def admin_command(msg: rp.AdminMsg):
                 cid,
                 topic,
             )
-            return await twin.response(rp.STS_ERROR, msg)
+            return await twin.response(rp.STS_GENERIC_ERROR, msg)
     elif cmd == rp.UNAUTHORIZE_CMD:
         cid = msg.data[rp.CID]
         if twin.isadmin():
@@ -293,7 +293,7 @@ async def admin_command(msg: rp.AdminMsg):
                 cid,
                 topic,
             )
-            return await twin.response(rp.STS_ERROR, msg)
+            return await twin.response(rp.STS_GENERIC_ERROR, msg)
     else:
         logger.error("invalid admin command: %s", cmd)
         return await twin.response(rp.STS_UNKNOWN_ADMIN_CMD, msg)

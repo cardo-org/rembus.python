@@ -229,7 +229,7 @@ broker but does not route messages between the connected components:
 
 * an RPC request is resolved only by the methods exposed by the server
   itself, otherwise it fails with `STS_METHOD_NOT_FOUND`;
-* a direct RPC to another component fails with `STS_ERROR`
+* a direct RPC to another component fails with `STS_GENERIC_ERROR`
   (`direct not permitted in server mode`);
 * a published message is delivered only to the server's own subscribers and
   is not broadcast to the other connected components.

@@ -1730,7 +1730,7 @@ class WsTwin(Twin):
                 await self.login()
             except Exception as e:
                 await self.close()
-                raise rp.RembusError(rp.STS_ERROR, "login failed") from e
+                raise rp.RembusError(rp.STS_GENERIC_ERROR, "login failed") from e
 
         self.handler["phase"] = lambda: "CONNECTED"
 

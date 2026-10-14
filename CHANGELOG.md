@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not relay RPC requests between connected components: a request from an
   ordinary component is resolved only by methods exposed by the server
   itself (otherwise `STS_METHOD_NOT_FOUND`). Direct RPCs to other
-  components are rejected with `STS_ERROR` ("direct not permitted in
+  components are rejected with `STS_GENERIC_ERROR` ("direct not permitted in
   server mode"), and published messages are delivered only to the
   server's own subscribers, not broadcast to other components. Requests
   and messages from broker peers are still routed.
@@ -48,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   removes its successor from the router or marks it as down.
 - `rembus.register` now uses an anonymous connection, so provisioning
   works also against an authenticated router.
-- `unregister` is now rejected (`STS_ERROR`, "invalid operation") when the
+- `unregister` is now rejected (`STS_GENERIC_ERROR`, "invalid operation") when the
   requesting component is not authenticated, as in Rembus.jl.
 - An unrecognized admin command now gets a `STS_UNKNOWN_ADMIN_CMD`
   response, as in Rembus.jl (previously it silently returned `STS_OK`).

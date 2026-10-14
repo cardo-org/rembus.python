@@ -43,7 +43,7 @@ def test_types_str():
     error = rp.RembusError(rp.STS_METHOD_EXCEPTION, "foo")
     assert str(error) == "METHOD_EXCEPTION:foo"
 
-    error_no_msg = rp.RembusError(rp.STS_ERROR)
+    error_no_msg = rp.RembusError(rp.STS_GENERIC_ERROR)
     assert str(error_no_msg) == "internal error"
 
 

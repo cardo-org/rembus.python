@@ -633,7 +633,7 @@ class Router(Supervised):
         ):
             outmsg = rp.ResMsg(
                 id=msg.id,
-                status=rp.STS_ERROR,
+                status=rp.STS_GENERIC_ERROR,
                 data="direct not permitted in server mode",
             )
             await msg.twin.send(outmsg)
@@ -695,7 +695,7 @@ class Router(Supervised):
     async def _handle_identity(self, msg: rp.IdentityMsg) -> None:
         twin_id = msg.cid
         if not twin_id:
-            await msg.twin.response(rp.STS_ERROR, msg, "empty cid")
+            await msg.twin.response(rp.STS_GENERIC_ERROR, msg, "empty cid")
             return
 
         # twins are keyed by cid and the netlink of the listening endpoint
@@ -713,7 +713,7 @@ class Router(Supervised):
                     self,
                     twin_id,
                 )
-                await msg.twin.response(rp.STS_ERROR, msg, "already connected")
+                await msg.twin.response(rp.STS_GENERIC_ERROR, msg, "already connected")
                 return
 
         logger.debug("[%s] identity: %s", self, msg.cid)
@@ -972,7 +972,7 @@ class Router(Supervised):
             return rp.STS_OK
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("verification failed: %s (%s)", e, type(e))
-            return rp.STS_ERROR
+            return rp.STS_GENERIC_ERROR
 
     def _challenge(self, msgid: int, twin):
         """Generate a challenge for the identity authentication."""
@@ -1013,7 +1013,7 @@ class Router(Supervised):
 
     async def _register_node(self, msg: rp.RegisterMsg):
         """Provision a new node."""
-        sts = rp.STS_ERROR
+        sts = rp.STS_GENERIC_ERROR
         reason = None
         tenant = domain(msg.cid)
         token = self._get_token(tenant, msg.pin)
@@ -1036,7 +1036,7 @@ class Router(Supervised):
 
     async def _unregister_node(self, msg: rp.UnregisterMsg):
         """Unprovisions the component."""
-        sts = rp.STS_ERROR
+        sts = rp.STS_GENERIC_ERROR
         reason = None
         try:
             if (
