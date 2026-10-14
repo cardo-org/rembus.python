@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_BROKER = "broker"
 DEFAULT_PORT = 8338
+# Default maximum size of a WebSocket message (bytes).
+MAX_WS_FRAME = 60 * 1024 * 1024
 TENANTS_FILE = "tenants.json"
 
 
@@ -46,6 +48,7 @@ class Settings:
         self.ws_ping_interval = cfg.get(
             "ws_ping_interval", def_ws_ping_interval
         )
+        self.max_ws_frame = cfg.get("max_ws_frame", MAX_WS_FRAME)
         self.start_anyway = cfg.get(
             "start_anyway", env_bool("REMBUS_START_ANYWAY", False)
         )

@@ -39,7 +39,6 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
-WS_FRAME_MAXSIZE = 60 * 1024 * 1024
 # WebSocket close code sent to a connection replaced by overwrite_connection.
 WS_CLOSE_OVERWRITTEN = 4000
 

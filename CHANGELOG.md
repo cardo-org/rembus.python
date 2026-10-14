@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Settings.max_ws_frame` (settings key `max_ws_frame`, default
+  `rembus.settings.MAX_WS_FRAME` = 60 MiB): maximum WebSocket message size.
+  It replaces the `protocol.WS_FRAME_MAXSIZE` constant.
 - `rembus.server(name, port, ...)`: a "server" component, the equivalent
   of Rembus.jl `server`. It accepts connections but, unlike a broker, does
   not relay RPC requests between connected components: a request from an
@@ -38,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A connection attempt with an already connected `cid` is now rejected
   with an "already connected" error response (previously the new twin
   was closed silently). An empty `cid` is rejected with an error too.
+- The status code `STS_ERROR` is renamed `STS_GENERIC_ERROR`.
+- Only WebSocket clients send RFC 6455 pings (`ws_ping_interval`); the
+  server side no longer sends them.
 
 ### Fixed
 

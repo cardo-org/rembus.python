@@ -916,8 +916,8 @@ class Router(Supervised):
             "0.0.0.0",
             port,
             ssl=ssl_context,
-            ping_interval=self.config.ws_ping_interval,
-            max_size=rp.WS_FRAME_MAXSIZE,
+            ping_interval=None,  # only clients send pings
+            max_size=self.config.max_ws_frame,
         ) as server:
             self.server_instance = server
             await self._shutdown_event.wait()

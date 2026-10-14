@@ -1714,7 +1714,7 @@ class WsTwin(Twin):
         self.socket = await websockets.connect(
             broker_url,
             ping_interval=self.router.config.ws_ping_interval,
-            max_size=rp.WS_FRAME_MAXSIZE,
+            max_size=self.router.config.max_ws_frame,
             ssl=ssl_context,
         )
         self.handler["phase"] = lambda: "CONNECTING"
