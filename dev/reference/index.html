@@ -2023,6 +2023,19 @@ by a <a class="reference internal" href="#rembus.twin.Twin" title="rembus.twin.T
 </dl>
 </dd></dl>
 
+<dl class="py method">
+<dt class="sig sig-object py" id="rembus.router.Router.command_permitted">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">command_permitted</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">twin</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.router.Router.command_permitted" title="Link to this definition">¶</a></dt>
+<dd><p>Check that <cite>twin</cite> is allowed to send commands.</p>
+<p>When the router requires authentication, a connected component that
+has not authenticated is disconnected and <cite>False</cite> is returned.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
 <dl class="py attribute">
 <dt class="sig sig-object py" id="rembus.router.Router.eid">
 <span class="sig-name descname"><span class="pre">eid</span></span><a class="headerlink" href="#rembus.router.Router.eid" title="Link to this definition">¶</a></dt>
@@ -2272,7 +2285,7 @@ messages towards <cite>twin</cite> without waiting for individual
 <p>Synchronous APIs.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="rembus.sync.node">
-<span class="sig-prename descclassname"><span class="pre">rembus.sync.</span></span><span class="sig-name descname"><span class="pre">node</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">url</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">secure</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'first_up'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">schema</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enc</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">keyspace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mqtt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thread</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.sync.node" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">rembus.sync.</span></span><span class="sig-name descname"><span class="pre">node</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">url</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">secure</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'first_up'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">schema</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enc</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">keyspace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mqtt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thread</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">authenticated</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.sync.node" title="Link to this definition">¶</a></dt>
 <dd><p>Initialize a rembus node.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -2286,6 +2299,7 @@ messages towards <cite>twin</cite> without waiting for individual
 <li><p><strong>keyspace</strong> (<em>bool</em>)</p></li>
 <li><p><strong>mqtt</strong> (<em>str</em><em> | </em><em>None</em>)</p></li>
 <li><p><strong>thread</strong> (<em>Callable</em><em>[</em><em>[</em><em>...</em><em>]</em><em>, </em><em>Thread</em><em>] </em><em>| </em><em>None</em>)</p></li>
+<li><p><strong>authenticated</strong> (<em>bool</em>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -2545,6 +2559,7 @@ messages towards <cite>twin</cite> without waiting for individual
 <li><a class="reference internal" href="#module-rembus.router"><code class="xref py py-mod docutils literal notranslate"><span class="pre">router</span></code></a><ul>
 <li><a class="reference internal" href="#rembus.router.Router"><code class="docutils literal notranslate"><span class="pre">Router</span></code></a><ul>
 <li><a class="reference internal" href="#rembus.router.Router.append_message"><code class="docutils literal notranslate"><span class="pre">Router.append_message()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.router.Router.command_permitted"><code class="docutils literal notranslate"><span class="pre">Router.command_permitted()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.router.Router.eid"><code class="docutils literal notranslate"><span class="pre">Router.eid</span></code></a></li>
 <li><a class="reference internal" href="#rembus.router.Router.evaluate"><code class="docutils literal notranslate"><span class="pre">Router.evaluate()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.router.Router.find_implementor"><code class="docutils literal notranslate"><span class="pre">Router.find_implementor()</span></code></a></li>
