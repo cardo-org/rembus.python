@@ -43,7 +43,7 @@ def test_settings_error(server):
         f.write("this is not a valid json")
 
     with pytest.raises(RuntimeError):
-        rs.Config(rs.DEFAULT_BROKER)
+        rs.Settings(rs.DEFAULT_BROKER)
 
     os.remove(fn)
 

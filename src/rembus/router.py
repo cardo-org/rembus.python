@@ -227,7 +227,7 @@ class Router(Supervised):
         self.serve_task: Optional[asyncio.Task[None]] = None
         self.server_instance = None  # To store the server object
         self._shutdown_event = asyncio.Event()  # For controlled shutdown
-        self.config = rs.Config(name)
+        self.config = rs.Settings(name)
         # If True only components that have proved their identity are
         # allowed to send commands (see `command_permitted`).
         self.authenticated = (

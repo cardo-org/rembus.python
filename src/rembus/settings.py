@@ -23,7 +23,7 @@ def env_bool(name: str, default: bool = False) -> bool:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
-class Config:
+class Settings:
     """Configuration values to modify the behavior of Rembus."""
 
     def __init__(self, name: str):
