@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `overwrite_connection` setting (env `REMBUS_OVERWRITE_CONNECTION`,
   default `False`): when enabled, a new connection using the `cid` of an
   already connected component replaces the prior one, which is closed.
+- Authenticated mode (`authenticated=True` on `node`/`component`/`server`/
+  `connect`, or `connection_mode: "authenticated"` / env
+  `REMBUS_CONNECTION_MODE` in settings), as in Rembus.jl. A router in this
+  mode sends a challenge to every connecting component and disconnects it
+  if it does not authenticate within `challenge_timeout` seconds (default
+  3, env `REMBUS_CHALLENGE_TIMEOUT`); pub/sub, RPC, admin and unregister
+  commands from an unauthenticated component close its connection.
+  Anonymous components are rejected by an authenticated component.
 
 ### Changed
 
@@ -38,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and evicts its successor: the server closes it with WebSocket close
   code 4000 and the client stays closed. A replaced twin also no longer
   removes its successor from the router or marks it as down.
+- `rembus.register` now uses an anonymous connection, so provisioning
+  works also against an authenticated router.
 - `unregister` is now rejected (`STS_ERROR`, "invalid operation") when the
   requesting component is not authenticated, as in Rembus.jl.
 - An unrecognized admin command now gets a `STS_UNKNOWN_ADMIN_CMD`

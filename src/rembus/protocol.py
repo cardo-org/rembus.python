@@ -62,6 +62,10 @@ SLOT_FLAG: int = 0x40
 
 MSGID_SZ = 8
 
+# Id of the challenge/attestation exchange that a router in authenticated
+# mode starts as soon as a component connects (see Rembus.jl CONNECTION_ID).
+CONNECTION_ID = 0x12345678DEADBEEF
+
 TYPE_IDENTITY = 0
 TYPE_PUB = 1
 TYPE_RPC = 2

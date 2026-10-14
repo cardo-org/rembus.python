@@ -252,6 +252,9 @@ class Twin(Supervised):
         self.overwritten = False
         # True after the component has proved its identity (attestation).
         self.isauth: bool = False
+        # True for a twin created for a component connected to this router.
+        self.inbound: bool = False
+        self._challenge_fut: Optional[FutureResponse] = None
         self.uid = uid
         self.handler: dict[str, Callable[..., Any]] = {}
         self.outreq: dict[int, FutureResponse] = {}
@@ -661,9 +664,12 @@ class Twin(Supervised):
                 if retries > max_retries:
                     raise rp.RembusTimeout() from e
 
-    async def _send_message(self, builder: Callable, data: Any = None) -> Any:
+    async def _send_message(
+        self, builder: Callable, data: Any = None, reqid: int | None = None
+    ) -> Any:
         """Send a message and wait for a response."""
-        reqid = rp.msgid()
+        if reqid is None:
+            reqid = rp.msgid()
         req = builder(reqid)
         req.twin = self
         task = None
@@ -752,12 +758,19 @@ class Twin(Supervised):
         RembusTimeout
             If the remote peer does not respond within the expected time.
         """
-        futreq = await self._send_message(
-            lambda id: rp.IdentityMsg(
-                id=id, cid=self.uid.id, meta=self.mesh_meta()
+        if self.router.authenticated:
+            # The router sends the challenge without waiting for an
+            # Identity message.
+            response = await self.wait_response(self._challenge_fut)
+            reqid = rp.CONNECTION_ID
+        else:
+            futreq = await self._send_message(
+                lambda id: rp.IdentityMsg(
+                    id=id, cid=self.uid.id, meta=self.mesh_meta()
+                )
             )
-        )
-        response = await self.wait_response(futreq)
+            response = await self.wait_response(futreq)
+            reqid = None
         challenge = response_data(response)
         if isinstance(challenge, bytes | str):
             if isinstance(challenge, str):
@@ -781,7 +794,8 @@ class Twin(Supervised):
                     cid=self.uid.id,
                     signature=bytes_to_b64(signature, self.enc),
                     meta=self.mesh_meta(),
-                )
+                ),
+                reqid=reqid,
             )
             response = await self.wait_response(futreq)
             exports = response_data(response)
@@ -1704,6 +1718,11 @@ class WsTwin(Twin):
             ssl=ssl_context,
         )
         self.handler["phase"] = lambda: "CONNECTING"
+        if self.uid.hasname and self.router.authenticated:
+            # Registered before the receiver starts: the router sends the
+            # challenge as soon as the connection is accepted.
+            self._challenge_fut = FutureResponse(None)
+            self.outreq[rp.CONNECTION_ID] = self._challenge_fut
         self.receiver = asyncio.create_task(self.twin_receiver())
 
         if self.uid.hasname:

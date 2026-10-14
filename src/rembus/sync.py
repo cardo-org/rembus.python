@@ -87,11 +87,21 @@ class Node:
         keyspace: bool = True,
         mqtt: str | None = None,
         thread: Optional[Callable[..., threading.Thread]] = None,
+        authenticated: bool = False,
     ):
         self._runner = AsyncLoopRunner(thread)
         self._rb = self._runner.run(
             _component(
-                url, name, port, secure, policy, schema, enc, keyspace, mqtt
+                url,
+                name,
+                port,
+                secure,
+                policy,
+                schema,
+                enc,
+                keyspace,
+                mqtt,
+                authenticated=authenticated,
             )
         )
         self.url = node_url(url)
@@ -291,7 +301,9 @@ class Node:
 def register(rid: str, pin: str, scheme: int = SIG_RSA, enc: int = CBOR):
     """Provisions the component with rid identifier."""
     rburl = RbURL(rid)
-    rb = Node(rid, enc=enc)
+    # An anonymous connection: the component is not provisioned yet, so it
+    # cannot authenticate.
+    rb = Node(rburl.netlink, enc=enc)
     try:
         rb.register(rburl.id, pin, scheme)
     except Exception as e:
@@ -315,6 +327,7 @@ def node(
     keyspace: bool = True,
     mqtt: str | None = None,
     thread: Optional[Callable[..., threading.Thread]] = None,
+    authenticated: bool = False,
 ) -> Node:
     """Initialize a rembus node."""
     uid = node_url(url)
@@ -326,7 +339,17 @@ def node(
         _registry[uid].close()
 
     handle = Node(
-        url, name, port, secure, policy, schema, enc, keyspace, mqtt, thread
+        url,
+        name,
+        port,
+        secure,
+        policy,
+        schema,
+        enc,
+        keyspace,
+        mqtt,
+        thread,
+        authenticated,
     )
     if not uid.isbroker():
         _registry[uid] = handle

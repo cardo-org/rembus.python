@@ -32,6 +32,7 @@ async def _component(
     keyspace: bool = True,
     mqtt: str | None = None,
     relay: bool = True,
+    authenticated: bool = False,
 ) -> Twin:
     """Return a Rembus component."""
     isserver = (url is None) or (port is not None)
@@ -51,8 +52,24 @@ async def _component(
         default_name = uid.id
 
     router_name = name if name else default_name
+    if (
+        authenticated
+        and url is not None
+        and not isserver
+        and not uid.hasname
+    ):
+        raise ValueError("anonymous components not allowed")
+
     router = await init_router(
-        router_name, policy, uid, port, secure, isserver, schema, relay
+        router_name,
+        policy,
+        uid,
+        port,
+        secure,
+        isserver,
+        schema,
+        relay,
+        authenticated,
     )
     handle = await init_twin(router, uid, enc, isserver)
     if isinstance(url, list):
@@ -80,10 +97,24 @@ async def component(
     enc: int = CBOR,
     keyspace: bool = True,
     mqtt: str | None = None,
+    authenticated: bool = False,
 ) -> Twin:
-    """Initialize a rembus component."""
+    """Initialize a rembus component.
+
+    If `authenticated` is true only authenticated components are allowed
+    to connect and anonymous components are not allowed.
+    """
     handle = await _component(
-        url, name, port, secure, policy, schema, enc, keyspace, mqtt
+        url,
+        name,
+        port,
+        secure,
+        policy,
+        schema,
+        enc,
+        keyspace,
+        mqtt,
+        authenticated=authenticated,
     )
     return handle
 
@@ -95,6 +126,7 @@ async def server(
     schema: str | None = None,
     enc: int = CBOR,
     keyspace: bool = True,
+    authenticated: bool = False,
 ) -> Twin:
     """Initialize a rembus server.
 
@@ -112,6 +144,7 @@ async def server(
         enc,
         keyspace,
         relay=False,
+        authenticated=authenticated,
     )
 
 
@@ -125,10 +158,19 @@ async def connect(
     schema: str | None = None,
     enc: int = CBOR,
     keyspace: bool = True,
+    authenticated: bool = False,
 ):
     """Initialize a component context."""
     handle = await _component(
-        url, name, port, secure, policy, schema, enc, keyspace
+        url,
+        name,
+        port,
+        secure,
+        policy,
+        schema,
+        enc,
+        keyspace,
+        authenticated=authenticated,
     )
     try:
         yield handle

@@ -57,6 +57,26 @@ class Config:
             env_bool("REMBUS_OVERWRITE_CONNECTION", False),
         )
 
+        # In "authenticated" mode only components that prove their identity
+        # are allowed to send commands.
+        self.connection_mode = cfg.get(
+            "connection_mode",
+            os.environ.get("REMBUS_CONNECTION_MODE", "anonymous"),
+        )
+        if self.connection_mode not in ("anonymous", "authenticated"):
+            raise ValueError(
+                f"invalid connection_mode [{self.connection_mode}]"
+            )
+
+        # Seconds a connected component has to authenticate in
+        # "authenticated" mode before being disconnected.
+        self.challenge_timeout = float(
+            cfg.get(
+                "challenge_timeout",
+                os.environ.get("REMBUS_CHALLENGE_TIMEOUT", 3),
+            )
+        )
+
         # Max numbers of QOS1 and QOS2 Pub/Sub retrasmissions
         self.send_retries = cfg.get("send_retries", def_send_retries)
 

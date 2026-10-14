@@ -139,6 +139,7 @@ async def init_router(
     isserver,
     schema,
     relay: bool = True,
+    authenticated: bool = False,
 ):
     """Start the router"""
 
@@ -148,7 +149,9 @@ async def init_router(
             "less_busy, round_robin"
         )
 
-    router = Router(router_name, policy, isserver, schema, relay)
+    router = Router(
+        router_name, policy, isserver, schema, relay, authenticated
+    )
     await router.start()
     logger.debug("component %s created, port: %s", uid.id, port)
     # start a websocket server
@@ -185,6 +188,7 @@ class Router(Supervised):
         data_at_rest: bool = True,
         schema: str | None = None,
         relay: bool = True,
+        authenticated: bool = False,
     ):
         super().__init__()
         # False for a "server": RPC requests from ordinary components are
@@ -224,6 +228,11 @@ class Router(Supervised):
         self.server_instance = None  # To store the server object
         self._shutdown_event = asyncio.Event()  # For controlled shutdown
         self.config = rs.Config(name)
+        # If True only components that have proved their identity are
+        # allowed to send commands (see `command_permitted`).
+        self.authenticated = (
+            authenticated or self.config.connection_mode == "authenticated"
+        )
         self.policy = Policy(policy)
         self.tenants: dict = {}
         self.start_ts = rp.timestamp()
@@ -379,8 +388,22 @@ class Router(Supervised):
             logger.warning("[%s] error in method invocation: %s", self, e)
             traceback.print_exc()
 
+    async def command_permitted(self, twin) -> bool:
+        """Check that `twin` is allowed to send commands.
+
+        When the router requires authentication, a connected component that
+        has not authenticated is disconnected and `False` is returned.
+        """
+        if self.authenticated and twin.inbound and not twin.isauth:
+            logger.warning("[%s] command from unauthenticated [%s]", self, twin)
+            await twin.close()
+            return False
+        return True
+
     async def _pubsub_msg(self, msg: rp.PubSubMsg):
         twin = msg.twin
+        if not await self.command_permitted(twin):
+            return
 
         # Check if publisher is authorized to
         if self.isauthorized(msg.topic, twin):
@@ -599,6 +622,8 @@ class Router(Supervised):
         data = rp.tag2df(msg.data)
         logger.debug("[%s] rpc: %s", self, msg)
         topic = msg.topic
+        if not await self.command_permitted(msg.twin):
+            return
         if msg.twin.isbroker():
             await self.send_message(msg)
         elif (
@@ -701,6 +726,8 @@ class Router(Supervised):
 
     async def _handle_admin(self, msg: rp.AdminMsg) -> None:
         logger.debug("[%s] admin: %s", self, msg)
+        if not await self.command_permitted(msg.twin):
+            return
         if msg.twin.isbroker():
             await self.send_message(msg)
         else:
@@ -846,7 +873,23 @@ class Router(Supervised):
         self.id_twin[url.twkey] = twin
 
         twin.socket = ws
-        await twin.twin_receiver()
+        twin.inbound = True
+        challenge_task = None
+        if self.authenticated:
+            await twin.send(self._challenge(rp.CONNECTION_ID, twin))
+            challenge_task = asyncio.create_task(self._challenge_timeout(twin))
+        try:
+            await twin.twin_receiver()
+        finally:
+            if challenge_task:
+                challenge_task.cancel()
+
+    async def _challenge_timeout(self, twin):
+        """Disconnect the twin if it does not authenticate in time."""
+        await asyncio.sleep(self.config.challenge_timeout)
+        if not twin.isauth:
+            logger.warning("[%s] authentication timeout", twin)
+            await twin.close()
 
     async def serve_ws(self, port: int, issecure: bool = False):
         """Start a WebSocket server to handle incoming connections."""
@@ -931,13 +974,12 @@ class Router(Supervised):
             logger.error("verification failed: %s (%s)", e, type(e))
             return rp.STS_ERROR
 
-    def _challenge(self, msg: rp.IdentityMsg):
+    def _challenge(self, msgid: int, twin):
         """Generate a challenge for the identity authentication."""
-        twin = msg.twin
         challenge_val = os.urandom(4)
         twin.handler["challenge"] = lambda twin: challenge_val
         return rp.ResMsg(
-            id=msg.id,
+            id=msgid,
             status=rp.STS_CHALLENGE,
             data=bytes_to_b64(challenge_val, twin.enc),
         )
@@ -947,9 +989,10 @@ class Router(Supervised):
         twin = msg.twin
         identity = msg.cid
 
-        if self._needs_auth(identity):
-            # Component is provisioned, send the challenge
-            response = self._challenge(msg)
+        if self.authenticated or self._needs_auth(identity):
+            # Component is provisioned (or the router requires
+            # authentication), send the challenge
+            response = self._challenge(msg.id, twin)
         else:
             await self._update_twin(twin, identity, msg.meta)
             response = rp.ResMsg(
@@ -996,7 +1039,10 @@ class Router(Supervised):
         sts = rp.STS_ERROR
         reason = None
         try:
-            if not msg.twin.isauth:
+            if (
+                not await self.command_permitted(msg.twin)
+                or not msg.twin.isauth
+            ):
                 reason = "invalid operation"
             else:
                 rp.remove_pubkey(self, msg.twin.rid)
