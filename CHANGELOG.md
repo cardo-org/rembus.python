@@ -5,6 +5,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `component(mqtt=...)` no longer raises `UnboundLocalError` when the
+  keyspace plugin is not active (`keyspace=False` or not a server): the
+  keyspace-to-MQTT subscription is skipped.
+- MQTT bridge: a Pub/Sub message with no arguments is published with a
+  0-length payload instead of raising; the MQTT v5 check no longer uses the
+  private gmqtt `_connection_state` attribute.
+
 ### Added
 
 - `Settings.max_ws_frame` (settings key `max_ws_frame`, default

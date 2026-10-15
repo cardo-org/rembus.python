@@ -76,13 +76,15 @@ async def _component(
         for netlink in url:
             await init_twin(router, RbURL(netlink), enc, isserver)
 
+    kspace = None
     if keyspace and isserver:
         kspace = KeySpaceRouter()
         await add_plugin(handle, kspace)
 
     if mqtt:
         mqtt_twin = await init_twin(router, RbURL(mqtt), enc, False)
-        await kspace.subscribe_handler(mqtt_twin, "**")
+        if kspace is not None:
+            await kspace.subscribe_handler(mqtt_twin, "**")
 
     return handle
 

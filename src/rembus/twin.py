@@ -1970,14 +1970,17 @@ class MqttTwin(Twin):
             :class:`rp.PubSubMsg`.
         """
         if isinstance(msg, rp.PubSubMsg):
-            # If data has a single item, send just that item
-            data_to_send = msg.data if len(msg.data) > 1 else msg.data[0]
             publish_kwargs = {}
-            if self.socket._connection_state.protocol_version == MQTTv50:
-                publish_kwargs["content_type"] = "application/json"
-            self.socket.publish(
-                msg.topic, json.dumps(data_to_send), **publish_kwargs
-            )
+            if not msg.data:
+                # No arguments: publish an empty payload.
+                payload = b""
+            else:
+                # If data has a single item, send just that item
+                data_to_send = msg.data if len(msg.data) > 1 else msg.data[0]
+                payload = json.dumps(data_to_send)
+                if self.socket.protocol_version == MQTTv50:
+                    publish_kwargs["content_type"] = "application/json"
+            self.socket.publish(msg.topic, payload, **publish_kwargs)
 
     def isopen(self) -> bool:
         """

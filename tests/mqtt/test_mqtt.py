@@ -181,7 +181,7 @@ async def test_mqtt_publish():
             payload,
         )
         received_payload["topic"] = topic
-        received_payload["data"] = json.loads(payload.decode())
+        received_payload["data"] = json.loads(payload.decode()) if payload else b""
         received.set()
 
     bro = await rb.component(mqtt=f"mqtt://{mqtt_host}:{mqtt_port}", port=8338)
@@ -205,6 +205,14 @@ async def test_mqtt_publish():
                 await asyncio.wait_for(received.wait(), timeout=2)
                 assert received_payload["topic"] == "a/b/c"
                 assert received_payload["data"] == [1, 2]
+
+                # a message without arguments is published with an empty payload
+                received.clear()
+                received_payload.clear()
+                await cli.publish("a/b/empty")
+                await asyncio.wait_for(received.wait(), timeout=2)
+                assert received_payload["topic"] == "a/b/empty"
+                assert received_payload["data"] == b""
             finally:
                 await cli.close()
         finally:
