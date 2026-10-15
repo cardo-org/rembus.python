@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   0-length payload instead of raising; the MQTT v5 check no longer uses the
   private gmqtt `_connection_state` attribute.
 
+### Changed
+
+- Authenticated mode: an `Identity` received while the router's challenge
+  is pending no longer triggers a new challenge. The `Identity` response is
+  deferred and carries the outcome of the `Attestation` (no data), or a
+  generic error if no `Attestation` arrives within `request_timeout`, as in
+  Rembus.jl.
+
 ### Added
 
 - `Settings.max_ws_frame` (settings key `max_ws_frame`, default

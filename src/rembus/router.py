@@ -697,7 +697,42 @@ class Router(Supervised):
             await msg.twin.send(outmsg)
         return
 
+    async def _await_attestation(self, msg: rp.IdentityMsg) -> None:
+        """Defer the response to an Identity received while a challenge
+        is pending.
+
+        The pending challenge stays valid: the Identity response carries
+        the outcome of the Attestation (no data), or a generic error if
+        the Attestation is not received within `request_timeout`.
+        """
+        twin = msg.twin
+        outcome: asyncio.Future = asyncio.get_running_loop().create_future()
+
+        def _set(sts: int) -> None:
+            if not outcome.done():
+                outcome.set_result(sts)
+
+        twin.handler["att"] = _set
+        try:
+            sts = await asyncio.wait_for(
+                outcome, self.config.request_timeout
+            )
+        except asyncio.TimeoutError:
+            sts = rp.STS_GENERIC_ERROR
+        finally:
+            if twin.handler.get("att") is _set:
+                twin.handler.pop("att")
+        await twin.response(sts, msg)
+
     async def _handle_identity(self, msg: rp.IdentityMsg) -> None:
+        if "challenge" in msg.twin.handler:
+            # Run as a task: the router loop must keep dispatching the
+            # Attestation this Identity waits for.
+            task = asyncio.create_task(self._await_attestation(msg))
+            self._rpc_tasks.add(task)
+            task.add_done_callback(self._rpc_tasks.discard)
+            return
+
         twin_id = msg.cid
         if not twin_id:
             await msg.twin.response(rp.STS_GENERIC_ERROR, msg, "empty cid")
@@ -728,6 +763,9 @@ class Router(Supervised):
         sts = await self._verify_signature(msg)
         data = self.get_topics(msg.twin) if sts == rp.STS_OK else None
         await msg.twin.response(sts, msg, data)
+        notify = msg.twin.handler.pop("att", None)
+        if notify is not None:
+            notify(sts)
 
     async def _handle_admin(self, msg: rp.AdminMsg) -> None:
         logger.debug("[%s] admin: %s", self, msg)
