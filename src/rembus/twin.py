@@ -22,7 +22,6 @@ import polars as pl
 import websockets
 from gmqtt import Client as MQTTClient
 from gmqtt import Subscription
-from gmqtt.mqtt.constants import MQTTv50
 import rembus.protocol as rp
 import rembus.settings as rs
 import rembus.builtins as builtins
@@ -1978,8 +1977,8 @@ class MqttTwin(Twin):
                 # If data has a single item, send just that item
                 data_to_send = msg.data if len(msg.data) > 1 else msg.data[0]
                 payload = json.dumps(data_to_send)
-                if self.socket.protocol_version == MQTTv50:
-                    publish_kwargs["content_type"] = "application/json"
+                # connect() uses the default MQTT v5 protocol.
+                publish_kwargs["content_type"] = "application/json"
             self.socket.publish(msg.topic, payload, **publish_kwargs)
 
     def isopen(self) -> bool:
