@@ -565,7 +565,7 @@ broker.</p>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="rembus.protocol.RegisterMsg.pin">
-<span class="sig-name descname"><span class="pre">pin</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#rembus.protocol.RegisterMsg.pin" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">pin</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bytes</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#rembus.protocol.RegisterMsg.pin" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
@@ -1329,7 +1329,8 @@ sent to the broker for registration.</p>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>rid</strong> (<em>str</em>) – The unique identifier for the component to register.</p></li>
-<li><p><strong>pin</strong> (<em>str</em>) – A PIN code used for component authentication.</p></li>
+<li><p><strong>pin</strong> (<em>str</em>) – A PIN code used for component authentication. It is not sent
+on the wire: the broker receives <code class="docutils literal notranslate"><span class="pre">SHA256(CBOR([pin,</span> <span class="pre">cid]))</span></code>.</p></li>
 <li><p><strong>scheme</strong> (<em>int</em><em>, </em><em>optional</em>) – The cryptographic signature scheme to use for key generation.
 Supported values are:
 - <cite>rp.SIG_RSA</cite> (default)
