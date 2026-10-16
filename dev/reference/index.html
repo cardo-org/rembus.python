@@ -2028,7 +2028,9 @@ by a <a class="reference internal" href="#rembus.twin.Twin" title="rembus.twin.T
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">command_permitted</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">twin</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.router.Router.command_permitted" title="Link to this definition">¶</a></dt>
 <dd><p>Check that <cite>twin</cite> is allowed to send commands.</p>
 <p>When the router requires authentication, a connected component that
-has not authenticated is disconnected and <cite>False</cite> is returned.</p>
+has not authenticated is disconnected and <cite>False</cite> is returned.
+Anonymous components connected from the loopback interface are
+always allowed.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>bool</p>
