@@ -12,6 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   challenge timeout. Anonymous components connected from other addresses are
   still disconnected.
 
+- **Breaking:** the `pin` field of the `Register` message is now
+  `SHA256(CBOR([pin, cid]))` (bytes in CBOR, base64 text in JSON) instead of
+  the plaintext pin, so the pin is no longer sent in clear. Peers of a
+  previous version cannot register with each other.
+
+- A failed attestation is answered with an error response and the router then
+  closes the connection after about 0.5 s (as Rembus.jl), instead of leaving
+  it open until the challenge timeout.
+
 ### Fixed
 
 - Authenticated mode: an anonymous client no longer logs

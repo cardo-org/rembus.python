@@ -3,6 +3,7 @@
 from __future__ import annotations
 import asyncio
 import base64
+import hmac
 from enum import Enum
 from functools import partial
 import ipaddress
@@ -774,6 +775,16 @@ class Router(Supervised):
         notify = msg.twin.handler.pop("att", None)
         if notify is not None:
             notify(sts)
+        if sts != rp.STS_OK:
+            # Give the error response time to reach the peer, then close.
+            task = asyncio.create_task(self._close_after(msg.twin, 0.5))
+            self._rpc_tasks.add(task)
+            task.add_done_callback(self._rpc_tasks.discard)
+
+    async def _close_after(self, twin, delay: float) -> None:
+        """Close `twin` after `delay` seconds."""
+        await asyncio.sleep(delay)
+        await twin.close()
 
     async def _handle_admin(self, msg: rp.AdminMsg) -> None:
         logger.debug("[%s] admin: %s", self, msg)
@@ -1065,22 +1076,25 @@ class Router(Supervised):
 
         await twin.send(response)
 
-    def _get_token(self, tenant, secret: str):
-        """Get the token embedded into the message id."""
+    def _get_token(self, tenant, cid: str, proof):
+        """Check the pin proof SHA256(CBOR([pin, cid])) of the tenant."""
         pin = self.tenants.get(tenant)
-        if secret != pin:
-            logger.warning("tenant %s: invalid token %s", tenant, secret)
+        if (
+            pin is None
+            or not isinstance(proof, bytes)
+            or not hmac.compare_digest(rp.pin_proof(pin, cid), proof)
+        ):
+            logger.warning("tenant %s: invalid token", tenant)
             return None
-        else:
-            logger.debug("tenant %s: token is valid", tenant)
-            return secret
+        logger.debug("tenant %s: token is valid", tenant)
+        return proof
 
     async def _register_node(self, msg: rp.RegisterMsg):
         """Provision a new node."""
         sts = rp.STS_GENERIC_ERROR
         reason = None
         tenant = domain(msg.cid)
-        token = self._get_token(tenant, msg.pin)
+        token = self._get_token(tenant, msg.cid, msg.pin)
         try:
             if tenant not in self.tenants:
                 reason = f"tenant [{tenant}] not enabled"

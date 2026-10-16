@@ -6,6 +6,7 @@ import cbor2
 import pytest
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
+from websockets.exceptions import ConnectionClosed
 from websockets.sync.client import connect
 import rembus
 import rembus.protocol as rp
@@ -135,6 +136,43 @@ def test_identity_during_pending_challenge():
             assert ident.id == identity_id
             assert ident.status == rp.STS_OK
             assert ident.data is None
+    finally:
+        cmp = rembus.node(f"ws://:{PORT}/{name}", authenticated=True)
+        cmp.unregister()
+        cmp.close()
+        server.close()
+
+
+def test_failed_attestation_closes_connection():
+    """A failed attestation is answered, then the connection is closed."""
+    name = "test_failed_attestation"
+    add_tenant(".", PIN)
+    try:
+        os.remove(rs.key_file(rs.DEFAULT_BROKER, name))
+    except FileNotFoundError:
+        pass
+
+    server = rembus.node(port=PORT, authenticated=True)
+    try:
+        rembus.register(f"ws://:{PORT}/{name}", PIN)
+        with connect(f"ws://127.0.0.1:{PORT}") as ws:
+            challenge = _recv_response(ws)
+            assert challenge.status == rp.STS_CHALLENGE
+
+            ws.send(
+                rp.AttestationMsg(
+                    id=rp.CONNECTION_ID, cid=name, signature=b"invalid"
+                ).to_payload(rp.CBOR)
+            )
+            att = _recv_response(ws)
+            assert att.status == rp.STS_GENERIC_ERROR
+
+            # The connection is still open right after the response ...
+            with pytest.raises(TimeoutError):
+                ws.recv(timeout=0.2)
+            # ... and closed by the router after ~0.5 s.
+            with pytest.raises(ConnectionClosed):
+                ws.recv(timeout=2)
     finally:
         cmp = rembus.node(f"ws://:{PORT}/{name}", authenticated=True)
         cmp.unregister()

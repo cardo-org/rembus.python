@@ -1114,7 +1114,8 @@ class Twin(Supervised):
         rid : str
             The unique identifier for the component to register.
         pin : str
-            A PIN code used for component authentication.
+            A PIN code used for component authentication. It is not sent
+            on the wire: the broker receives ``SHA256(CBOR([pin, cid]))``.
         scheme : int, optional
             The cryptographic signature scheme to use for key generation.
             Supported values are:
@@ -1141,9 +1142,13 @@ class Twin(Supervised):
         if self.enc == rp.JSON:
             pubkey = base64.b64encode(pubkey).decode("utf-8")
 
+        proof = rp.pin_proof(pin, rid)
+        if self.enc == rp.JSON:
+            proof = base64.b64encode(proof).decode("utf-8")
+
         futreq = await self._send_message(
             lambda id: rp.RegisterMsg(
-                id=id, cid=rid, pin=pin, pubkey=pubkey, type=scheme
+                id=id, cid=rid, pin=proof, pubkey=pubkey, type=scheme
             )
         )
         response = await self.wait_response(futreq)

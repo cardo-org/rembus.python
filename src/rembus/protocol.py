@@ -4,6 +4,7 @@ to the transport layer.
 """
 
 import base64
+import hashlib
 import os
 import logging
 from typing import Any, List, Optional
@@ -535,7 +536,8 @@ class RegisterMsg(RembusMsg):
 
     id: int
     cid: str
-    pin: str
+    # SHA256(CBOR([pin, cid])), see pin_proof; base64 text in JSON
+    pin: bytes | str
     pubkey: bytes | str
     type: int
 
@@ -588,6 +590,14 @@ class UnregisterMsg(RembusMsg):
         ).decode()
 
 
+def pin_proof(pin: str, cid: str) -> bytes:
+    """Return the Register `pin` field value: SHA256(CBOR([pin, cid])).
+
+    The pin itself is never sent on the wire.
+    """
+    return hashlib.sha256(cbor2.dumps([pin, cid])).digest()
+
+
 def isregistered(router_id, rid: str):
     """Check if a component identified by `rid` is registered in the router."""
     try:
@@ -636,11 +646,14 @@ def jsonrpc_request(pkt, msg_id, params) -> RembusMsg:
             pubkey = params.get("key_val")
             if isinstance(pubkey, str):
                 pubkey = base64.b64decode(pubkey)
+            pin = params.get("pin")
+            if isinstance(pin, str):
+                pin = base64.b64decode(pin)
 
             return RegisterMsg(
                 id=msg_id,
                 cid=pkt["method"],
-                pin=params.get("pin"),
+                pin=pin,
                 pubkey=pubkey,
                 type=params.get("key_type"),
             )
