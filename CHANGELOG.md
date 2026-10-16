@@ -3,6 +3,21 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Authenticated mode: anonymous components connected from the loopback
+  interface are allowed to send commands and are not subject to the
+  challenge timeout. Anonymous components connected from other addresses are
+  still disconnected.
+
+### Fixed
+
+- Authenticated mode: an anonymous client no longer logs
+  `recv unknown msg id` when it receives the router's challenge; the
+  challenge is ignored.
+
 ## [0.8.23] 2026-10-15
 
 ### Fixed

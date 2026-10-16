@@ -51,8 +51,25 @@ def test_authenticated_mode():
     server.close()
 
 
-def test_anonymous_component_is_disconnected():
-    """A component that does not authenticate cannot send commands."""
+def test_anonymous_loopback_component_is_allowed():
+    """Anonymous components connected from the loopback are allowed."""
+    server = rembus.node(port=PORT, authenticated=True)
+    try:
+        server.expose(echo)
+        cmp = rembus.node(f"ws://:{PORT}")
+        try:
+            assert cmp.rpc("echo", 1) == 1
+        finally:
+            cmp.close()
+    finally:
+        server.close()
+
+
+def test_anonymous_remote_component_is_disconnected(monkeypatch):
+    """A remote component that does not authenticate cannot send commands."""
+    monkeypatch.setattr(
+        rembus.router.Router, "_remote_host", lambda self, twin: "10.0.0.1"
+    )
     server = rembus.node(port=PORT, authenticated=True)
     try:
         server.expose(echo)

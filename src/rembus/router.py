@@ -5,6 +5,7 @@ import asyncio
 import base64
 from enum import Enum
 from functools import partial
+import ipaddress
 import logging
 import os
 import time
@@ -393,8 +394,15 @@ class Router(Supervised):
 
         When the router requires authentication, a connected component that
         has not authenticated is disconnected and `False` is returned.
+        Anonymous components connected from the loopback interface are
+        always allowed.
         """
-        if self.authenticated and twin.inbound and not twin.isauth:
+        if (
+            self.authenticated
+            and twin.inbound
+            and not twin.isauth
+            and not self._is_loopback(twin)
+        ):
             logger.warning("[%s] command from unauthenticated [%s]", self, twin)
             await twin.close()
             return False
@@ -920,7 +928,10 @@ class Router(Supervised):
         challenge_task = None
         if self.authenticated:
             await twin.send(self._challenge(rp.CONNECTION_ID, twin))
-            challenge_task = asyncio.create_task(self._challenge_timeout(twin))
+            if not self._is_loopback(twin):
+                challenge_task = asyncio.create_task(
+                    self._challenge_timeout(twin)
+                )
         try:
             await twin.twin_receiver()
         finally:
@@ -983,6 +994,16 @@ class Router(Supervised):
             self.network.extend(
                 mesh_nodes(identity, self._remote_host(twin), meta)
             )
+
+    def _is_loopback(self, twin) -> bool:
+        """Return True if the twin is connected from the loopback interface."""
+        try:
+            ip = ipaddress.ip_address(self._remote_host(twin))
+        except ValueError:
+            return False
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+        return ip.is_loopback
 
     def _remote_host(self, twin) -> str:
         """Return the remote host address of the connecting twin's socket."""

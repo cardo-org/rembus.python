@@ -579,6 +579,12 @@ class Twin(Supervised):
         return fut
 
     async def _response_msg(self, msg: rp.ResMsg):
+        if msg.id == rp.CONNECTION_ID and msg.id not in self.outreq:
+            # Challenge received by an anonymous component: the router decides
+            # whether to accept it (loopback) or to disconnect it.
+            logger.debug("[%s] ignoring authentication challenge", self)
+            return
+
         fut = await self.future_request(msg.id)
         if fut:
             fut.future.set_result(msg)
