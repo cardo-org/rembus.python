@@ -1,6 +1,7 @@
 """Tests for rembus protocol messages and helpers."""
 
 import logging
+import cbor2
 import pytest
 import rembus.protocol as rp
 import rembus.settings as rs
@@ -130,3 +131,20 @@ def test_env_bool():
     assert rs.env_bool("TEST_BOOL_1") is True
     assert rs.env_bool("TEST_BOOL_0") is False
     assert rs.env_bool("NON_EXISTENT_VAR", default=True) is True
+
+@pytest.mark.parametrize(
+    "pkt",
+    [
+        [0x82, rp.to_bytes(5), "t", None, 1, "x", {"a": 1}],
+        [0x84, rp.to_bytes(5), 0, "d", "x"],
+        [0x81, "t", 1, "x", "y"],
+        [0x91, rp.to_bytes(5), "t", 1, "x"],
+        [0x83, rp.to_bytes(5), "t", "d", "x"],
+        [0x80, rp.to_bytes(5), "c", {}, "x"],
+    ],
+)
+def test_relay_unknown_trailing_elements(pkt):
+    """Unknown trailing elements are forwarded as elements of the packet."""
+    msg = rp.cbor_parse(pkt)
+    assert msg.extra
+    assert cbor2.loads(msg.to_payload(rp.CBOR)) == pkt
