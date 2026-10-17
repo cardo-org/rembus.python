@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- CBOR frames: bits 7-4 of the type byte (reserved bits and flags) are now
+  kept for every packet type and re-emitted when a message is relayed,
+  instead of being dropped for all types except Pub/Sub.
+
 - Authenticated mode: an anonymous client no longer logs
   `recv unknown msg id` when it receives the router's challenge; the
   challenge is ignored.

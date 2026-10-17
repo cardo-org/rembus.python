@@ -59,6 +59,7 @@ QOS0: int = 0x00
 QOS1: int = 0x10
 QOS2: int = 0x30
 SLOT_FLAG: int = 0x40
+FLAGS_MASK: int = 0xF0
 
 MSGID_SZ = 8
 
@@ -207,6 +208,9 @@ def from_bytes(bval: bytes | bytearray) -> int:
 class RembusMsg(BaseModel):
     """Rembus message"""
 
+    # Bits 7-4 of the CBOR type byte. Received bits are kept so that a
+    # relay forwards the ones it does not understand unchanged.
+    flags: int = 0
     _twin: Any = PrivateAttr(default=None)
 
     @property
@@ -258,7 +262,7 @@ class RpcReqMsg(RembusMsg):
         if enc == CBOR:
             return cbor2.dumps(
                 [
-                    TYPE_RPC,
+                    TYPE_RPC | self.flags,
                     to_bytes(self.id),
                     self.topic,
                     self.target,
@@ -289,7 +293,7 @@ class ResMsg(RembusMsg):
         if enc == CBOR:
             return cbor2.dumps(
                 [
-                    TYPE_RESPONSE,
+                    TYPE_RESPONSE | self.flags,
                     to_bytes(self.id),
                     self.status,
                     df2tag(self.data),
@@ -356,7 +360,7 @@ class PubSubMsg(RembusMsg):
             if self.slot is None:
                 if enc == CBOR:
                     return cbor2.dumps(
-                        [TYPE_PUB, self.topic, df2tag(self.data)]
+                        [TYPE_PUB | self.flags, self.topic, df2tag(self.data)]
                     )
 
                 return json.dumps(
@@ -397,7 +401,9 @@ class AckMsg(RembusMsg):
     def to_payload(self, enc: int) -> bytes | str:
         """Serialize the Ack message."""
         if enc == CBOR:
-            return cbor2.dumps([TYPE_ACK, to_bytes(self.id)])
+            return cbor2.dumps(
+                [TYPE_ACK | self.flags, to_bytes(self.id)]
+            )
 
         return json.dumps(
             {"jsonrpc": "2.0", "id": self.id, "result": {"type": TYPE_ACK}}
@@ -412,7 +418,9 @@ class Ack2Msg(RembusMsg):
     def to_payload(self, enc: int) -> bytes | str:
         """Serialize the Ack2 message."""
         if enc == CBOR:
-            return cbor2.dumps([TYPE_ACK2, to_bytes(self.id)])
+            return cbor2.dumps(
+                [TYPE_ACK2 | self.flags, to_bytes(self.id)]
+            )
 
         return json.dumps(
             {"jsonrpc": "2.0", "id": self.id, "result": {"type": TYPE_ACK2}}
@@ -433,7 +441,12 @@ class AdminMsg(RembusMsg):
         """Serialize the Admin message."""
         if enc == CBOR:
             return cbor2.dumps(
-                [TYPE_ADMIN, to_bytes(self.id), self.topic, self.data]
+                [
+                    TYPE_ADMIN | self.flags,
+                    to_bytes(self.id),
+                    self.topic,
+                    self.data,
+                ]
             )
 
         return json.dumps(
@@ -470,7 +483,12 @@ class IdentityMsg(RembusMsg):
         """Serialize the Identity message."""
         if enc == CBOR:
             return cbor2.dumps(
-                [TYPE_IDENTITY, to_bytes(self.id), self.cid, self.meta or {}]
+                [
+                    TYPE_IDENTITY | self.flags,
+                    to_bytes(self.id),
+                    self.cid,
+                    self.meta or {},
+                ]
             )
 
         return json.dumps(
@@ -509,7 +527,7 @@ class AttestationMsg(RembusMsg):
         if enc == CBOR:
             return cbor2.dumps(
                 [
-                    TYPE_ATTESTATION,
+                    TYPE_ATTESTATION | self.flags,
                     to_bytes(self.id),
                     self.cid,
                     self.signature,
@@ -546,7 +564,7 @@ class RegisterMsg(RembusMsg):
         if enc == CBOR:
             return cbor2.dumps(
                 [
-                    TYPE_REGISTER,
+                    TYPE_REGISTER | self.flags,
                     to_bytes(self.id),
                     self.cid,
                     self.pin,
@@ -578,7 +596,9 @@ class UnregisterMsg(RembusMsg):
     def to_payload(self, enc: int) -> bytes | str:
         """Serialize the Unregister message."""
         if enc == CBOR:
-            return cbor2.dumps([TYPE_UNREGISTER, to_bytes(self.id)])
+            return cbor2.dumps(
+                [TYPE_UNREGISTER | self.flags, to_bytes(self.id)]
+            )
 
         return json.dumps(
             {
@@ -706,12 +726,14 @@ def cbor_parse(pkt) -> RembusMsg:
     """Parse a CBOR packet into a Rembus message."""
     type_byte = pkt[0]
     mtype = type_byte & 0x0F
-    flags = type_byte & 0xF0
+    flags = type_byte & FLAGS_MASK
 
     # Special cases first (because of flag-dependent structure)
     if mtype == TYPE_PUB:
-        if flags == QOS0:
-            return PubSubMsg(topic=pkt[1], data=pkt[2])
+        # Only the QoS and slot bits select the layout; any other bit is
+        # kept in `flags` and forwarded unchanged.
+        if flags & (QOS2 | SLOT_FLAG) == QOS0:
+            return PubSubMsg(topic=pkt[1], data=pkt[2], flags=flags)
 
         slot = None
         mid = from_bytes(pkt[1])
@@ -727,6 +749,7 @@ def cbor_parse(pkt) -> RembusMsg:
             id=from_bytes(pkt[1]),
             status=pkt[2],
             data=pkt[3] if len(pkt) > 3 else None,
+            flags=flags,
         )
 
     # Dispatch table for the rest
@@ -761,9 +784,12 @@ def cbor_parse(pkt) -> RembusMsg:
     }
 
     try:
-        return table[mtype]()
+        msg = table[mtype]()
     except KeyError as e:
         raise ValueError(f"unknown message type: {mtype}") from e
+
+    msg.flags = flags
+    return msg
 
 
 def decode_dataframe(data: bytes) -> IntoFrame:
