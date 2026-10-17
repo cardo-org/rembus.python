@@ -59,6 +59,17 @@ def test_register_ecdsa():
     server.close()
 
 
+def test_register_invalid_key_type():
+    """The broker rejects a Register with a key type other than 1 or 2."""
+    server = rembus.node(port=8990)
+    with pytest.raises(rp.RembusError):
+        rembus.register("ws://:8990/test_register_badtype", PIN, scheme=9)
+    server.close()
+    assert not rp.isregistered(
+        rembus.settings.DEFAULT_BROKER, "test_register_badtype"
+    )
+
+
 def test_register_already_provisioned():
     """
     Test the error condition when trying to register

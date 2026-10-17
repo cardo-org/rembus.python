@@ -1098,6 +1098,10 @@ class Router(Supervised):
         try:
             if tenant not in self.tenants:
                 reason = f"tenant [{tenant}] not enabled"
+            elif msg.type not in (rp.SIG_RSA, rp.SIG_ECDSA):
+                reason = f"invalid key type {msg.type}"
+            elif not isinstance(msg.pubkey, bytes) or not msg.pubkey:
+                reason = "invalid pubkey"
             elif token is None:
                 reason = "wrong tenant/pin"
             elif rp.isregistered(self.id, msg.cid):

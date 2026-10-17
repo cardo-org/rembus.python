@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Register: the broker rejects a key `type` other than `SIG_RSA` or
+  `SIG_ECDSA` and a `pubkey` that is not a plain byte string.
+
 - CBOR frames: unknown trailing elements of a received packet are kept and
   forwarded as elements of the relayed packet instead of being dropped.
 
