@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Removed the unused `STS_METHOD_ARGS_ERROR` (41) status constant: it was
+  never sent, argument errors are reported as `STS_METHOD_EXCEPTION`.
+
 - Authenticated mode: anonymous components connected from the loopback
   interface are allowed to send commands and are not subject to the
   challenge timeout. Anonymous components connected from other addresses are
