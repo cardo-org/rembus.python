@@ -271,6 +271,16 @@ to the transport layer.</p>
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">rembus.protocol.</span></span><span class="sig-name descname"><span class="pre">RembusMsg</span></span><a class="headerlink" href="#rembus.protocol.RembusMsg" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseModel</span></code></p>
 <p>Rembus message</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="rembus.protocol.RembusMsg.flags">
+<span class="sig-name descname"><span class="pre">flags</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#rembus.protocol.RembusMsg.flags" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="rembus.protocol.RembusMsg.extra">
+<span class="sig-name descname"><span class="pre">extra</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[]</span></span><a class="headerlink" href="#rembus.protocol.RembusMsg.extra" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
 <dl class="py property">
 <dt class="sig sig-object py" id="rembus.protocol.RembusMsg.twin">
 <span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">twin</span></span><a class="headerlink" href="#rembus.protocol.RembusMsg.twin" title="Link to this definition">¶</a></dt>
@@ -2376,6 +2386,8 @@ messages towards <cite>twin</cite> without waiting for individual
 <li><a class="reference internal" href="#rembus.protocol.CBOR"><code class="docutils literal notranslate"><span class="pre">CBOR</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.JSON"><code class="docutils literal notranslate"><span class="pre">JSON</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.RembusMsg"><code class="docutils literal notranslate"><span class="pre">RembusMsg</span></code></a><ul>
+<li><a class="reference internal" href="#rembus.protocol.RembusMsg.flags"><code class="docutils literal notranslate"><span class="pre">RembusMsg.flags</span></code></a></li>
+<li><a class="reference internal" href="#rembus.protocol.RembusMsg.extra"><code class="docutils literal notranslate"><span class="pre">RembusMsg.extra</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.RembusMsg.twin"><code class="docutils literal notranslate"><span class="pre">RembusMsg.twin</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.RembusMsg.to_payload"><code class="docutils literal notranslate"><span class="pre">RembusMsg.to_payload()</span></code></a></li>
 </ul>
