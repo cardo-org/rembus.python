@@ -1988,7 +1988,7 @@ class MqttTwin(Twin):
             else:
                 # If data has a single item, send just that item
                 data_to_send = msg.data if len(msg.data) > 1 else msg.data[0]
-                payload = json.dumps(data_to_send)
+                payload = rp.json_dumps(data_to_send)
                 # connect() uses the default MQTT v5 protocol.
                 publish_kwargs["content_type"] = "application/json"
             self.socket.publish(msg.topic, payload, **publish_kwargs)

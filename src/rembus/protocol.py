@@ -124,6 +124,25 @@ SETUP_CMD = "setup"
 STATUS = "status"
 
 
+def _check_finite(obj: Any) -> None:
+    """Raise ValueError if obj contains NaN or +/-Inf (not valid in JSON)."""
+    if isinstance(obj, float):
+        if obj != obj or obj in (float("inf"), float("-inf")):
+            raise ValueError("NaN and Inf are not supported in JSON")
+    elif isinstance(obj, dict):
+        for v in obj.values():
+            _check_finite(v)
+    elif isinstance(obj, (list, tuple)):
+        for v in obj:
+            _check_finite(v)
+
+
+def json_dumps(obj: Any) -> bytes:
+    """Encode obj as JSON, failing on NaN/Inf instead of emitting null."""
+    _check_finite(obj)
+    return json.dumps(obj)
+
+
 def timestamp():
     return time.time_ns()
 
@@ -272,7 +291,7 @@ class RpcReqMsg(RembusMsg):
                 ]
             )
 
-        return json.dumps(
+        return json_dumps(
             {
                 "jsonrpc": "2.0",
                 "id": self.id,
@@ -308,7 +327,7 @@ class ResMsg(RembusMsg):
         else:
             restype = "error"
 
-        return json.dumps(
+        return json_dumps(
             {
                 "jsonrpc": "2.0",
                 "id": self.id,
@@ -352,7 +371,7 @@ class PubSubMsg(RembusMsg):
                     ]
                 )
 
-            return json.dumps(
+            return json_dumps(
                 {
                     "jsonrpc": "2.0",
                     "id": self.id,
@@ -372,7 +391,7 @@ class PubSubMsg(RembusMsg):
                         ]
                     )
 
-                return json.dumps(
+                return json_dumps(
                     {
                         "jsonrpc": "2.0",
                         "method": self.topic,
@@ -393,7 +412,7 @@ class PubSubMsg(RembusMsg):
                         ]
                     )
 
-                return json.dumps(
+                return json_dumps(
                     {
                         "jsonrpc": "2.0",
                         "id": self.slot,
@@ -415,7 +434,7 @@ class AckMsg(RembusMsg):
                 [TYPE_ACK | self.flags, to_bytes(self.id), *self.extra]
             )
 
-        return json.dumps(
+        return json_dumps(
             {"jsonrpc": "2.0", "id": self.id, "result": {"type": TYPE_ACK}}
         ).decode()
 
@@ -432,7 +451,7 @@ class Ack2Msg(RembusMsg):
                 [TYPE_ACK2 | self.flags, to_bytes(self.id), *self.extra]
             )
 
-        return json.dumps(
+        return json_dumps(
             {"jsonrpc": "2.0", "id": self.id, "result": {"type": TYPE_ACK2}}
         ).decode()
 
@@ -460,7 +479,7 @@ class AdminMsg(RembusMsg):
                 ]
             )
 
-        return json.dumps(
+        return json_dumps(
             {
                 "jsonrpc": "2.0",
                 "id": self.id,
@@ -503,7 +522,7 @@ class IdentityMsg(RembusMsg):
                 ]
             )
 
-        return json.dumps(
+        return json_dumps(
             {
                 "jsonrpc": "2.0",
                 "id": self.id,
@@ -548,7 +567,7 @@ class AttestationMsg(RembusMsg):
                 ]
             )
 
-        return json.dumps(
+        return json_dumps(
             {
                 "jsonrpc": "2.0",
                 "id": self.id,
@@ -587,7 +606,7 @@ class RegisterMsg(RembusMsg):
                 ]
             )
 
-        return json.dumps(
+        return json_dumps(
             {
                 "jsonrpc": "2.0",
                 "id": self.id,
@@ -618,7 +637,7 @@ class UnregisterMsg(RembusMsg):
                 ]
             )
 
-        return json.dumps(
+        return json_dumps(
             {
                 "jsonrpc": "2.0",
                 "id": self.id,
