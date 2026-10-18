@@ -977,7 +977,8 @@ class Router(Supervised):
             port,
             ssl=ssl_context,
             ping_interval=None,  # only clients send pings
-            max_size=self.config.max_ws_frame,
+            # per-frame limit only; the reassembled message is not bounded
+            max_size=(None, self.config.max_ws_frame),
         ) as server:
             self.server_instance = server
             await self._shutdown_event.wait()

@@ -62,7 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `Settings.max_ws_frame` (settings key `max_ws_frame`, default
-  `rembus.settings.MAX_WS_FRAME` = 60 MiB): maximum WebSocket message size.
+  `rembus.settings.MAX_WS_FRAME` = 60 MiB): maximum WebSocket frame size
+  (per frame, not per reassembled message; larger frames close the
+  connection with code 1009). Requires `websockets>=16.0`.
   It replaces the `protocol.WS_FRAME_MAXSIZE` constant.
 - `rembus.server(name, port, ...)`: a "server" component, the equivalent
   of Rembus.jl `server`. It accepts connections but, unlike a broker, does

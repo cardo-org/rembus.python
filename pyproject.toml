@@ -24,7 +24,7 @@ dependencies = [
   "platformdirs",
   "pandas",
   "pyarrow",
-  "websockets",
+  "websockets>=16.0",
   "cbor2",
   "cryptography",
   "narwhals",
