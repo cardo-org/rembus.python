@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- JSON encoding fails with an error on `NaN` and `±Inf` instead of silently
+  emitting `null`.
+
+- A malformed JSON text message (invalid JSON, including `NaN`/`Infinity`
+  tokens, or not a valid Rembus packet) no longer closes the connection: a
+  request with an id gets a `STS_GENERIC_ERROR` response, any other packet is
+  dropped.
+
 - Removed the unused `STS_METHOD_ARGS_ERROR` (41) status constant: it was
   never sent, argument errors are reported as `STS_METHOD_EXCEPTION`.
 

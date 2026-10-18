@@ -8,6 +8,7 @@ import hashlib
 import os
 import logging
 from typing import Any, List, Optional
+import json as stdjson
 import orjson as json
 import time
 import cbor2
@@ -733,6 +734,27 @@ def jsonrpc_response(pkt, msg_id, result) -> RembusMsg:
         return Ack2Msg(id=msg_id)
 
     raise ValueError(f"{pkt}:invalid JSON-RPC response")
+
+
+def jsonrpc_malformed_request_id(payload) -> Any:
+    """Id of a malformed JSON request that expects a Response.
+
+    Return None when no id can be recovered or no Response is expected.
+    """
+    try:
+        # The stdlib parser also accepts the NaN/Infinity tokens.
+        pkt = stdjson.loads(payload)
+        if (
+            isinstance(pkt, dict)
+            and pkt.get("id")
+            and pkt.get("params") is not None
+            and "result" not in pkt
+            and "error" not in pkt
+        ):
+            return pkt["id"]
+    except ValueError:
+        pass
+    return None
 
 
 def jsonrpc_parse(payload) -> RembusMsg:
