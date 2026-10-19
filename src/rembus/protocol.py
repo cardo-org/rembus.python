@@ -680,10 +680,10 @@ def tohex(bs: bytes):
 
 def jsonrpc_request(pkt, msg_id, params) -> RembusMsg:
     """Parse a JSON_RPC request"""
-    if isinstance(params, list):
+    if params is None or isinstance(params, list):
         # Default to RPC request
         return RpcReqMsg(id=msg_id, topic=pkt["method"], data=params)
-    else:
+    elif isinstance(params, dict):
         msg_type = params.get("type")
         if msg_type == TYPE_IDENTITY:
             return IdentityMsg(
@@ -719,7 +719,10 @@ def jsonrpc_request(pkt, msg_id, params) -> RembusMsg:
         elif msg_type == TYPE_UNREGISTER:
             return UnregisterMsg(id=msg_id)
 
-        raise ValueError(f"{pkt}:invalid JSON-RPC request")
+        # Any other object is an RPC request with the object as arguments.
+        return RpcReqMsg(id=msg_id, topic=pkt["method"], data=params)
+
+    raise ValueError(f"{pkt}:invalid JSON-RPC request")
 
 
 def jsonrpc_response(pkt, msg_id, result) -> RembusMsg:
@@ -784,21 +787,16 @@ def jsonrpc_parse(payload) -> RembusMsg:
         )
 
     if msg_id:
-        # request-response message
-        params = pkt.get("params")
-        if params is not None:
-            return jsonrpc_request(pkt, msg_id, params)
-
         result = pkt.get("result")
-        if result:
+        if result is not None:
             return jsonrpc_response(pkt, msg_id, result)
 
         err = pkt.get("error")
-        if err:
+        if err is not None:
             return jsonrpc_response(pkt, msg_id, err)
 
-    else:
-        raise ValueError(f"{pkt}:JSON-RPC invalid payload")
+        # request-response message: absent params means no arguments.
+        return jsonrpc_request(pkt, msg_id, pkt.get("params"))
 
     raise ValueError(f"{pkt}:JSON-RPC invalid payload")
 

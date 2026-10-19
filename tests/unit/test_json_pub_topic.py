@@ -59,3 +59,25 @@ def test_slot_pub_not_supported_over_json():
     )
     with pytest.raises(ValueError):
         jsonrpc_parse(payload)
+
+
+def test_rpc_params_handling():
+    """RPC params: array, absent or object are accepted; a scalar is not."""
+    import pytest
+
+    out = jsonrpc_parse('{"id": "1", "method": "f"}')
+    assert isinstance(out, RpcReqMsg) and out.data is None
+
+    out = jsonrpc_parse('{"id": "1", "method": "f", "params": [1, 2]}')
+    assert out.data == [1, 2]
+
+    out = jsonrpc_parse('{"id": "1", "method": "f", "params": {"x": 1}}')
+    assert isinstance(out, RpcReqMsg) and out.data == {"x": 1}
+
+    out = jsonrpc_parse(
+        '{"id": "1", "method": "f", "params": {"type": 99, "x": 1}}'
+    )
+    assert isinstance(out, RpcReqMsg)
+
+    with pytest.raises(ValueError):
+        jsonrpc_parse('{"id": "1", "method": "f", "params": 5}')
