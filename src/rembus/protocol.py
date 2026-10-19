@@ -294,7 +294,7 @@ class RpcReqMsg(RembusMsg):
 
         return json_dumps(
             {
-                "jsonrpc": "2.0",
+                "rembus": "1.0",
                 "id": str(self.id),
                 "method": self.topic,
                 "params": self.data,
@@ -330,7 +330,7 @@ class ResMsg(RembusMsg):
 
         return json_dumps(
             {
-                "jsonrpc": "2.0",
+                "rembus": "1.0",
                 "id": str(self.id),
                 restype: {
                     "type": TYPE_RESPONSE,
@@ -379,7 +379,7 @@ class PubSubMsg(RembusMsg):
 
             return json_dumps(
                 {
-                    "jsonrpc": "2.0",
+                    "rembus": "1.0",
                     "id": str(self.id),
                     "topic": self.topic,
                     "params": {"type": self.flags, "data": self.data},
@@ -399,7 +399,7 @@ class PubSubMsg(RembusMsg):
 
                 return json_dumps(
                     {
-                        "jsonrpc": "2.0",
+                        "rembus": "1.0",
                         "topic": self.topic,
                         "params": {"type": self.flags, "data": self.data},
                     }
@@ -437,7 +437,7 @@ class AckMsg(RembusMsg):
 
         return json_dumps(
             {
-                "jsonrpc": "2.0",
+                "rembus": "1.0",
                 "id": str(self.id),
                 "result": {"type": TYPE_ACK},
             }
@@ -458,7 +458,7 @@ class Ack2Msg(RembusMsg):
 
         return json_dumps(
             {
-                "jsonrpc": "2.0",
+                "rembus": "1.0",
                 "id": str(self.id),
                 "result": {"type": TYPE_ACK2},
             }
@@ -490,7 +490,7 @@ class AdminMsg(RembusMsg):
 
         return json_dumps(
             {
-                "jsonrpc": "2.0",
+                "rembus": "1.0",
                 "id": str(self.id),
                 "method": self.topic,
                 "params": {"type": TYPE_ADMIN, "data": self.data},
@@ -533,7 +533,7 @@ class IdentityMsg(RembusMsg):
 
         return json_dumps(
             {
-                "jsonrpc": "2.0",
+                "rembus": "1.0",
                 "id": str(self.id),
                 "method": "__identity__",
                 "params": {
@@ -578,7 +578,7 @@ class AttestationMsg(RembusMsg):
 
         return json_dumps(
             {
-                "jsonrpc": "2.0",
+                "rembus": "1.0",
                 "id": str(self.id),
                 "method": self.cid,
                 "params": {
@@ -617,7 +617,7 @@ class RegisterMsg(RembusMsg):
 
         return json_dumps(
             {
-                "jsonrpc": "2.0",
+                "rembus": "1.0",
                 "id": str(self.id),
                 "method": self.cid,
                 "params": {
@@ -648,7 +648,7 @@ class UnregisterMsg(RembusMsg):
 
         return json_dumps(
             {
-                "jsonrpc": "2.0",
+                "rembus": "1.0",
                 "id": str(self.id),
                 "method": "__unregister__",
                 "params": {"type": TYPE_UNREGISTER},

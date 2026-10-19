@@ -88,7 +88,7 @@ def test_jsonrpc_request_invalid():
     """Test handling of invalid JSON-RPC request."""
     with pytest.raises(ValueError):
         rp.jsonrpc_request(
-            {"jsonrpc": "2.0", "method": "invalid_method"},
+            {"rembus": "1.0", "method": "invalid_method"},
             msg_id=1,
             params=5)
 
@@ -96,7 +96,7 @@ def test_jsonrpc_parse_invalid():
     """Test handling of invalid JSON-RPC request."""
     with pytest.raises(ValueError):
         rp.jsonrpc_parse(
-            '{"jsonrpc": "2.0", "id": 1, "method": "m", "params": 5}',
+            '{"rembus": "1.0", "id": 1, "method": "m", "params": 5}',
         )
 
 
@@ -104,7 +104,7 @@ def test_jsonrpc_response_invalid():
     """Test handling of invalid JSON-RPC response."""
     with pytest.raises(ValueError):
         rp.jsonrpc_response(
-            '{"jsonrpc": "2.0", "method": "invalid_method"}',
+            '{"rembus": "1.0", "method": "invalid_method"}',
             msg_id=1,
             result={"type": "invalid"})
 
