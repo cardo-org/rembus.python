@@ -295,7 +295,7 @@ class RpcReqMsg(RembusMsg):
         return json_dumps(
             {
                 "jsonrpc": "2.0",
-                "id": self.id,
+                "id": str(self.id),
                 "method": self.topic,
                 "params": self.data,
             }
@@ -331,7 +331,7 @@ class ResMsg(RembusMsg):
         return json_dumps(
             {
                 "jsonrpc": "2.0",
-                "id": self.id,
+                "id": str(self.id),
                 restype: {
                     "type": TYPE_RESPONSE,
                     "sts": self.status,
@@ -372,11 +372,16 @@ class PubSubMsg(RembusMsg):
                     ]
                 )
 
+            if self.slot is not None:
+                raise ValueError(
+                    "slot publish is not supported with the JSON encoding"
+                )
+
             return json_dumps(
                 {
                     "jsonrpc": "2.0",
-                    "id": self.id,
-                    "method": self.topic,
+                    "id": str(self.id),
+                    "topic": self.topic,
                     "params": {"type": self.flags, "data": self.data},
                 }
             ).decode()
@@ -395,8 +400,8 @@ class PubSubMsg(RembusMsg):
                 return json_dumps(
                     {
                         "jsonrpc": "2.0",
-                        "method": self.topic,
-                        "params": self.data,
+                        "topic": self.topic,
+                        "params": {"type": self.flags, "data": self.data},
                     }
                 ).decode()
             else:
@@ -413,14 +418,9 @@ class PubSubMsg(RembusMsg):
                         ]
                     )
 
-                return json_dumps(
-                    {
-                        "jsonrpc": "2.0",
-                        "id": self.slot,
-                        "method": self.topic,
-                        "params": self.data,
-                    }
-                ).decode()
+                raise ValueError(
+                    "slot publish is not supported with the JSON encoding"
+                )
 
 
 class AckMsg(RembusMsg):
@@ -436,7 +436,11 @@ class AckMsg(RembusMsg):
             )
 
         return json_dumps(
-            {"jsonrpc": "2.0", "id": self.id, "result": {"type": TYPE_ACK}}
+            {
+                "jsonrpc": "2.0",
+                "id": str(self.id),
+                "result": {"type": TYPE_ACK},
+            }
         ).decode()
 
 
@@ -453,7 +457,11 @@ class Ack2Msg(RembusMsg):
             )
 
         return json_dumps(
-            {"jsonrpc": "2.0", "id": self.id, "result": {"type": TYPE_ACK2}}
+            {
+                "jsonrpc": "2.0",
+                "id": str(self.id),
+                "result": {"type": TYPE_ACK2},
+            }
         ).decode()
 
 
@@ -483,7 +491,7 @@ class AdminMsg(RembusMsg):
         return json_dumps(
             {
                 "jsonrpc": "2.0",
-                "id": self.id,
+                "id": str(self.id),
                 "method": self.topic,
                 "params": {"type": TYPE_ADMIN, "data": self.data},
             }
@@ -526,7 +534,7 @@ class IdentityMsg(RembusMsg):
         return json_dumps(
             {
                 "jsonrpc": "2.0",
-                "id": self.id,
+                "id": str(self.id),
                 "method": "__identity__",
                 "params": {
                     "type": TYPE_IDENTITY,
@@ -571,7 +579,7 @@ class AttestationMsg(RembusMsg):
         return json_dumps(
             {
                 "jsonrpc": "2.0",
-                "id": self.id,
+                "id": str(self.id),
                 "method": self.cid,
                 "params": {
                     "type": TYPE_ATTESTATION,
@@ -610,7 +618,7 @@ class RegisterMsg(RembusMsg):
         return json_dumps(
             {
                 "jsonrpc": "2.0",
-                "id": self.id,
+                "id": str(self.id),
                 "method": self.cid,
                 "params": {
                     "type": TYPE_REGISTER,
@@ -641,7 +649,7 @@ class UnregisterMsg(RembusMsg):
         return json_dumps(
             {
                 "jsonrpc": "2.0",
-                "id": self.id,
+                "id": str(self.id),
                 "method": "__unregister__",
                 "params": {"type": TYPE_UNREGISTER},
             }
@@ -677,14 +685,7 @@ def jsonrpc_request(pkt, msg_id, params) -> RembusMsg:
         return RpcReqMsg(id=msg_id, topic=pkt["method"], data=params)
     else:
         msg_type = params.get("type")
-        if msg_type in [QOS1, QOS2]:
-            return PubSubMsg(
-                id=msg_id,
-                topic=pkt["method"],
-                data=pkt.get("data"),
-                flags=msg_type,
-            )
-        elif msg_type == TYPE_IDENTITY:
+        if msg_type == TYPE_IDENTITY:
             return IdentityMsg(
                 id=msg_id, cid=params["cid"], meta=params.get("meta")
             )
@@ -761,6 +762,27 @@ def jsonrpc_parse(payload) -> RembusMsg:
     """Get a Rembus message from a JSON-RPC string payload."""
     pkt = json.loads(payload)
     msg_id = pkt.get("id")
+    if isinstance(msg_id, str):
+        # Ids are sent as decimal strings: 64-bit values exceed 2^53.
+        msg_id = int(msg_id)
+    if "topic" in pkt:
+        # The "topic" member identifies a Pub/Sub message: the data is in
+        # params.data and params.type holds the QoS/slot flags.
+        params = pkt.get("params")
+        if not isinstance(params, dict):
+            raise ValueError(f"{pkt}:JSON-RPC invalid payload")
+        flags = params.get("type", QOS0)
+        if flags & SLOT_FLAG:
+            raise ValueError(
+                f"{pkt}:slot publish is not supported with JSON"
+            )
+        return PubSubMsg(
+            id=msg_id or None,
+            topic=pkt["topic"],
+            data=params.get("data"),
+            flags=flags,
+        )
+
     if msg_id:
         # request-response message
         params = pkt.get("params")
@@ -776,7 +798,7 @@ def jsonrpc_parse(payload) -> RembusMsg:
             return jsonrpc_response(pkt, msg_id, err)
 
     else:
-        return PubSubMsg(topic=pkt["method"], data=pkt.get("data"))
+        raise ValueError(f"{pkt}:JSON-RPC invalid payload")
 
     raise ValueError(f"{pkt}:JSON-RPC invalid payload")
 
