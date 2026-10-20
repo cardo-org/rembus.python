@@ -513,28 +513,22 @@ class Twin(Supervised):
         try:
             while self.socket is not None:
                 result: str | bytes = await self.socket.recv()
-                if isinstance(result, str):
-                    self.enc = rp.JSON
-                    try:
+                try:
+                    if isinstance(result, str):
+                        self.enc = rp.JSON
                         msg = rp.jsonrpc_parse(result)
-                    except Exception as e:  # pylint: disable=broad-except
-                        # Malformed packet: reply if a Response is expected,
-                        # otherwise drop it. The connection stays open.
-                        logger.warning("[%s] malformed JSON packet: %s", self, e)
-                        msg_id = rp.jsonrpc_malformed_request_id(result)
-                        if msg_id is not None:
-                            await self.send(
-                                rp.ResMsg(
-                                    id=msg_id,
-                                    status=rp.STS_GENERIC_ERROR,
-                                    data="malformed JSON packet",
-                                )
-                            )
-                        continue
-                else:
-                    self.enc = rp.CBOR
-                    pkt: list[Any] = cbor2.loads(result)
-                    msg = rp.cbor_parse(pkt)
+                    else:
+                        self.enc = rp.CBOR
+                        pkt: list[Any] = cbor2.loads(result)
+                        msg = rp.cbor_parse(pkt)
+                except Exception as e:  # pylint: disable=broad-except
+                    # Empty, truncated or undecodable message: the connection
+                    # is closed, no Response is sent.
+                    logger.warning("[%s] malformed packet: %s", self, e)
+                    await self.socket.close(
+                        rp.WS_CLOSE_MALFORMED, "malformed message"
+                    )
+                    break
 
                 msg.twin = self
                 await self._eval_input(msg)

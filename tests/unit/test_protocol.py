@@ -148,3 +148,16 @@ def test_relay_unknown_trailing_elements(pkt):
     msg = rp.cbor_parse(pkt)
     assert msg.extra
     assert cbor2.loads(msg.to_payload(rp.CBOR)) == pkt
+
+
+def test_jsonrpc_parse_numeric_id_rejected():
+    """A JSON number id is not accepted, only a decimal string."""
+    with pytest.raises(ValueError):
+        rp.jsonrpc_parse('{"rembus": "1.0", "id": 1, "method": "m"}')
+    msg = rp.jsonrpc_parse('{"rembus": "1.0", "id": "7", "method": "m"}')
+    assert msg.id == 7
+
+
+def test_jsonrpc_parse_zero_id_rejected():
+    with pytest.raises(ValueError):
+        rp.jsonrpc_parse('{"rembus": "1.0", "id": "0", "method": "m"}')

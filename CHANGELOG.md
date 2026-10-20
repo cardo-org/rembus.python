@@ -10,10 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JSON encoding fails with an error on `NaN` and `±Inf` instead of silently
   emitting `null`.
 
-- A malformed JSON text message (invalid JSON, including `NaN`/`Infinity`
-  tokens, or not a valid Rembus packet) no longer closes the connection: a
-  request with an id gets a `STS_GENERIC_ERROR` response, any other packet is
-  dropped.
+- **Breaking:** a JSON message whose `id` is a number is no longer accepted:
+  ids are decimal strings. The id `"0"` is not valid either. Such a message is undecodable (close
+  code 1008).
+
+- **Breaking:** an empty, truncated or undecodable message (CBOR or JSON,
+  including `NaN`/`Infinity` tokens or an invalid Rembus packet) closes the
+  connection with WebSocket close code 1008. No `Response` is sent and the
+  message is not ignored.
 
 - Removed the unused `STS_METHOD_ARGS_ERROR` (41) status constant: it was
   never sent, argument errors are reported as `STS_METHOD_EXCEPTION`.

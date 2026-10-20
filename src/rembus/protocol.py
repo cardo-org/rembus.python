@@ -43,6 +43,8 @@ logger = logging.getLogger(__name__)
 
 # WebSocket close code sent to a connection replaced by overwrite_connection.
 WS_CLOSE_OVERWRITTEN = 4000
+# WebSocket close code sent on an empty, truncated or undecodable message.
+WS_CLOSE_MALFORMED = 1008
 
 SIG_RSA = 0x1
 SIG_ECDSA = 0x2
@@ -740,34 +742,18 @@ def jsonrpc_response(pkt, msg_id, result) -> RembusMsg:
     raise ValueError(f"{pkt}:invalid JSON-RPC response")
 
 
-def jsonrpc_malformed_request_id(payload) -> Any:
-    """Id of a malformed JSON request that expects a Response.
-
-    Return None when no id can be recovered or no Response is expected.
-    """
-    try:
-        # The stdlib parser also accepts the NaN/Infinity tokens.
-        pkt = stdjson.loads(payload)
-        if (
-            isinstance(pkt, dict)
-            and pkt.get("id")
-            and pkt.get("params") is not None
-            and "result" not in pkt
-            and "error" not in pkt
-        ):
-            return pkt["id"]
-    except ValueError:
-        pass
-    return None
-
-
 def jsonrpc_parse(payload) -> RembusMsg:
     """Get a Rembus message from a JSON-RPC string payload."""
     pkt = json.loads(payload)
     msg_id = pkt.get("id")
-    if isinstance(msg_id, str):
-        # Ids are sent as decimal strings: 64-bit values exceed 2^53.
+    if msg_id is not None:
+        # Ids are decimal strings: 64-bit values exceed 2^53, a number is
+        # not accepted.
+        if not isinstance(msg_id, str):
+            raise ValueError(f"{pkt}:JSON-RPC id must be a string")
         msg_id = int(msg_id)
+        if msg_id == 0:
+            raise ValueError(f"{pkt}:JSON-RPC id 0 is not valid")
     if "topic" in pkt:
         # The "topic" member identifies a Pub/Sub message: the data is in
         # params.data and params.type holds the QoS/slot flags.

@@ -17,20 +17,3 @@ def test_jsonrpc_encode_rejects_nan():
 
 def test_json_dumps_finite():
     assert rp.json_dumps([1.5]) == b"[1.5]"
-
-
-
-@pytest.mark.parametrize(
-    "payload,expected",
-    [
-        ('{"id":5,"method":"f","params":[NaN]}', 5),
-        ('{"id":7,"method":"f","params":[Infinity]}', 7),
-        ('{"id":3,"method":"f","params":{"type":99}}', 3),
-        ('{"method":"t","params":[1]}', None),
-        ("{bad", None),
-        ("[1]", None),
-        ('{"id":3,"result":{}}', None),
-    ],
-)
-def test_malformed_request_id(payload, expected):
-    assert rp.jsonrpc_malformed_request_id(payload) == expected
