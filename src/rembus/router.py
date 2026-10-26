@@ -335,6 +335,23 @@ class Router(Supervised):
             self.db.execute("DETACH DATABASE __ducklake_metadata_rl")
             self.db.close()
 
+    def _log_delivery_failure(self, topic, twin, error):
+        logger.warning(
+            "[%s] failed to deliver message on topic %s to %s: %s",
+            self,
+            topic,
+            twin,
+            error,
+        )
+
+    async def _deliver_with_ack(self, twin, msg):
+        """Deliver a QOS1/QOS2 message to a subscriber and update its mark."""
+        try:
+            await twin.deliver_with_ack(msg)
+            twin.mark = msg.recvts
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            self._log_delivery_failure(msg.topic, twin, e)
+
     async def _broadcast(self, msg):
         twin = msg.twin
         data = rp.tag2df(msg.data)
@@ -356,33 +373,35 @@ class Router(Supervised):
                 # Do not send back to publisher, only deliver to
                 # subscribers that opted-in with reactive(), and only
                 # to twins belonging to the same tenant as the publisher.
+                # Disconnected subscribers are skipped: they recover the
+                # missed messages through the data-at-rest replay.
                 if (
                     t != twin
                     and t.isreactive
+                    and t.isopen()
                     and t.domain == twin.domain
                     and self.isauthorized(topic, t)
                 ):
-                    targets.append(t)
                     if qos > rp.QOS0:
                         # QOS1/QOS2: mirror the publisher->broker hop
                         # with a full Ack/Ack2 handshake, retrying on
-                        # timeout, instead of a fire-and-forget send.
-                        tasks.append(t.deliver_with_ack(msg))
+                        # timeout. The wait runs in a background task so
+                        # a slow or unreachable subscriber never delays
+                        # the processing of other messages.
+                        task = asyncio.create_task(
+                            self._deliver_with_ack(t, msg)
+                        )
+                        self._rpc_tasks.add(task)
+                        task.add_done_callback(self._rpc_tasks.discard)
                     else:
+                        targets.append(t)
                         tasks.append(t.send(msg))
 
             if tasks:
                 results = await asyncio.gather(*tasks, return_exceptions=True)
                 for t, result in zip(targets, results):
                     if isinstance(result, Exception):
-                        logger.warning(
-                            "[%s] failed to deliver message on topic "
-                            "%s to %s: %s",
-                            self,
-                            topic,
-                            t,
-                            result,
-                        )
+                        self._log_delivery_failure(topic, t, result)
                     else:
                         t.mark = msg.recvts
 

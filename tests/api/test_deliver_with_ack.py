@@ -134,3 +134,47 @@ async def test_deliver_with_ack_exhausts_retries(caplog):
     await pub.close()
     await sub.close()
     await server.close()
+
+
+@pytest.mark.asyncio
+async def test_unreachable_subscriber_does_not_delay_other_messages():
+    """A QOS1 delivery that never gets acknowledged must not stall the
+    router: a following message is delivered to another subscriber long
+    before the retries of the first delivery are exhausted.
+    """
+    port = 8105
+    server = await start_server(port)
+    server.router.config.ack_timeout = 1.0
+    server.router.config.send_retries = 5
+
+    received = []
+
+    async def fast_topic(data):
+        received.append(data)
+
+    sub = await rembus.component(f"ws://:{port}/sub.net")
+    await sub.subscribe(mytopic)
+    await sub.reactive()
+
+    fast = await rembus.component(f"ws://:{port}/fast.net")
+    await fast.subscribe(fast_topic)
+    await fast.reactive()
+
+    sub_twin = server.router.subscribers["mytopic"][0]
+
+    async def dropped_send(msg):
+        return None
+
+    sub_twin.send = dropped_send
+
+    pub = await rembus.component(f"ws://:{port}/pub.net")
+    await pub.publish("mytopic", "lost", qos=rp.QOS1)
+    await pub.publish("fast_topic", "quick", qos=rp.QOS0)
+
+    await asyncio.sleep(0.3)
+    assert received == ["quick"]
+
+    await pub.close()
+    await fast.close()
+    await sub.close()
+    await server.close()

@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Broker: QOS1/QOS2 delivery to subscribers no longer blocks the router
+  dispatch loop. The Ack/Ack2 wait and retries run in background tasks, and
+  disconnected subscribers are skipped (they recover missed messages through
+  data-at-rest replay).
+
 - Register: the broker rejects a key `type` other than `SIG_RSA` or
   `SIG_ECDSA` and a `pubkey` that is not a plain byte string.
 
