@@ -50,7 +50,13 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 
-async def init_twin(router, uid: RbURL, enc: int, isserver: bool):
+async def init_twin(
+    router,
+    uid: RbURL,
+    enc: int,
+    isserver: bool,
+    failovers: list[RbURL] | None = None,
+):
     """
     Create and initialize a Twin instance for the component identified by `uid`.
 
@@ -68,6 +74,9 @@ async def init_twin(router, uid: RbURL, enc: int, isserver: bool):
     isserver : bool
         Indicates whether the Twin should operate as a server (broker)
         or as a client (connected component).
+    failovers : list of RbURL, optional
+        Alternative endpoints tried in order after `uid` when a connection
+        attempt fails.
 
     Returns
     -------
@@ -87,6 +96,7 @@ async def init_twin(router, uid: RbURL, enc: int, isserver: bool):
         cmp = MqttTwin(uid, bottom_router(router), not isserver, enc)
     else:
         cmp = ReplTwin(uid, bottom_router(router), not isserver, enc)
+    cmp.failovers = list(failovers or [])
     await cmp.start()
     router.id_twin[uid.twkey] = cmp
     try:
@@ -255,6 +265,8 @@ class Twin(Supervised):
         self.inbound: bool = False
         self._challenge_fut: Optional[FutureResponse] = None
         self.uid = uid
+        # Alternative endpoints, tried in order after `uid`.
+        self.failovers: list[RbURL] = []
         self.handler: dict[str, Callable[..., Any]] = {}
         self.outreq: dict[int, FutureResponse] = {}
         self.reconnect_task: Optional[asyncio.Task[None]] = None
@@ -1727,18 +1739,26 @@ class WsTwin(Twin):
         RembusError
             If login fails after connecting to the broker.
         """
-        broker_url = self.uid.netlink
-        ssl_context = None
-        if self.uid.protocol == "wss":
-            ssl_context = get_ssl_context()
-
-        self.socket = await websockets.connect(
-            broker_url,
-            ping_interval=self.router.config.ws_ping_interval,
-            # per-frame limit only; the reassembled message is not bounded
-            max_size=(None, self.router.config.max_ws_frame),
-            ssl=ssl_context,
-        )
+        error: Exception | None = None
+        for endpoint in [self.uid, *self.failovers]:
+            ssl_context = None
+            if endpoint.protocol == "wss":
+                ssl_context = get_ssl_context()
+            try:
+                self.socket = await websockets.connect(
+                    endpoint.netlink,
+                    ping_interval=self.router.config.ws_ping_interval,
+                    # per-frame limit only; the reassembled message is not
+                    # bounded
+                    max_size=(None, self.router.config.max_ws_frame),
+                    ssl=ssl_context,
+                )
+                break
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.info("[%s] connect to %s: %s", self, endpoint, e)
+                error = e
+        else:
+            raise error
         self.handler["phase"] = lambda: "CONNECTING"
         if self.uid.hasname and self.router.authenticated:
             # Registered before the receiver starts: the router sends the

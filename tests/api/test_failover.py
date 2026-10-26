@@ -1,4 +1,4 @@
-"""Test cases for the node synchronous API."""
+"""Test cases for the node API given a list of URLs (ordered failover)."""
 
 import logging
 import time
@@ -78,15 +78,10 @@ def test_publish(server):
     server.inject(ctx)
 
     rb = rembus.node(["pub1", "pub2"])
-    assert repr(rb.uid) == "repl://:0/repl"
-    assert rb.isbroker() is True
+    assert rb.uid.id == "pub1"
+    assert rb.isbroker() is False
     assert rb.isopen()
-
-    # implemented but without meaning in this rembus version
-    rb.reactive()
-    rb.unreactive()
     assert isinstance(rb.router, rembus.router.Router)
-    assert rembus.core.domain(rb.rid) == "."
 
     rb.publish("mytopic")
     rb.publish("mytopic", "log_warning")
@@ -97,3 +92,25 @@ def test_publish(server):
         rb.publish("mytopic")
     server.unsubscribe(mytopic)
     server.wait(0.1)
+
+
+@pytest.mark.asyncio
+async def test_ordered_failover():
+    """A list of URLs is an ordered failover with one active connection."""
+    import asyncio  # pylint: disable=import-outside-toplevel
+
+    async def who():
+        return "second"
+
+    srv = await rembus.component(port=8107)
+    await srv.expose(who, "who")
+    # The primary endpoint is down: the second URL is used.
+    cli = await rembus.component(
+        ["ws://127.0.0.1:8108/cli.net", "ws://127.0.0.1:8107/cli.net"]
+    )
+    assert cli.uid.id == "cli.net"
+    assert await cli.rpc("who") == "second"
+    assert len(srv.router.id_twin) == 2  # repl + the single client twin
+    await asyncio.sleep(0.1)
+    await cli.close()
+    await srv.close()

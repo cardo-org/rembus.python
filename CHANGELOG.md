@@ -5,6 +5,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** a list of URLs passed to `component()`/`node()` is an ordered
+  failover, not a pool of simultaneous connections: the first URL is the
+  primary endpoint, the others are tried in order when a connection attempt
+  fails. The component keeps a single connection and the identity of the
+  primary URL. The previous behavior (one upstream twin per URL) is removed.
+
 ### Fixed
 
 - A broker now publishes the arguments of a successful RPC to the reactive

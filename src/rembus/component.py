@@ -35,6 +35,18 @@ async def _component(
     authenticated: bool = False,
 ) -> Twin:
     """Return a Rembus component."""
+    failovers: list[RbURL] = []
+    if isinstance(url, list):
+        # Ordered failover: the first URL is the primary endpoint, the
+        # others are alternative endpoints of the same component.
+        urls, url = url, (url[0] if url else None)
+        primary = RbURL(url) if url is not None else None
+        for netlink in urls[1:]:
+            alt = RbURL(netlink)
+            alt.id = primary.id
+            alt.hasname = primary.hasname
+            failovers.append(alt)
+
     isserver = (url is None) or (port is not None)
 
     if isserver and port is None:
@@ -71,10 +83,7 @@ async def _component(
         relay,
         authenticated,
     )
-    handle = await init_twin(router, uid, enc, isserver)
-    if isinstance(url, list):
-        for netlink in url:
-            await init_twin(router, RbURL(netlink), enc, isserver)
+    handle = await init_twin(router, uid, enc, isserver, failovers)
 
     kspace = None
     if keyspace and isserver:

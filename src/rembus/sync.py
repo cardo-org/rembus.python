@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 def node_url(url: RbURL | str | List[str] | None):
     """Normalize to a RbURL value."""
+    if isinstance(url, list) and url:
+        return RbURL(url[0])
     if isinstance(url, str):
         return RbURL(url)
     elif isinstance(url, RbURL):
