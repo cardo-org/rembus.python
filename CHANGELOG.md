@@ -5,6 +5,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A broker now publishes the arguments of a successful RPC to the reactive
+  subscribers of the same topic (excluding the requestor), as Rembus.jl does.
+
 ### Changed
 
 - JSON encoding fails with an error on `NaN` and `±Inf` instead of silently

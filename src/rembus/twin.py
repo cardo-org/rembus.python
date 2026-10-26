@@ -506,6 +506,8 @@ class Twin(Supervised):
         self.outreq[msg.id] = futreq
         response = await self.wait_response(futreq)
         await msg.twin.send(response)
+        if response.status == rp.STS_OK:
+            await self.router.broadcast_rpc_result(msg)
 
     async def twin_receiver(self):
         """Receive messages from the WebSocket connection."""

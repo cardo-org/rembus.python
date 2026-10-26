@@ -348,7 +348,8 @@ class Router(Supervised):
         """Deliver a QOS1/QOS2 message to a subscriber and update its mark."""
         try:
             await twin.deliver_with_ack(msg)
-            twin.mark = msg.recvts
+            if msg.recvts is not None:
+                twin.mark = msg.recvts
         except Exception as e:  # pylint: disable=broad-exception-caught
             self._log_delivery_failure(msg.topic, twin, e)
 
@@ -365,49 +366,64 @@ class Router(Supervised):
             if not self.relay and not twin.isbroker():
                 return
 
-            subs = self.subscribers.get(topic, [])
-            qos = msg.flags & rp.QOS2
-            targets = []
-            tasks = []
-            for t in subs:
-                # Do not send back to publisher, only deliver to
-                # subscribers that opted-in with reactive(), and only
-                # to twins belonging to the same tenant as the publisher.
-                # Disconnected subscribers are skipped: they recover the
-                # missed messages through the data-at-rest replay.
-                if (
-                    t != twin
-                    and t.isreactive
-                    and t.isopen()
-                    and t.domain == twin.domain
-                    and self.isauthorized(topic, t)
-                ):
-                    if qos > rp.QOS0:
-                        # QOS1/QOS2: mirror the publisher->broker hop
-                        # with a full Ack/Ack2 handshake, retrying on
-                        # timeout. The wait runs in a background task so
-                        # a slow or unreachable subscriber never delays
-                        # the processing of other messages.
-                        task = asyncio.create_task(
-                            self._deliver_with_ack(t, msg)
-                        )
-                        self._rpc_tasks.add(task)
-                        task.add_done_callback(self._rpc_tasks.discard)
-                    else:
-                        targets.append(t)
-                        tasks.append(t.send(msg))
-
-            if tasks:
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-                for t, result in zip(targets, results):
-                    if isinstance(result, Exception):
-                        self._log_delivery_failure(topic, t, result)
-                    else:
-                        t.mark = msg.recvts
+            await self._fanout(msg)
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.warning("[%s] error in method invocation: %s", self, e)
             traceback.print_exc()
+
+    async def broadcast_rpc_result(self, req: rp.RpcReqMsg):
+        """Publish the arguments of a successful RPC to the topic
+        subscribers, excluding the requestor."""
+        msg = rp.PubSubMsg(topic=req.topic, data=req.data)
+        msg.twin = req.twin
+        try:
+            await self._fanout(msg)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.warning("[%s] error broadcasting rpc result: %s", self, e)
+
+    async def _fanout(self, msg):
+        twin = msg.twin
+        topic = msg.topic
+        subs = self.subscribers.get(topic, [])
+        qos = msg.flags & rp.QOS2
+        targets = []
+        tasks = []
+        for t in subs:
+            # Do not send back to publisher, only deliver to
+            # subscribers that opted-in with reactive(), and only
+            # to twins belonging to the same tenant as the publisher.
+            # Disconnected subscribers are skipped: they recover the
+            # missed messages through the data-at-rest replay.
+            if (
+                t != twin
+                and t.isreactive
+                and t.isopen()
+                and t.domain == twin.domain
+                and self.isauthorized(topic, t)
+            ):
+                if qos > rp.QOS0:
+                    # QOS1/QOS2: mirror the publisher->broker hop
+                    # with a full Ack/Ack2 handshake, retrying on
+                    # timeout. The wait runs in a background task so
+                    # a slow or unreachable subscriber never delays
+                    # the processing of other messages.
+                    task = asyncio.create_task(
+                        self._deliver_with_ack(t, msg)
+                    )
+                    self._rpc_tasks.add(task)
+                    task.add_done_callback(self._rpc_tasks.discard)
+                else:
+                    targets.append(t)
+                    tasks.append(t.send(msg))
+
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for t, result in zip(targets, results):
+                if isinstance(result, Exception):
+                    self._log_delivery_failure(topic, t, result)
+                elif msg.recvts is not None:
+                    t.mark = msg.recvts
 
     async def command_permitted(self, twin) -> bool:
         """Check that `twin` is allowed to send commands.
