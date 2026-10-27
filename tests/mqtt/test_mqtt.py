@@ -206,6 +206,14 @@ async def test_mqtt_publish():
                 assert received_payload["topic"] == "a/b/c"
                 assert received_payload["data"] == [1, 2]
 
+                # a single list argument is wrapped to be distinguished from
+                # a list of arguments
+                received.clear()
+                await cli.publish("a/b/list", [1, 2])
+                await asyncio.wait_for(received.wait(), timeout=2)
+                assert received_payload["topic"] == "a/b/list"
+                assert received_payload["data"] == [[1, 2]]
+
                 # a message without arguments is published with an empty payload
                 received.clear()
                 received_payload.clear()
@@ -245,6 +253,31 @@ def test_mqtt_empty_payload():
 
             asyncio.run(publish_empty_payload("mqtt_empty_topic"))
             asyncio.run(asyncio.wait_for(received.wait(), timeout=2))
+        finally:
+            cli.close()
+    finally:
+        bro.close()
+
+
+def test_mqtt_single_list_argument():
+    """A wrapped JSON array is a single list argument."""
+    received = []
+    done = asyncio.Event()
+
+    def mqtt_list_topic(x):
+        received.append(x)
+        done.set()
+
+    bro = rb.node(mqtt=f"mqtt://{mqtt_host}:{mqtt_port}", port=8338)
+    try:
+        cli = rb.node("mysubscriber")
+        try:
+            cli.subscribe(mqtt_list_topic)
+            cli.reactive()
+
+            asyncio.run(publish_mqtt_message("mqtt_list_topic", [[1, 2]]))
+            asyncio.run(asyncio.wait_for(done.wait(), timeout=2))
+            assert received == [[1, 2]]
         finally:
             cli.close()
     finally:

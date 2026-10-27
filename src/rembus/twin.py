@@ -2031,8 +2031,14 @@ class MqttTwin(Twin):
                 # No arguments: publish an empty payload.
                 payload = b""
             else:
-                # If data has a single item, send just that item
-                data_to_send = msg.data if len(msg.data) > 1 else msg.data[0]
+                # A single item is sent as is, unless it is a list: it is
+                # wrapped to be distinguished from a list of arguments.
+                if len(msg.data) > 1:
+                    data_to_send = msg.data
+                elif isinstance(msg.data[0], (list, tuple)):
+                    data_to_send = [msg.data[0]]
+                else:
+                    data_to_send = msg.data[0]
                 payload = rp.json_dumps(data_to_send)
                 # connect() uses the default MQTT v5 protocol.
                 publish_kwargs["content_type"] = "application/json"
