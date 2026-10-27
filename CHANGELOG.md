@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** the encoding of a WebSocket connection is fixed by its first
+  message (binary = CBOR, text = JSON). A later message of the other type
+  closes the connection with code 1003 (`WS_CLOSE_UNSUPPORTED`). Previously
+  the encoding was switched on every received message.
+
 - The mesh router id stamped in `rmark` is an unsigned 64-bit integer (as in
   Rembus.jl) instead of a 128-bit one. Peers accept both.
 

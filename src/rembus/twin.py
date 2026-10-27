@@ -524,9 +524,19 @@ class Twin(Supervised):
     async def twin_receiver(self):
         """Receive messages from the WebSocket connection."""
         logger.debug("[%s] client is connected", self)
+        conn_enc = None  # encoding fixed by the first message of the connection
         try:
             while self.socket is not None:
                 result: str | bytes = await self.socket.recv()
+                enc = rp.JSON if isinstance(result, str) else rp.CBOR
+                if conn_enc is None:
+                    conn_enc = enc
+                elif enc != conn_enc:
+                    logger.warning("[%s] encoding changed on connection", self)
+                    await self.socket.close(
+                        rp.WS_CLOSE_UNSUPPORTED, "encoding mismatch"
+                    )
+                    break
                 try:
                     if isinstance(result, str):
                         self.enc = rp.JSON

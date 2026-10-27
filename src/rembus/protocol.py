@@ -45,6 +45,9 @@ logger = logging.getLogger(__name__)
 WS_CLOSE_OVERWRITTEN = 4000
 # WebSocket close code sent on an empty, truncated or undecodable message.
 WS_CLOSE_MALFORMED = 1008
+# WebSocket close code sent when the message type (text/binary) differs from
+# the encoding fixed by the first message of the connection.
+WS_CLOSE_UNSUPPORTED = 1003
 
 SIG_RSA = 0x1
 SIG_ECDSA = 0x2
