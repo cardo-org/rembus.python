@@ -218,6 +218,14 @@ class RembusError(RembusException):
             return f"{retcode[self.status]}"
 
 
+class RembusAuthError(RembusError):
+    """Raised when the authentication of a component fails.
+
+    The failure is not recoverable by retrying the connection: the
+    attestation was rejected or the credentials are missing.
+    """
+
+
 def to_bytes(val: int) -> bytes:
     """Convert an int to MSGID_SZ bytes"""
     return val.to_bytes(MSGID_SZ, "little")

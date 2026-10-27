@@ -407,6 +407,12 @@ class Twin(Supervised):
                 await self.setup()
                 self.reconnect_task = None
                 break
+            except rp.RembusAuthError as e:
+                # Authentication failures are not retried.
+                logger.error("[%s] reconnect aborted: %s", self, e)
+                self.handler["phase"] = lambda: "CLOSED"
+                self.reconnect_task = None
+                break
             except Exception as e:  # pylint: disable=broad-exception-caught
                 logger.info("[%s] reconnect: %s", self, e)
                 await asyncio.sleep(2)
@@ -816,7 +822,12 @@ class Twin(Supervised):
 
             plain = [bytes(challenge), self.uid.id]
             message = cbor2.dumps(plain)
-            privatekey = rp.load_private_key(self.uid.id)
+            try:
+                privatekey = rp.load_private_key(self.uid.id)
+            except OSError as e:
+                raise rp.RembusAuthError(
+                    rp.STS_GENERIC_ERROR, "missing private key"
+                ) from e
             if isinstance(privatekey, rsa.RSAPrivateKey):
                 signature: bytes = privatekey.sign(
                     message, padding.PKCS1v15(), hashes.SHA256()
@@ -836,7 +847,10 @@ class Twin(Supervised):
                 reqid=reqid,
             )
             response = await self.wait_response(futreq)
-            exports = response_data(response)
+            try:
+                exports = response_data(response)
+            except rp.RembusError as e:
+                raise rp.RembusAuthError(e.status, e.message) from e
             self.router.update_tables(self, exports)
         else:
             logger.debug("[%s]: free mode access", self)
@@ -1782,6 +1796,10 @@ class WsTwin(Twin):
                 await self.login()
             except Exception as e:
                 await self.close()
+                if isinstance(e, rp.RembusAuthError):
+                    raise rp.RembusAuthError(
+                        rp.STS_GENERIC_ERROR, "login failed"
+                    ) from e
                 raise rp.RembusError(rp.STS_GENERIC_ERROR, "login failed") from e
 
         self.handler["phase"] = lambda: "CONNECTED"

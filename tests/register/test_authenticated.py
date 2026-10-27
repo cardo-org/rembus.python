@@ -1,7 +1,9 @@
 """Test the authenticated connection mode of the router."""
 
+import asyncio
 import base64
 import os
+from types import SimpleNamespace
 import cbor2
 import pytest
 from cryptography.hazmat.primitives import hashes
@@ -178,3 +180,59 @@ def test_failed_attestation_closes_connection():
         cmp.unregister()
         cmp.close()
         server.close()
+
+
+def test_identity_on_identified_connection_is_rejected():
+    """Identity and Attestation on an identified connection get status 10."""
+    server = rembus.node(port=PORT)
+    try:
+        with connect(f"ws://127.0.0.1:{PORT}") as ws:
+            ws.send(rp.IdentityMsg(id=1, cid="first").to_payload(rp.CBOR))
+            first = _recv_response(ws)
+            assert first.status == rp.STS_OK
+
+            ws.send(rp.IdentityMsg(id=2, cid="second").to_payload(rp.CBOR))
+            second = _recv_response(ws)
+            assert second.id == 2
+            assert second.status == rp.STS_GENERIC_ERROR
+
+            ws.send(
+                rp.AttestationMsg(
+                    id=3, cid="second", signature=b"x"
+                ).to_payload(rp.CBOR)
+            )
+            att = _recv_response(ws)
+            assert att.id == 3
+            assert att.status == rp.STS_GENERIC_ERROR
+
+            # the connection is still usable and keeps its identity
+            ws.send(rp.IdentityMsg(id=4, cid="first").to_payload(rp.CBOR))
+            again = _recv_response(ws)
+            assert again.status == rp.STS_GENERIC_ERROR
+    finally:
+        server.close()
+
+
+def test_reconnect_stops_on_authentication_failure():
+    """An authentication failure is not retried."""
+    calls = []
+
+    async def connect_fail():
+        calls.append(1)
+        raise rp.RembusAuthError(rp.STS_GENERIC_ERROR, "login failed")
+
+    async def setup():
+        pass
+
+    twin = SimpleNamespace(
+        connect=connect_fail,
+        setup=setup,
+        handler={},
+        reconnect_task="task",
+    )
+    asyncio.run(
+        asyncio.wait_for(rembus.twin.Twin._reconnect(twin), timeout=5)
+    )
+    assert len(calls) == 1
+    assert twin.handler["phase"]() == "CLOSED"
+    assert twin.reconnect_task is None

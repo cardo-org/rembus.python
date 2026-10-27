@@ -776,6 +776,13 @@ class Router(Supervised):
             task.add_done_callback(self._rpc_tasks.discard)
             return
 
+        if msg.twin.uid.hasname:
+            # The connection is already identified.
+            await msg.twin.response(
+                rp.STS_GENERIC_ERROR, msg, "already identified"
+            )
+            return
+
         twin_id = msg.cid
         if not twin_id:
             await msg.twin.response(rp.STS_GENERIC_ERROR, msg, "empty cid")
@@ -803,6 +810,12 @@ class Router(Supervised):
         await self._auth_identity(msg)
 
     async def _handle_attestation(self, msg: rp.AttestationMsg) -> None:
+        if msg.twin.uid.hasname or "challenge" not in msg.twin.handler:
+            # Already identified or no pending challenge.
+            await msg.twin.response(
+                rp.STS_GENERIC_ERROR, msg, "unexpected attestation"
+            )
+            return
         sts = await self._verify_signature(msg)
         data = self.get_topics(msg.twin) if sts == rp.STS_OK else None
         await msg.twin.response(sts, msg, data)

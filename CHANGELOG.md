@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Breaking:** an `Identity` or `Attestation` received on an already identified connection is rejected with status 10 ("already identified") and the identity is kept.
+- Authentication failures (rejected attestation, missing private key) are no longer retried by the reconnect loop.
 
 - **Breaking:** a message with a single argument that is a list is published
   to MQTT wrapped in an array (`[[1, 2]]`), so that it is not mistaken for a
