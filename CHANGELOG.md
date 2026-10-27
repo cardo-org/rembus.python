@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The mesh router id stamped in `rmark` is an unsigned 64-bit integer (as in
+  Rembus.jl) instead of a 128-bit one. Peers accept both.
+
 - **Breaking:** a list of URLs passed to `component()`/`node()` is an ordered
   failover, not a pool of simultaneous connections: the first URL is the
   primary endpoint, the others are tried in order when a connection attempt

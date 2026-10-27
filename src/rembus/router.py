@@ -15,7 +15,6 @@ import traceback
 from typing import Callable, Any, Optional, List, cast
 import socket
 import ssl
-import uuid
 from websockets.asyncio.server import serve
 import cbor2
 from cryptography.hazmat.primitives import hashes
@@ -201,9 +200,9 @@ class Router(Supervised):
         self.wsprotocol = "ws"
         self.network: List[Node] = []
         self.id = name
-        self.eid = uuid.uuid4().int
+        self.eid = int.from_bytes(os.urandom(8), "big")
         """
-        Ephemeral id of this router instance, used to stamp mesh-wide
+        Ephemeral random unsigned 64-bit id of this router instance, used to stamp mesh-wide
         admin commands (``rmark``) so that a flood of
         ``subscribe``/``expose``/``unsubscribe``/``unexpose`` never loops
         back and gets re-applied to the same router twice (see
