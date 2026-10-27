@@ -219,3 +219,33 @@ async def test_mqtt_publish():
             await sub.disconnect()
     finally:
         await bro.close()
+
+
+async def publish_empty_payload(topic):
+    client = MQTTClient("test-publisher")
+    await client.connect(mqtt_host, mqtt_port)
+    client.publish(topic, b"", qos=0)
+    await asyncio.sleep(0.2)
+    await client.disconnect()
+
+
+def test_mqtt_empty_payload():
+    """An empty MQTT payload is a message without arguments."""
+    received = asyncio.Event()
+
+    def mqtt_empty_topic():
+        received.set()
+
+    bro = rb.node(mqtt=f"mqtt://{mqtt_host}:{mqtt_port}", port=8338)
+    try:
+        cli = rb.node("mysubscriber")
+        try:
+            cli.subscribe(mqtt_empty_topic)
+            cli.reactive()
+
+            asyncio.run(publish_empty_payload("mqtt_empty_topic"))
+            asyncio.run(asyncio.wait_for(received.wait(), timeout=2))
+        finally:
+            cli.close()
+    finally:
+        bro.close()

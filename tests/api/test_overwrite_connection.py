@@ -1,5 +1,7 @@
 """Test the overwrite_connection setting."""
 
+import asyncio
+
 import pytest
 import rembus
 import rembus.protocol as rp
@@ -31,6 +33,25 @@ async def test_overwrite_connection():
         server.router.config.overwrite_connection = True
         first = await rembus.component(URL, name="dup1")
         second = await rembus.component(URL, name="dup2")
+        assert await second.rpc("rid") == rembus.settings.DEFAULT_BROKER
+    finally:
+        for node in (second, first, server):
+            if node:
+                await node.close()
+
+
+async def test_overwritten_client_does_not_reconnect():
+    """A client closed with 4000 must not reconnect and evict its successor."""
+    server = await rembus.component(port=8991)
+    first = second = None
+    try:
+        server.router.config.overwrite_connection = True
+        first = await rembus.component(URL, name="dup1")
+        second = await rembus.component(URL, name="dup2")
+        # longer than the reconnect retry delay
+        await asyncio.sleep(5)
+        assert not first.isopen()
+        assert second.isopen()
         assert await second.rpc("rid") == rembus.settings.DEFAULT_BROKER
     finally:
         for node in (second, first, server):

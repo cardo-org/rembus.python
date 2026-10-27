@@ -1932,8 +1932,12 @@ class MqttTwin(Twin):
 
     async def process_message(self, topic, payload):
         try:
-            data = json.loads(payload)
-            args = data if isinstance(data, list) else [data]
+            if not payload:
+                # An empty payload is a message without arguments.
+                args = []
+            else:
+                data = json.loads(payload)
+                args = data if isinstance(data, list) else [data]
             msg = rp.PubSubMsg(topic=topic, data=args, from_mqtt=True)
             msg.twin = self
             await self._router.inbox.put(msg)
