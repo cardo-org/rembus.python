@@ -316,14 +316,15 @@ class RpcReqMsg(RembusMsg):
                 ]
             )
 
-        return json_dumps(
-            {
-                "rembus": "1.0",
-                "id": str(self.id),
-                "method": self.topic,
-                "params": self.data,
-            }
-        ).decode()
+        req = {
+            "rembus": "1.0",
+            "id": str(self.id),
+            "method": self.topic,
+            "params": self.data,
+        }
+        if self.target is not None:
+            req["target"] = self.target
+        return json_dumps(req).decode()
 
 
 class ResMsg(RembusMsg):
@@ -704,9 +705,14 @@ def tohex(bs: bytes):
 
 def jsonrpc_request(pkt, msg_id, params) -> RembusMsg:
     """Parse a JSON_RPC request"""
+    target = pkt.get("target")
+    if target is not None and not isinstance(target, str):
+        raise ValueError(f"{pkt}:invalid JSON-RPC request target")
     if params is None or isinstance(params, list):
         # Default to RPC request
-        return RpcReqMsg(id=msg_id, topic=pkt["method"], data=params)
+        return RpcReqMsg(
+            id=msg_id, topic=pkt["method"], data=params, target=target
+        )
     elif isinstance(params, dict):
         msg_type = params.get("type")
         if msg_type == TYPE_IDENTITY:
@@ -744,7 +750,9 @@ def jsonrpc_request(pkt, msg_id, params) -> RembusMsg:
             return UnregisterMsg(id=msg_id)
 
         # Any other object is an RPC request with the object as arguments.
-        return RpcReqMsg(id=msg_id, topic=pkt["method"], data=params)
+        return RpcReqMsg(
+            id=msg_id, topic=pkt["method"], data=params, target=target
+        )
 
     raise ValueError(f"{pkt}:invalid JSON-RPC request")
 

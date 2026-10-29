@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- A direct RPC over JSON is sent and parsed with an optional top-level
+  `target` member of the request (a non-text, non-null `target` is a
+  malformed message).
+
 - A request or message whose `data` is `null` invokes the handler with no
   arguments (as `[]`), instead of with a single `None` argument.
 
