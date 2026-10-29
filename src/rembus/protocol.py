@@ -143,10 +143,21 @@ def _check_finite(obj: Any) -> None:
             _check_finite(v)
 
 
+def _json_default(obj: Any) -> str:
+    """Encode byte strings as base64 text (RFC 4648 section 4, padded)."""
+    if isinstance(obj, (bytes, bytearray, memoryview)):
+        return base64.b64encode(obj).decode("ascii")
+    raise TypeError(f"Type is not JSON serializable: {type(obj).__name__}")
+
+
 def json_dumps(obj: Any) -> bytes:
-    """Encode obj as JSON, failing on NaN/Inf instead of emitting null."""
+    """Encode obj as JSON.
+
+    Fails on NaN/Inf instead of emitting null; byte strings are encoded
+    as base64 text.
+    """
     _check_finite(obj)
-    return json.dumps(obj)
+    return json.dumps(obj, default=_json_default)
 
 
 def timestamp():

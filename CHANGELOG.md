@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Byte strings (`bytes`, `bytearray`, `memoryview`) are encoded in JSON
+  messages as base64 text (RFC 4648 §4, padded), as in Rembus.jl, instead of
+  failing with `TypeError`.
+
 - **Breaking:** an `Identity` or `Attestation` received on an already identified connection is rejected with status 10 ("already identified") and the identity is kept.
 - Authentication failures (rejected attestation, missing private key) are no longer retried by the reconnect loop.
 

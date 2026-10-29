@@ -17,3 +17,20 @@ def test_jsonrpc_encode_rejects_nan():
 
 def test_json_dumps_finite():
     assert rp.json_dumps([1.5]) == b"[1.5]"
+
+
+def test_json_dumps_bytes_as_base64():
+    assert rp.json_dumps({"a": b"\x01\x02\x03", "b": [b""]}) == (
+        b'{"a":"AQID","b":[""]}'
+    )
+    assert rp.json_dumps(bytearray(b"\x01")) == b'"AQ=="'
+
+
+def test_json_dumps_unsupported_type_still_fails():
+    with pytest.raises(TypeError):
+        rp.json_dumps(object())
+
+
+def test_jsonrpc_encode_bytes():
+    msg = rp.RpcReqMsg(id=1, topic="f", data=[b"\x01\x02\x03"])
+    assert '"AQID"' in msg.to_payload(rp.JSON)
