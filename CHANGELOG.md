@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- A request or message whose `data` is `null` invokes the handler with no
+  arguments (as `[]`), instead of with a single `None` argument.
+
 - Byte strings (`bytes`, `bytearray`, `memoryview`) are encoded in JSON
   messages as base64 text (RFC 4648 §4, padded), as in Rembus.jl, instead of
   failing with `TypeError`.

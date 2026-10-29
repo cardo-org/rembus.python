@@ -67,8 +67,11 @@ def getargs(data):
     in-process :class:`~rembus.protocol.PubSubMsg` payloads built from
     ``Twin.publish``'s ``*data``, see :meth:`~rembus.twin.Twin._publish`).
     In both cases the items should be unpacked as separate positional
-    arguments; any other value is treated as a single argument.
+    arguments; ``None`` means no arguments; any other value is treated as a
+    single argument.
     """
+    if data is None:
+        return []
     if isinstance(data, (list, tuple)):
         return data
     else:
