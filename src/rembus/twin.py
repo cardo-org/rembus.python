@@ -25,6 +25,7 @@ from gmqtt import Subscription
 import rembus.protocol as rp
 import rembus.settings as rs
 import rembus.builtins as builtins
+import rembus.telemetry as telemetry
 from rembus.core import (
     RbURL,
     Supervised,
@@ -657,6 +658,8 @@ class Twin(Supervised):
         elif isinstance(msg, rp.Ack2Msg):
             await self._ack2_msg(msg)
         else:
+            if telemetry.ENABLED and isinstance(msg, rp.PubSubMsg):
+                telemetry.received(self, msg)
             self._router.inbox.put_nowait(msg)
 
     async def send(self, msg: rp.RembusMsg):
@@ -1958,6 +1961,8 @@ class MqttTwin(Twin):
                 args = data if isinstance(data, list) else [data]
             msg = rp.PubSubMsg(topic=topic, data=args, from_mqtt=True)
             msg.twin = self
+            if telemetry.ENABLED:
+                telemetry.received(self, msg)
             await self._router.inbox.put(msg)
 
             if topic not in self.router.handler:

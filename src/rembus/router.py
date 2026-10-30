@@ -23,6 +23,7 @@ import rembus.protocol as rp
 import rembus.settings as rs
 import rembus.db as rdb
 import rembus.builtins as builtins
+import rembus.telemetry as telemetry
 from . import __version__
 from .admin import admin_command, add_exposer, add_subscriber, ismultipath
 from .core import Supervised, RbURL, domain, bytes_to_b64, Node, mesh_nodes
@@ -47,6 +48,16 @@ class Policy(Enum):
     FIRST_UP = "first_up"
     ROUND_ROBIN = "round_robin"
     LESS_BUSY = "less_busy"
+
+
+def _skip_reason(router, t, twin, topic) -> str:
+    if not t.isreactive:
+        return "not reactive"
+    if not t.isopen():
+        return "disconnected"
+    if t.domain != twin.domain:
+        return "different tenant"
+    return "not authorized" if not router.isauthorized(topic, t) else ""
 
 
 async def get_response(obj: Any) -> Any:
@@ -391,6 +402,8 @@ class Router(Supervised):
         qos = msg.flags & rp.QOS2
         targets = []
         tasks = []
+        if telemetry.ENABLED:
+            telemetry.published(self, msg, subs)
         for t in subs:
             # Do not send back to publisher, only deliver to
             # subscribers that opted-in with reactive(), and only
@@ -404,6 +417,8 @@ class Router(Supervised):
                 and t.domain == twin.domain
                 and self.isauthorized(topic, t)
             ):
+                if telemetry.ENABLED:
+                    telemetry.sent(self, msg, t, True)
                 if qos > rp.QOS0:
                     # QOS1/QOS2: mirror the publisher->broker hop
                     # with a full Ack/Ack2 handshake, retrying on
@@ -418,6 +433,10 @@ class Router(Supervised):
                 else:
                     targets.append(t)
                     tasks.append(t.send(msg))
+            elif telemetry.ENABLED and t != twin:
+                telemetry.sent(
+                    self, msg, t, False, _skip_reason(self, t, twin, topic)
+                )
 
         if tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)

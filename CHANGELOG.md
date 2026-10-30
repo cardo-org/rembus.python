@@ -5,6 +5,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Opt-in pub/sub telemetry enabled with `REMBUS_TELEMETRY=1`: logs (logger
+  `rembus.telemetry`) each published message with the subscribed twins and
+  their connection status, the per-twin send/skip outcome, and the messages
+  received by a twin.
+
 ### Changed
 - A direct RPC `target` is a bare component id matched by exact equality
   (it is no longer parsed as a URL).
