@@ -6,7 +6,7 @@
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Publish/Subscribe" href="../pubsub/index.html"><link rel="prev" title="Rembus" href="../index.html">
         <link rel="canonical" href="https://cardo-org.github.io/rembus.python/reference/index.html">
 
-    <!-- Generated with Sphinx 9.1.1 and Furo 2025.12.19 -->
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
         <title>API Reference - Rembus 0.8.23 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
@@ -1979,7 +1979,7 @@ receiver task, and performs login if the Twin has a registered name.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="rembus.twin.init_twin">
-<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">rembus.twin.</span></span><span class="sig-name descname"><span class="pre">init_twin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">router</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uid</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">isserver</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.init_twin" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">rembus.twin.</span></span><span class="sig-name descname"><span class="pre">init_twin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">router</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uid</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">isserver</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">failovers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.init_twin" title="Link to this definition">¶</a></dt>
 <dd><p>Create and initialize a Twin instance for the component identified by <cite>uid</cite>.</p>
 <p>This function sets up the messaging Twin for the specified component,
 handling all necessary initialization.</p>
@@ -1991,6 +1991,8 @@ handling all necessary initialization.</p>
 <li><p><strong>enc</strong> (<em>int</em>) – The message encoding type (e.g., <cite>rp.CBOR</cite> or <cite>rp.JSON</cite>).</p></li>
 <li><p><strong>isserver</strong> (<em>bool</em>) – Indicates whether the Twin should operate as a server (broker)
 or as a client (connected component).</p></li>
+<li><p><strong>failovers</strong> (<em>list</em><em> of </em><a class="reference internal" href="#rembus.core.RbURL" title="rembus.core.RbURL"><em>RbURL</em></a><em>, </em><em>optional</em>) – Alternative endpoints tried in order after <cite>uid</cite> when a connection
+attempt fails.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -2035,6 +2037,18 @@ by a <a class="reference internal" href="#rembus.twin.Twin" title="rembus.twin.T
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="rembus.router.Router.broadcast_rpc_result">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">broadcast_rpc_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">req</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.router.Router.broadcast_rpc_result" title="Link to this definition">¶</a></dt>
+<dd><p>Publish the arguments of a successful RPC to the topic
+subscribers, excluding the requestor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>req</strong> (<a class="reference internal" href="#rembus.protocol.RpcReqMsg" title="rembus.protocol.RpcReqMsg"><em>RpcReqMsg</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="rembus.router.Router.command_permitted">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">command_permitted</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">twin</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.router.Router.command_permitted" title="Link to this definition">¶</a></dt>
 <dd><p>Check that <cite>twin</cite> is allowed to send commands.</p>
@@ -2052,7 +2066,7 @@ always allowed.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="rembus.router.Router.eid">
 <span class="sig-name descname"><span class="pre">eid</span></span><a class="headerlink" href="#rembus.router.Router.eid" title="Link to this definition">¶</a></dt>
-<dd><p>Ephemeral id of this router instance, used to stamp mesh-wide
+<dd><p>Ephemeral random unsigned 64-bit id of this router instance, used to stamp mesh-wide
 admin commands (<code class="docutils literal notranslate"><span class="pre">rmark</span></code>) so that a flood of
 <code class="docutils literal notranslate"><span class="pre">subscribe</span></code>/<code class="docutils literal notranslate"><span class="pre">expose</span></code>/<code class="docutils literal notranslate"><span class="pre">unsubscribe</span></code>/<code class="docutils literal notranslate"><span class="pre">unexpose</span></code> never loops
 back and gets re-applied to the same router twice (see
@@ -2574,6 +2588,7 @@ messages towards <cite>twin</cite> without waiting for individual
 <li><a class="reference internal" href="#module-rembus.router"><code class="xref py py-mod docutils literal notranslate"><span class="pre">router</span></code></a><ul>
 <li><a class="reference internal" href="#rembus.router.Router"><code class="docutils literal notranslate"><span class="pre">Router</span></code></a><ul>
 <li><a class="reference internal" href="#rembus.router.Router.append_message"><code class="docutils literal notranslate"><span class="pre">Router.append_message()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.router.Router.broadcast_rpc_result"><code class="docutils literal notranslate"><span class="pre">Router.broadcast_rpc_result()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.router.Router.command_permitted"><code class="docutils literal notranslate"><span class="pre">Router.command_permitted()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.router.Router.eid"><code class="docutils literal notranslate"><span class="pre">Router.eid</span></code></a></li>
 <li><a class="reference internal" href="#rembus.router.Router.evaluate"><code class="docutils literal notranslate"><span class="pre">Router.evaluate()</span></code></a></li>
