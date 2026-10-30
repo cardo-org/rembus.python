@@ -726,7 +726,12 @@ class Router(Supervised):
                     id=msg.id, status=status, data=msg.target
                 )
                 await msg.twin.send(outmsg)
-        elif topic in self.handler and self.isauthorized(topic, msg.twin):
+        elif not self.isauthorized(topic, msg.twin):
+            outmsg = rp.ResMsg(
+                id=msg.id, status=rp.STS_GENERIC_ERROR, data="unauthorized"
+            )
+            await msg.twin.send(outmsg)
+        elif topic in self.handler:
             # Run the local handler as an independent task rather than
             # `await`ing it inline: this coroutine runs on
             # `_task_impl`'s single-consumer dispatch loop, which is

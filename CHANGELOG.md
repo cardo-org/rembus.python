@@ -3,6 +3,15 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+
+## [0.9.1] Unreleased
+
+### Changed
+- An RPC request on a private topic by an unauthorized caller is answered
+  with status `10` (generic error) and reason `"unauthorized"` instead of
+  `42` (method implementor not found).
+
 ## [0.9.0] 2026-10-30
 
 ### Added

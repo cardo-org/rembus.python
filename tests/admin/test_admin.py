@@ -3,7 +3,7 @@ import time
 import pytest
 from tools.admin import add_admin
 import rembus as rb
-
+import rembus.protocol as rp
 ADMIN_NODE = "admin"
 
 
@@ -78,8 +78,10 @@ def test_authorize():
     value = auth_client.rpc("mymethod")
     assert value == "secret"
 
-    with pytest.raises(rb.RembusError):
+    with pytest.raises(rb.RembusError) as exc:
         unauth_client.rpc("mymethod")
+    assert exc.value.status == rp.STS_GENERIC_ERROR
+    assert "unauthorized" in str(exc.value)
 
     auth_client.publish("mytopic", auth_client_name)
     unauth_client.publish("mytopic", unauth_client_name)
