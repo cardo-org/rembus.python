@@ -757,12 +757,21 @@ def jsonrpc_request(pkt, msg_id, params) -> RembusMsg:
     raise ValueError(f"{pkt}:invalid JSON-RPC request")
 
 
-def jsonrpc_response(pkt, msg_id, result) -> RembusMsg:
-    """Parse a JSON_RPC success response"""
+def jsonrpc_response(pkt, msg_id, result, member="result") -> RembusMsg:
+    """Parse a JSON_RPC response (`member` is "result" or "error")."""
 
     msg_type = result.get("type")
     if msg_type == TYPE_RESPONSE or msg_type is None:
-        status = result.get("sts", STS_OK)
+        # `sts` is mandatory and the member must match it: `result` if and
+        # only if the status is success or challenge.
+        status = result.get("sts")
+        if isinstance(status, bool) or not isinstance(status, int):
+            raise ValueError(f"{pkt}:JSON-RPC response without valid sts")
+        is_result = status in (STS_OK, STS_CHALLENGE)
+        if is_result != (member == "result"):
+            raise ValueError(
+                f"{pkt}:JSON-RPC {member} member does not match sts {status}"
+            )
         return ResMsg(id=msg_id, status=status, data=result.get("data"))
     elif msg_type == TYPE_ACK:
         return AckMsg(id=msg_id)
@@ -809,7 +818,7 @@ def jsonrpc_parse(payload) -> RembusMsg:
 
         err = pkt.get("error")
         if err is not None:
-            return jsonrpc_response(pkt, msg_id, err)
+            return jsonrpc_response(pkt, msg_id, err, "error")
 
         # request-response message: absent params means no arguments.
         return jsonrpc_request(pkt, msg_id, pkt.get("params"))

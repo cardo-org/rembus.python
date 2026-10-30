@@ -3,7 +3,12 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] Unreleased
 
+### Changed
+- A JSON Response without an integer `sts`, or whose member does not match
+  the status (`result` iff `sts` is 0 or 11), is a malformed message
+  (previously a missing `sts` was read as success).
 
 ## [0.9.1] 2026-10-30
 

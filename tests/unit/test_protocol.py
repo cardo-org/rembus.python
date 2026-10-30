@@ -161,3 +161,35 @@ def test_jsonrpc_parse_numeric_id_rejected():
 def test_jsonrpc_parse_zero_id_rejected():
     with pytest.raises(ValueError):
         rp.jsonrpc_parse('{"rembus": "1.0", "id": "0", "method": "m"}')
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        '{"rembus": "1.0", "id": "1", "result": {"data": 3}}',
+        '{"rembus": "1.0", "id": "1", "error": {"data": "x"}}',
+        '{"rembus": "1.0", "id": "1", "error": {"type": 4, "sts": 0}}',
+        '{"rembus": "1.0", "id": "1", "result": {"type": 4, "sts": 10}}',
+        '{"rembus": "1.0", "id": "1", "result": {"type": 4, "sts": "0"}}',
+    ],
+)
+def test_json_response_invalid_sts(payload):
+    """`sts` is mandatory and the member must match it."""
+    with pytest.raises(ValueError):
+        rp.jsonrpc_parse(payload)
+
+
+def test_json_response_valid():
+    """`type` may be absent; the member matches the status."""
+    ok = rp.jsonrpc_parse(
+        '{"rembus": "1.0", "id": "1", "result": {"sts": 0, "data": 3}}'
+    )
+    assert ok.status == rp.STS_OK and ok.data == 3
+    err = rp.jsonrpc_parse(
+        '{"rembus": "1.0", "id": "1", "error": {"type": 4, "sts": 42}}'
+    )
+    assert err.status == rp.STS_METHOD_NOT_FOUND
+    ch = rp.jsonrpc_parse(
+        '{"rembus": "1.0", "id": "1", "result": {"sts": 11, "data": "c"}}'
+    )
+    assert ch.status == rp.STS_CHALLENGE
