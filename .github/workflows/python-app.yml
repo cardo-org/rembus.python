@@ -75,19 +75,23 @@ jobs:
     # Start Mosquitto locally with TLS enabled
     - name: Start local Mosquitto
       run: |
-        cat > tests/cfg/mosquitto.conf <<EOF
+        # Use /tmp so the mosquitto user can read config and certs
+        MQ=/tmp/mosq
+        mkdir -p $MQ
+        cp tests/cfg/rembus-ca.crt tests/cfg/rembus.crt tests/cfg/rembus.key $MQ/
+        cat > $MQ/mosquitto.conf <<EOF
         listener 1883
         allow_anonymous true
-            
+
         listener 8883
-        cafile $(pwd)/tests/cfg/rembus-ca.crt
-        certfile $(pwd)/tests/cfg/rembus.crt
-        keyfile $(pwd)/tests/cfg/rembus.key
+        cafile $MQ/rembus-ca.crt
+        certfile $MQ/rembus.crt
+        keyfile $MQ/rembus.key
         allow_anonymous true
         EOF
-        chmod 644 tests/cfg/rembus-*.crt tests/cfg/rembus.key
+        chmod -R a+rX $MQ
         sudo systemctl stop mosquitto
-        mosquitto -c "$(pwd)/tests/cfg/mosquitto.conf" -d
+        sudo mosquitto -c $MQ/mosquitto.conf -d
         sleep 2
         ss -ltnp | grep 1883 || (echo "Mosquitto not listening!" && exit 1)
           
