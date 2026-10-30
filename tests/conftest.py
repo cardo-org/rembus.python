@@ -8,8 +8,12 @@ import shutil
 import websockets
 import cbor2
 import pytest
-import rembus
-import rembus.protocol as rp
+
+# Tenants are disabled by default; the flag is read at import time.
+os.environ.setdefault("REMBUS_ENABLE_TENANTS", "1")
+
+import rembus  # noqa: E402  pylint: disable=wrong-import-position
+import rembus.protocol as rp  # noqa: E402  pylint: disable=wrong-import-position
 
 
 @pytest.fixture(scope="module")

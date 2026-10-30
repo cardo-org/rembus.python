@@ -3,9 +3,17 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.2] Unreleased
+## [0.9.2] 2026-10-30
 
 ### Changed
+- Tenants are disabled by default: every node belongs to the root domain.
+  Set `REMBUS_ENABLE_TENANTS=1` (or `true`/`yes`) to derive the tenant from
+  the component id domain. The variable is read once at import time and
+  `domain()` results are cached.
+
+- A CBOR packet whose `id` is not a byte string of exactly 8 bytes, or is
+  all zeros, is malformed (previously accepted); the connection is closed.
+
 - A JSON Response without an integer `sts`, or whose member does not match
   the status (`result` iff `sts` is 0 or 11), is a malformed message
   (previously a missing `sts` was read as success).
@@ -16,9 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An RPC request on a private topic by an unauthorized caller is answered
   with status `10` (generic error) and reason `"unauthorized"` instead of
   `42` (method implementor not found).
-- Tenants are disabled by default: every node belongs to the root domain.
-  Set `REMBUS_ENABLE_TENANTS=1` (or `true`/`yes`) to derive the tenant from
-  the component id domain.
 
 ## [0.9.0] 2026-10-30
 

@@ -9,6 +9,7 @@ import base64
 import logging
 import os
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any, List, Optional
 from urllib.parse import urlparse
 import uuid
@@ -46,13 +47,26 @@ def bytes_to_b64(val: bytes, enc: int):
     return val
 
 
+# Read once at import time: changing the env var requires a restart.
+TENANTS_ENABLED = os.getenv("REMBUS_ENABLE_TENANTS", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
+
+@lru_cache(maxsize=4096)
 def domain(s: str) -> str:
     """
     Return the domain portion of a string.
 
     If the input string does not contain a domain, the root domain
-    "." is returned.
+    "." is returned. Tenants are disabled by default: unless
+    ``REMBUS_ENABLE_TENANTS`` is set, every string belongs to the root domain.
     """
+    if not TENANTS_ENABLED:
+        return "."
+
     dot_index = s.find(".")
     if dot_index != -1:
         return s[dot_index + 1 :]
@@ -80,13 +94,7 @@ class Node:
     tenant: str = field(init=False)
 
     def __post_init__(self):
-        # Tenants are disabled by default: every node belongs to the root domain.
-        enabled = os.getenv("REMBUS_ENABLE_TENANTS", "").lower() in (
-            "1",
-            "true",
-            "yes",
-        )
-        self.tenant = domain(self.cid) if enabled else "."
+        self.tenant = domain(self.cid)
 
     def __repr__(self):
         return (

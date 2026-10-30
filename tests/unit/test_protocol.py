@@ -193,3 +193,21 @@ def test_json_response_valid():
         '{"rembus": "1.0", "id": "1", "result": {"sts": 11, "data": "c"}}'
     )
     assert ch.status == rp.STS_CHALLENGE
+
+
+@pytest.mark.parametrize(
+    "bad_id",
+    [b"", b"\x01" * 7, b"\x01" * 9, bytes(8), 5, "abcdefgh"],
+)
+def test_cbor_invalid_id(bad_id):
+    """An id that is not 8 non-zero bytes makes the packet malformed."""
+    with pytest.raises(ValueError):
+        rp.cbor_parse([rp.TYPE_RESPONSE, bad_id, rp.STS_OK, None])
+    with pytest.raises(ValueError):
+        rp.cbor_parse([rp.TYPE_RPC, bad_id, "t", None, None])
+
+
+def test_cbor_valid_id():
+    mid = rp.to_bytes(7)
+    msg = rp.cbor_parse([rp.TYPE_RESPONSE, mid, rp.STS_OK, None])
+    assert msg.id == 7

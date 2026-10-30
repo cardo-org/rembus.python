@@ -243,8 +243,17 @@ def to_bytes(val: int) -> bytes:
 
 
 def from_bytes(bval: bytes | bytearray) -> int:
-    """Convert MSGID_SZ bytes to an int"""
-    return int.from_bytes(bval, "little")
+    """Convert a received CBOR id to an int.
+
+    The id MUST be a byte string of exactly MSGID_SZ bytes and MUST NOT be
+    zero, otherwise the packet is malformed.
+    """
+    if not isinstance(bval, (bytes, bytearray)) or len(bval) != MSGID_SZ:
+        raise ValueError(f"id must be a byte string of {MSGID_SZ} bytes")
+    val = int.from_bytes(bval, "little")
+    if val == 0:
+        raise ValueError("id 0 is invalid")
+    return val
 
 
 class RembusMsg(BaseModel):
