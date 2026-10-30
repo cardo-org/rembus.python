@@ -80,7 +80,13 @@ class Node:
     tenant: str = field(init=False)
 
     def __post_init__(self):
-        self.tenant = domain(self.cid)
+        # Tenants are disabled by default: every node belongs to the root domain.
+        enabled = os.getenv("REMBUS_ENABLE_TENANTS", "").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        self.tenant = domain(self.cid) if enabled else "."
 
     def __repr__(self):
         return (
