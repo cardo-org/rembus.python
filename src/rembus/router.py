@@ -26,7 +26,7 @@ import rembus.builtins as builtins
 import rembus.telemetry as telemetry
 from . import __version__
 from .admin import admin_command, add_exposer, add_subscriber, ismultipath
-from .core import Supervised, RbURL, domain, bytes_to_b64, Node, mesh_nodes
+from .core import Supervised, RbURL, tenant_of, bytes_to_b64, Node, mesh_nodes
 
 
 logger = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ def _skip_reason(router, t, twin, topic) -> str:
         return "not reactive"
     if not t.isopen():
         return "disconnected"
-    if t.domain != twin.domain:
+    if t.tenant != twin.tenant:
         return "different tenant"
     return "not authorized" if not router.isauthorized(topic, t) else ""
 
@@ -92,14 +92,14 @@ def getargs(data):
 def first_up(tenant, implementors):
     """Select the first open twin belonging to the tenant."""
     return next(
-        (t for t in implementors if t.isopen() and t.domain == tenant), None
+        (t for t in implementors if t.isopen() and t.tenant == tenant), None
     )
 
 
 def less_busy(tenant, implementors):
     """Select the twin with fewer outstanding requests."""
     up_and_running = [
-        t for t in implementors if t.isopen() and t.domain == tenant
+        t for t in implementors if t.isopen() and t.tenant == tenant
     ]
 
     if not up_and_running:
@@ -124,13 +124,13 @@ def round_robin(router, tenant, topic, implementors):
     for ix, tw in enumerate(implementors):
         if ix < current_index:
             # candidate for wrap-around
-            if candidate is None and tw.isopen() and tw.domain == tenant:
+            if candidate is None and tw.isopen() and tw.tenant == tenant:
                 candidate = tw
                 candidate_index = ix
 
         else:
             # forward search from current_index
-            if tw.isopen() and tw.domain == tenant:
+            if tw.isopen() and tw.tenant == tenant:
                 target = tw
                 router.last_invoked[topic] = 0 if ix >= length - 1 else ix + 1
                 break
@@ -414,7 +414,7 @@ class Router(Supervised):
                 t != twin
                 and t.isreactive
                 and t.isopen()
-                and t.domain == twin.domain
+                and t.tenant == twin.tenant
                 and self.isauthorized(topic, t)
             ):
                 if telemetry.ENABLED:
@@ -519,7 +519,7 @@ class Router(Supervised):
     def _select_twin(self, tenant, topic, twins=None):
         """Apply the configured load-balancing policy to pick an implementor.
 
-        Only open twins belonging to `tenant` (the requestor's domain) are
+        Only open twins belonging to `tenant` (the requestor's tenant) are
         eligible. `twins` defaults to `self.exposers[topic]` but callers performing
         mesh-wide routing (see `find_implementor`) pass an already-filtered
         candidate list, e.g. with the requestor removed to avoid loopbacks.
@@ -560,7 +560,7 @@ class Router(Supervised):
                 return None, rp.STS_METHOD_LOOPBACK
             return None, rp.STS_METHOD_UNAVAILABLE
 
-        target_twin = self._select_twin(requestor.domain, topic, candidates)
+        target_twin = self._select_twin(requestor.tenant, topic, candidates)
         if target_twin is None:
             return None, rp.STS_METHOD_UNAVAILABLE
 
@@ -1173,7 +1173,7 @@ class Router(Supervised):
         """Provision a new node."""
         sts = rp.STS_GENERIC_ERROR
         reason = None
-        tenant = domain(msg.cid)
+        tenant = tenant_of(msg.cid, self.config.tenants_enabled)
         token = self._get_token(tenant, msg.cid, msg.pin)
         try:
             if tenant not in self.tenants:

@@ -53,6 +53,12 @@ class Settings:
             "start_anyway", env_bool("REMBUS_START_ANYWAY", False)
         )
 
+        # If True the tenant of a component is the domain part of its id,
+        # otherwise every component belongs to the root domain.
+        self.tenants_enabled = cfg.get(
+            "tenants_enabled", env_bool("REMBUS_ENABLE_TENANTS", False)
+        )
+
         # If True a new connection with an already connected cid replaces
         # the prior one, otherwise it is rejected.
         self.overwrite_connection = cfg.get(

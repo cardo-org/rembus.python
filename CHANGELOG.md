@@ -3,6 +3,18 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Tenant enablement is now a per-broker setting (`tenants_enabled` in the
+  broker config, defaulting to `REMBUS_ENABLE_TENANTS`) instead of a
+  process-wide flag read at import time.
+
+- `Twin.domain` is replaced by `Twin.tenant`, resolved once per component id.
+  `core.domain()` is no longer cached nor affected by the environment;
+  the new `core.tenant_of(cid, enabled)` returns the root domain when tenants
+  are disabled.
+
 ## [0.9.2] 2026-10-30
 
 ### Changed

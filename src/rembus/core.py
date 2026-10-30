@@ -9,7 +9,6 @@ import base64
 import logging
 import os
 from dataclasses import dataclass, field
-from functools import lru_cache
 from typing import Any, List, Optional
 from urllib.parse import urlparse
 import uuid
@@ -19,6 +18,7 @@ __all__ = [
     "randname",
     "bytes_to_b64",
     "domain",
+    "tenant_of",
     "FutureResponse",
     "Node",
     "mesh_nodes",
@@ -47,31 +47,23 @@ def bytes_to_b64(val: bytes, enc: int):
     return val
 
 
-# Read once at import time: changing the env var requires a restart.
-TENANTS_ENABLED = os.getenv("REMBUS_ENABLE_TENANTS", "").lower() in (
-    "1",
-    "true",
-    "yes",
-)
-
-
-@lru_cache(maxsize=4096)
 def domain(s: str) -> str:
     """
     Return the domain portion of a string.
 
     If the input string does not contain a domain, the root domain
-    "." is returned. Tenants are disabled by default: unless
-    ``REMBUS_ENABLE_TENANTS`` is set, every string belongs to the root domain.
+    "." is returned.
     """
-    if not TENANTS_ENABLED:
-        return "."
-
     dot_index = s.find(".")
     if dot_index != -1:
         return s[dot_index + 1 :]
 
     return "."
+
+
+def tenant_of(cid: str, enabled: bool) -> str:
+    """Return the tenant of `cid`: the root domain if tenants are disabled."""
+    return domain(cid) if enabled else "."
 
 
 @dataclass

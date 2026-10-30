@@ -30,7 +30,7 @@ from rembus.core import (
     RbURL,
     Supervised,
     FutureResponse,
-    domain,
+    tenant_of,
     response_data,
     bytes_to_b64,
 )
@@ -266,7 +266,7 @@ class Twin(Supervised):
         self.inbound: bool = False
         self._challenge_fut: Optional[FutureResponse] = None
         self.uid = uid
-        # Alternative endpoints, tried in order after `uid`.
+        self._tenant: Optional[tuple[str, str]] = None        # Alternative endpoints, tried in order after `uid`.
         self.failovers: list[RbURL] = []
         self.handler: dict[str, Callable[..., Any]] = {}
         self.outreq: dict[int, FutureResponse] = {}
@@ -330,9 +330,14 @@ class Twin(Supervised):
         self._router = plugin
 
     @property
-    def domain(self) -> str:
-        """Return the domain of the twin."""
-        return domain(self.rid)
+    def tenant(self) -> str:
+        """Return the tenant of the twin, resolved once per component id."""
+        rid = self.rid
+        cached = self._tenant
+        if cached is None or cached[0] != rid:
+            enabled = self.router.config.tenants_enabled  # type: ignore[union-attr]
+            cached = self._tenant = (rid, tenant_of(rid, enabled))
+        return cached[1]
 
     @property
     def broker_dir(self) -> str:
