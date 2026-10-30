@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- A direct RPC `target` is a bare component id matched by exact equality
+  (it is no longer parsed as a URL).
+
 - A direct RPC over JSON is sent and parsed with an optional top-level
   `target` member of the request (a non-text, non-null `target` is a
   malformed message).

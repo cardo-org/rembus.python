@@ -684,9 +684,14 @@ class Router(Supervised):
             )
             await msg.twin.send(outmsg)
         elif msg.target is not None and msg.target != self.id:
-            target_url = RbURL(msg.target)
-            target_url.port = self.wsport
-            target_twin = self.id_twin.get(target_url.twkey)
+            # the target is a bare component id matched by exact equality
+            candidates = [
+                t for t in self.id_twin.values() if t.rid == msg.target
+            ]
+            target_twin = next(
+                (t for t in candidates if t.isopen()),
+                candidates[0] if candidates else None,
+            )
             if target_twin and target_twin.isopen():
                 logger.debug("[%s] sending to [%s]", self, target_twin)
                 # dispatch to the target twin, reset target
