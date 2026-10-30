@@ -75,11 +75,14 @@ jobs:
     # Start Mosquitto locally with TLS enabled
     - name: Start local Mosquitto
       run: |
-        # Use /tmp so the mosquitto user can read config and certs
-        MQ=/tmp/mosq
-        mkdir -p $MQ
-        cp tests/cfg/rembus-ca.crt tests/cfg/rembus.crt tests/cfg/rembus.key $MQ/
-        cat > $MQ/mosquitto.conf <<EOF
+        # AppArmor confines mosquitto to /etc/mosquitto, so configure the system service there
+        MQ=/etc/mosquitto/certs
+        sudo mkdir -p $MQ
+        sudo cp tests/cfg/rembus-ca.crt tests/cfg/rembus.crt tests/cfg/rembus.key $MQ/
+        sudo chown -R mosquitto:mosquitto $MQ
+        sudo chmod 644 $MQ/*.crt
+        sudo chmod 600 $MQ/rembus.key
+        sudo tee /etc/mosquitto/conf.d/test.conf > /dev/null <<EOF
         listener 1883
         allow_anonymous true
 
@@ -89,9 +92,7 @@ jobs:
         keyfile $MQ/rembus.key
         allow_anonymous true
         EOF
-        chmod -R a+rX $MQ
-        sudo systemctl stop mosquitto
-        sudo mosquitto -c $MQ/mosquitto.conf -d
+        sudo systemctl restart mosquitto || (sudo journalctl -u mosquitto --no-pager | tail -20; exit 1)
         sleep 2
         ss -ltnp | grep 1883 || (echo "Mosquitto not listening!" && exit 1)
           
