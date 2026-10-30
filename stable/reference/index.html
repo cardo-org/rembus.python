@@ -6,8 +6,8 @@
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Publish/Subscribe" href="../pubsub/index.html"><link rel="prev" title="Rembus" href="../index.html">
         <link rel="canonical" href="https://cardo-org.github.io/rembus.python/reference/index.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>API Reference - Rembus 0.8.23 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>API Reference - Rembus 0.9.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/tabs.css?v=4c969af8" />
@@ -169,7 +169,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">Rembus 0.8.23 documentation</div></a>
+      <a href="../index.html"><div class="brand">Rembus 0.9.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -190,7 +190,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
-  <span class="sidebar-brand-text">Rembus 0.8.23 documentation</span>
+  <span class="sidebar-brand-text">Rembus 0.9.0 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -271,6 +271,16 @@ to the transport layer.</p>
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">rembus.protocol.</span></span><span class="sig-name descname"><span class="pre">RembusMsg</span></span><a class="headerlink" href="#rembus.protocol.RembusMsg" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseModel</span></code></p>
 <p>Rembus message</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="rembus.protocol.RembusMsg.flags">
+<span class="sig-name descname"><span class="pre">flags</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#rembus.protocol.RembusMsg.flags" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="rembus.protocol.RembusMsg.extra">
+<span class="sig-name descname"><span class="pre">extra</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[]</span></span><a class="headerlink" href="#rembus.protocol.RembusMsg.extra" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
 <dl class="py property">
 <dt class="sig sig-object py" id="rembus.protocol.RembusMsg.twin">
 <span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">twin</span></span><a class="headerlink" href="#rembus.protocol.RembusMsg.twin" title="Link to this definition">¶</a></dt>
@@ -565,7 +575,7 @@ broker.</p>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="rembus.protocol.RegisterMsg.pin">
-<span class="sig-name descname"><span class="pre">pin</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#rembus.protocol.RegisterMsg.pin" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">pin</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bytes</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#rembus.protocol.RegisterMsg.pin" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
@@ -1329,7 +1339,8 @@ sent to the broker for registration.</p>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>rid</strong> (<em>str</em>) – The unique identifier for the component to register.</p></li>
-<li><p><strong>pin</strong> (<em>str</em>) – A PIN code used for component authentication.</p></li>
+<li><p><strong>pin</strong> (<em>str</em>) – A PIN code used for component authentication. It is not sent
+on the wire: the broker receives <code class="docutils literal notranslate"><span class="pre">SHA256(CBOR([pin,</span> <span class="pre">cid]))</span></code>.</p></li>
 <li><p><strong>scheme</strong> (<em>int</em><em>, </em><em>optional</em>) – The cryptographic signature scheme to use for key generation.
 Supported values are:
 - <cite>rp.SIG_RSA</cite> (default)
@@ -1968,7 +1979,7 @@ receiver task, and performs login if the Twin has a registered name.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="rembus.twin.init_twin">
-<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">rembus.twin.</span></span><span class="sig-name descname"><span class="pre">init_twin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">router</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uid</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">isserver</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.init_twin" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">rembus.twin.</span></span><span class="sig-name descname"><span class="pre">init_twin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">router</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uid</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">isserver</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">failovers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.init_twin" title="Link to this definition">¶</a></dt>
 <dd><p>Create and initialize a Twin instance for the component identified by <cite>uid</cite>.</p>
 <p>This function sets up the messaging Twin for the specified component,
 handling all necessary initialization.</p>
@@ -1980,6 +1991,8 @@ handling all necessary initialization.</p>
 <li><p><strong>enc</strong> (<em>int</em>) – The message encoding type (e.g., <cite>rp.CBOR</cite> or <cite>rp.JSON</cite>).</p></li>
 <li><p><strong>isserver</strong> (<em>bool</em>) – Indicates whether the Twin should operate as a server (broker)
 or as a client (connected component).</p></li>
+<li><p><strong>failovers</strong> (<em>list</em><em> of </em><a class="reference internal" href="#rembus.core.RbURL" title="rembus.core.RbURL"><em>RbURL</em></a><em>, </em><em>optional</em>) – Alternative endpoints tried in order after <cite>uid</cite> when a connection
+attempt fails.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -2024,11 +2037,25 @@ by a <a class="reference internal" href="#rembus.twin.Twin" title="rembus.twin.T
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="rembus.router.Router.broadcast_rpc_result">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">broadcast_rpc_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">req</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.router.Router.broadcast_rpc_result" title="Link to this definition">¶</a></dt>
+<dd><p>Publish the arguments of a successful RPC to the topic
+subscribers, excluding the requestor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>req</strong> (<a class="reference internal" href="#rembus.protocol.RpcReqMsg" title="rembus.protocol.RpcReqMsg"><em>RpcReqMsg</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="rembus.router.Router.command_permitted">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">command_permitted</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">twin</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.router.Router.command_permitted" title="Link to this definition">¶</a></dt>
 <dd><p>Check that <cite>twin</cite> is allowed to send commands.</p>
 <p>When the router requires authentication, a connected component that
-has not authenticated is disconnected and <cite>False</cite> is returned.</p>
+has not authenticated is disconnected and <cite>False</cite> is returned.
+Anonymous components connected from the loopback interface are
+always allowed.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>bool</p>
@@ -2039,7 +2066,7 @@ has not authenticated is disconnected and <cite>False</cite> is returned.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="rembus.router.Router.eid">
 <span class="sig-name descname"><span class="pre">eid</span></span><a class="headerlink" href="#rembus.router.Router.eid" title="Link to this definition">¶</a></dt>
-<dd><p>Ephemeral id of this router instance, used to stamp mesh-wide
+<dd><p>Ephemeral random unsigned 64-bit id of this router instance, used to stamp mesh-wide
 admin commands (<code class="docutils literal notranslate"><span class="pre">rmark</span></code>) so that a flood of
 <code class="docutils literal notranslate"><span class="pre">subscribe</span></code>/<code class="docutils literal notranslate"><span class="pre">expose</span></code>/<code class="docutils literal notranslate"><span class="pre">unsubscribe</span></code>/<code class="docutils literal notranslate"><span class="pre">unexpose</span></code> never loops
 back and gets re-applied to the same router twice (see
@@ -2373,6 +2400,8 @@ messages towards <cite>twin</cite> without waiting for individual
 <li><a class="reference internal" href="#rembus.protocol.CBOR"><code class="docutils literal notranslate"><span class="pre">CBOR</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.JSON"><code class="docutils literal notranslate"><span class="pre">JSON</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.RembusMsg"><code class="docutils literal notranslate"><span class="pre">RembusMsg</span></code></a><ul>
+<li><a class="reference internal" href="#rembus.protocol.RembusMsg.flags"><code class="docutils literal notranslate"><span class="pre">RembusMsg.flags</span></code></a></li>
+<li><a class="reference internal" href="#rembus.protocol.RembusMsg.extra"><code class="docutils literal notranslate"><span class="pre">RembusMsg.extra</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.RembusMsg.twin"><code class="docutils literal notranslate"><span class="pre">RembusMsg.twin</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.RembusMsg.to_payload"><code class="docutils literal notranslate"><span class="pre">RembusMsg.to_payload()</span></code></a></li>
 </ul>
@@ -2559,6 +2588,7 @@ messages towards <cite>twin</cite> without waiting for individual
 <li><a class="reference internal" href="#module-rembus.router"><code class="xref py py-mod docutils literal notranslate"><span class="pre">router</span></code></a><ul>
 <li><a class="reference internal" href="#rembus.router.Router"><code class="docutils literal notranslate"><span class="pre">Router</span></code></a><ul>
 <li><a class="reference internal" href="#rembus.router.Router.append_message"><code class="docutils literal notranslate"><span class="pre">Router.append_message()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.router.Router.broadcast_rpc_result"><code class="docutils literal notranslate"><span class="pre">Router.broadcast_rpc_result()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.router.Router.command_permitted"><code class="docutils literal notranslate"><span class="pre">Router.command_permitted()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.router.Router.eid"><code class="docutils literal notranslate"><span class="pre">Router.eid</span></code></a></li>
 <li><a class="reference internal" href="#rembus.router.Router.evaluate"><code class="docutils literal notranslate"><span class="pre">Router.evaluate()</span></code></a></li>
@@ -2597,7 +2627,7 @@ messages towards <cite>twin</cite> without waiting for individual
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=a4a5f85c"></script>
+</div><script src="../_static/documentation_options.js?v=39bb1c6d"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
