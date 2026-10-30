@@ -87,7 +87,7 @@ jobs:
         EOF
         chmod 644 tests/cfg/rembus-*.crt tests/cfg/rembus.key
         sudo systemctl stop mosquitto
-        mosquitto -c tests/cfg/mosquitto.conf -d
+        mosquitto -c "$(pwd)/tests/cfg/mosquitto.conf" -d
         sleep 2
         ss -ltnp | grep 1883 || (echo "Mosquitto not listening!" && exit 1)
           
