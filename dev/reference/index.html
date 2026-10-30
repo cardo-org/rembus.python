@@ -830,7 +830,8 @@ JSON encoding is requested, otherwise returns <code class="docutils literal notr
 <span class="sig-prename descclassname"><span class="pre">rembus.core.</span></span><span class="sig-name descname"><span class="pre">domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">s</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.core.domain" title="Link to this definition">¶</a></dt>
 <dd><p>Return the domain portion of a string.</p>
 <p>If the input string does not contain a domain, the root domain
-“.” is returned.</p>
+“.” is returned. Tenants are disabled by default: unless
+<code class="docutils literal notranslate"><span class="pre">REMBUS_ENABLE_TENANTS</span></code> is set, every string belongs to the root domain.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>s</strong> (<em>str</em>)</p>
