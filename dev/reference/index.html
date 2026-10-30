@@ -830,8 +830,7 @@ JSON encoding is requested, otherwise returns <code class="docutils literal notr
 <span class="sig-prename descclassname"><span class="pre">rembus.core.</span></span><span class="sig-name descname"><span class="pre">domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">s</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.core.domain" title="Link to this definition">¶</a></dt>
 <dd><p>Return the domain portion of a string.</p>
 <p>If the input string does not contain a domain, the root domain
-“.” is returned. Tenants are disabled by default: unless
-<code class="docutils literal notranslate"><span class="pre">REMBUS_ENABLE_TENANTS</span></code> is set, every string belongs to the root domain.</p>
+“.” is returned.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>s</strong> (<em>str</em>)</p>
@@ -879,6 +878,23 @@ listening port advertised by the peer.</p></li>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>msg</strong> (<a class="reference internal" href="#rembus.protocol.ResMsg" title="rembus.protocol.ResMsg"><em>ResMsg</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="rembus.core.tenant_of">
+<span class="sig-prename descclassname"><span class="pre">rembus.core.</span></span><span class="sig-name descname"><span class="pre">tenant_of</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cid</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enabled</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.core.tenant_of" title="Link to this definition">¶</a></dt>
+<dd><p>Return the tenant of <cite>cid</cite>: the root domain if tenants are disabled.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cid</strong> (<em>str</em>)</p></li>
+<li><p><strong>enabled</strong> (<em>bool</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>str</p>
 </dd>
 </dl>
 </dd></dl>
@@ -932,9 +948,9 @@ methods for RPC, pub/sub, and other commands interactions.</p>
 </dd></dl>
 
 <dl class="py property">
-<dt class="sig sig-object py" id="rembus.twin.Twin.domain">
-<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">domain</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#rembus.twin.Twin.domain" title="Link to this definition">¶</a></dt>
-<dd><p>Return the domain of the twin.</p>
+<dt class="sig sig-object py" id="rembus.twin.Twin.tenant">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">tenant</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#rembus.twin.Twin.tenant" title="Link to this definition">¶</a></dt>
+<dd><p>Return the tenant of the twin, resolved once per component id.</p>
 </dd></dl>
 
 <dl class="py property">
@@ -2504,6 +2520,7 @@ messages towards <cite>twin</cite> without waiting for individual
 <li><a class="reference internal" href="#rembus.core.mesh_nodes"><code class="docutils literal notranslate"><span class="pre">mesh_nodes()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.core.randname"><code class="docutils literal notranslate"><span class="pre">randname()</span></code></a></li>
 <li><a class="reference internal" href="#rembus.core.response_data"><code class="docutils literal notranslate"><span class="pre">response_data()</span></code></a></li>
+<li><a class="reference internal" href="#rembus.core.tenant_of"><code class="docutils literal notranslate"><span class="pre">tenant_of()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#module-rembus.twin"><code class="xref py py-mod docutils literal notranslate"><span class="pre">twin</span></code></a><ul>
@@ -2514,7 +2531,7 @@ messages towards <cite>twin</cite> without waiting for individual
 <li><a class="reference internal" href="#rembus.twin.Twin.twkey"><code class="docutils literal notranslate"><span class="pre">Twin.twkey</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.ctx"><code class="docutils literal notranslate"><span class="pre">Twin.ctx</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.router"><code class="docutils literal notranslate"><span class="pre">Twin.router</span></code></a></li>
-<li><a class="reference internal" href="#rembus.twin.Twin.domain"><code class="docutils literal notranslate"><span class="pre">Twin.domain</span></code></a></li>
+<li><a class="reference internal" href="#rembus.twin.Twin.tenant"><code class="docutils literal notranslate"><span class="pre">Twin.tenant</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.broker_dir"><code class="docutils literal notranslate"><span class="pre">Twin.broker_dir</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.ismqtt"><code class="docutils literal notranslate"><span class="pre">Twin.ismqtt</span></code></a></li>
 <li><a class="reference internal" href="#rembus.twin.Twin.isadmin"><code class="docutils literal notranslate"><span class="pre">Twin.isadmin()</span></code></a></li>
