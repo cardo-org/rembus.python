@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- An RPC whose return value cannot be encoded is answered with status 40 and
+  the encoding error instead of leaving the caller waiting for the timeout.
+
 - An RPC request without the `data` element (4 elements) is accepted and
   treated as `data = null`; a request with fewer than 4 elements is still a
   malformed packet.

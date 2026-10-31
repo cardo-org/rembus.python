@@ -679,8 +679,19 @@ class Router(Supervised):
             status = rp.STS_METHOD_EXCEPTION
             output = f"{e}"
             logger.error("%s exception: %s", msg.twin, e, exc_info=True)
-        outmsg = rp.ResMsg(id=msg.id, status=status, data=rp.df2tag(output))
-        await msg.twin.send(outmsg)
+        try:
+            outmsg = rp.ResMsg(
+                id=msg.id, status=status, data=rp.df2tag(output)
+            )
+            await msg.twin.send(outmsg)
+        except (TypeError, ValueError, cbor2.CBOREncodeError) as e:
+            # the return value cannot be encoded: answer with a failure
+            # instead of leaving the caller waiting for the timeout
+            logger.error("%s response encoding failed: %s", msg.twin, e)
+            outmsg = rp.ResMsg(
+                id=msg.id, status=rp.STS_METHOD_EXCEPTION, data=f"{e}"
+            )
+            await msg.twin.send(outmsg)
 
     async def _rpcreq_msg(self, msg: rp.RpcReqMsg):
         """Handle an RPC request."""
