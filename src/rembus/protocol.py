@@ -876,7 +876,10 @@ def cbor_parse(pkt) -> RembusMsg:
     # Dispatch table for the rest
     table = {
         TYPE_RPC: lambda: RpcReqMsg(
-            id=from_bytes(pkt[1]), topic=pkt[2], target=pkt[3], data=pkt[4]
+            id=from_bytes(pkt[1]),
+            topic=pkt[2],
+            target=pkt[3],
+            data=pkt[4] if len(pkt) > 4 else None,
         ),
         TYPE_ACK: lambda: AckMsg(id=from_bytes(pkt[1])),
         TYPE_ACK2: lambda: Ack2Msg(id=from_bytes(pkt[1])),

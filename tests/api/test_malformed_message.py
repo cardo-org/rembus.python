@@ -15,7 +15,7 @@ URL = "ws://localhost:8992/"
         b"\xff\xff",
         "{bad",
         "[1]",
-        cbor2.dumps([rp.TYPE_RPC, b"\x01" * 8, "m", None]),
+        cbor2.dumps([rp.TYPE_RPC, b"\x01" * 8, "m"]),
     ])
 async def test_malformed_closes_connection(payload):
     server = await rembus.component(port=8992)

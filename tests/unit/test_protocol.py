@@ -211,3 +211,13 @@ def test_cbor_valid_id():
     mid = rp.to_bytes(7)
     msg = rp.cbor_parse([rp.TYPE_RESPONSE, mid, rp.STS_OK, None])
     assert msg.id == 7
+
+
+def test_cbor_request_without_data():
+    """A 4-element request is accepted with data = None; 3 is malformed."""
+    mid = rp.to_bytes(7)
+    msg = rp.cbor_parse([rp.TYPE_RPC, mid, "t", None])
+    assert msg.data is None
+    assert msg.extra == []
+    with pytest.raises(Exception):
+        rp.cbor_parse([rp.TYPE_RPC, mid, "t"])

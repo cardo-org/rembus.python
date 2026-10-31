@@ -6,7 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- Tenant enablement is now a per-broker setting (`tenants_enabled` in the
+- An RPC request without the `data` element (4 elements) is accepted and
+  treated as `data = null`; a request with fewer than 4 elements is still a
+  malformed packet.
+
+ a per-broker setting (`tenants_enabled` in the
   broker config, defaulting to `REMBUS_ENABLE_TENANTS`) instead of a
   process-wide flag read at import time.
 
