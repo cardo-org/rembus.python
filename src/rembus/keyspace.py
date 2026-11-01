@@ -122,17 +122,47 @@ class KeySpaceRouter(rc.Supervised):
 
             if twid in self.broker.twins:
                 tw = self.broker.id_twin[twid]
-                if tw.isopen():
-                    if tw.ismqtt:
-                        if not msg.from_mqtt:
-                            await tw.publish(topic, *msg.data)
+                if not self._deliverable(tw, msg):
+                    continue
+                if tw.ismqtt:
+                    if not msg.from_mqtt:
+                        await tw.publish(topic, *msg.data)
+                else:
+                    qos = msg.flags & rp.QOS2
+                    if qos > rp.QOS0:
+                        # Same QoS as the original message, delivered in
+                        # background so slow subscribers do not block.
+                        out = rp.PubSubMsg(
+                            id=rp.msgid(),
+                            topic=pattern,
+                            data=datas,
+                            flags=qos,
+                        )
+                        task = asyncio.create_task(
+                            self.broker._deliver_with_ack(tw, out)
+                        )
+                        self.broker._rpc_tasks.add(task)
+                        task.add_done_callback(self.broker._rpc_tasks.discard)
                     else:
                         await tw.publish(pattern, *datas)
+
+    def _deliverable(self, tw, msg):
+        """Delivery conditions evaluated against the original topic."""
+        if not tw.isopen() or tw == msg.twin:
+            return False
+        # mqtt twins have no reactive setting
+        if not tw.ismqtt and not tw.isreactive:
+            return False
+        if tw.tenant != msg.twin.tenant:
+            return False
+        return self.broker.isauthorized(msg.topic, tw)
 
     async def publish_interceptor(self, msg):
         """Parse the topic and dispatch to all twins subscribed to spaces
         with regex matching the topic"""
         topic = msg.topic
+        if rp.invalid_topic(topic) or "*" in topic:
+            return
         for space_regex, space_twins in self.spaces.items():
             if space_regex.match(topic) is not None:
                 await self.broadcast(topic, msg, space_twins)

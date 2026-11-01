@@ -160,6 +160,21 @@ def json_dumps(obj: Any) -> bytes:
     return json.dumps(obj, default=_json_default)
 
 
+def invalid_topic(topic: str) -> bool:
+    """Return True for an empty or reserved (`__x__`) topic."""
+    return not topic or (topic.startswith("__") and topic.endswith("__"))
+
+
+def valid_msg_from(value) -> bool:
+    """Return True if value is a valid `msg_from` (see subscribe)."""
+    return not (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or value != value
+        or value < 0
+    )
+
+
 def valid_pattern(topic: str) -> bool:
     """Return True if every `*`/`**` in topic is a whole `/`-separated segment."""
     return all(
@@ -200,8 +215,10 @@ def bytes2id(byte_data: bytearray) -> int:
 
 
 class SendDataAtRest:
-    def __init__(self, twin):
+    def __init__(self, twin, max_period=None):
         self.twin = twin
+        # Upper bound (ns) of the replay window; None means broker default.
+        self.max_period = max_period
 
 
 class RembusException(Exception):

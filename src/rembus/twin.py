@@ -1245,12 +1245,19 @@ class Twin(Supervised):
             os.remove(os.path.join(rs.rembus_dir(), self.uid.id, ".secret"))
         return response_data(response)
 
-    async def reactive(self):
+    async def reactive(self, msg_from: float | None = None):
         """
         Enable reactive mode for the component.
 
         In reactive mode, the component receives messages published on topics
         it has subscribed to.
+
+        Parameters
+        ----------
+        msg_from : float, optional
+            Upper bound (nanoseconds look-back, or ``LastReceived``) of the
+            window of stored messages replayed to the component. When omitted
+            the broker applies its default window.
 
         Returns
         -------
@@ -1269,7 +1276,10 @@ class Twin(Supervised):
             # upstream connection to its parent broker and must be able
             # to request reactive delivery on it, exactly like any plain
             # client twin.
-            await self.broker_setting("reactive", {"status": True})
+            args: dict[str, Any] = {"status": True}
+            if msg_from is not None:
+                args[rp.MSG_FROM] = float(msg_from)
+            await self.broker_setting("reactive", args)
         return self
 
     async def unreactive(self):

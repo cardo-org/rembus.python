@@ -470,6 +470,13 @@ class Router(Supervised):
         if not await self.command_permitted(twin):
             return
 
+        # An invalid publish is dropped without ack. A wildcard topic is
+        # the form of a delivered match, so it is invalid only when received
+        # from a connected component.
+        if rp.invalid_topic(msg.topic) or ("*" in msg.topic and twin.inbound):
+            logger.warning("[%s] dropping publish with invalid topic", twin)
+            return
+
         # Check if publisher is authorized to
         if self.isauthorized(msg.topic, twin):
             ts = rp.timestamp()

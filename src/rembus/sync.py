@@ -225,11 +225,13 @@ class Node:
         """
         return self.exec(self._rb.unexpose, fn)
 
-    def reactive(self):
+    def reactive(self, msg_from: float | None = None):
         """
         Set the component to receive published messages on subscribed topics.
+
+        `msg_from` optionally bounds the replay window of stored messages.
         """
-        return self.exec(self._rb.reactive)
+        return self.exec(self._rb.reactive, msg_from)
 
     def unreactive(self):
         """

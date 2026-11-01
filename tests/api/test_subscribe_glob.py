@@ -35,6 +35,7 @@ def test_subscribe_glob():
     sub = rembus.node("ws://:8801/mysub")
     sub.subscribe(sub_handler, topic="**")
     sub.inject(sub_ctx)
+    sub.reactive()
 
     cli = rembus.node("ws://:8801/cli")
     cli.publish("/myservice/abc", x, y)

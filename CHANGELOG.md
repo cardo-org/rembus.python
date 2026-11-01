@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `*` is rejected with status 10 when the keyspace extension is not enabled,
   and `*` in an RPC or expose topic is rejected with status 10.
 
+- **Breaking:** wildcard (keyspace) delivery applies the same rules as
+  exact-topic delivery, evaluated against the original topic: the publisher
+  is not echoed, non-reactive components, other tenants and components not
+  authorized for the topic receive nothing, and QoS1/QoS2 messages are
+  delivered with the original QoS. A publish with an empty, reserved or `*`
+  topic (from a connected component) is dropped without ack.
+
+- `reactive` accepts an optional `msg_from` bounding the replay window of
+  stored messages (invalid values are rejected with status 10).
+
 - **Breaking:** an RPC request from a requestor not authorized for the topic
   is answered with status 42 (methodImplementorNotFound, `data` = topic)
   instead of status 10 `"unauthorized"`; the authorization check now also

@@ -138,11 +138,11 @@ def ismultipath(router) -> bool:
     return True
 
 
-async def reactive(router, twin, status: bool):
+async def reactive(router, twin, status: bool, msg_from=None):
     logger.debug("[%s] reactive: %s", twin, status)
     twin.isreactive = status
     if status:
-        await router.inbox.put(rp.SendDataAtRest(twin))
+        await router.inbox.put(rp.SendDataAtRest(twin, msg_from))
 
 
 def set_private_topic(twin, topic):
@@ -272,7 +272,12 @@ async def admin_command(msg: rp.AdminMsg):
         else:
             return await twin.response(rp.STS_GENERIC_ERROR, msg, "unauthorized")
     elif cmd == rp.REACTIVE_CMD:
-        await reactive(router, twin, msg.data[rp.STATUS])
+        msgfrom = msg.data.get(rp.MSG_FROM)
+        if msgfrom is not None and not rp.valid_msg_from(msgfrom):
+            return await twin.response(
+                rp.STS_GENERIC_ERROR, msg, "invalid msg_from"
+            )
+        await reactive(router, twin, msg.data[rp.STATUS], msgfrom)
     elif cmd == rp.PRIVATE_TOPIC_CMD:
         if twin.isadmin():
             logger.debug("[%s] set private topic [%s]", twin, topic)
