@@ -709,6 +709,12 @@ class Router(Supervised):
             return
         if msg.twin.isbroker():
             await self.send_message(msg)
+        elif not self.isauthorized(topic, msg.twin):
+            # indistinguishable from an unknown method
+            outmsg = rp.ResMsg(
+                id=msg.id, status=rp.STS_METHOD_NOT_FOUND, data=topic
+            )
+            await msg.twin.send(outmsg)
         elif (
             msg.target is not None
             and msg.target != self.id
@@ -744,11 +750,6 @@ class Router(Supervised):
                     id=msg.id, status=status, data=msg.target
                 )
                 await msg.twin.send(outmsg)
-        elif not self.isauthorized(topic, msg.twin):
-            outmsg = rp.ResMsg(
-                id=msg.id, status=rp.STS_GENERIC_ERROR, data="unauthorized"
-            )
-            await msg.twin.send(outmsg)
         elif topic in self.handler:
             # Run the local handler as an independent task rather than
             # `await`ing it inline: this coroutine runs on

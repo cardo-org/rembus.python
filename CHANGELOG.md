@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Breaking:** an RPC request from a requestor not authorized for the topic
+  is answered with status 42 (methodImplementorNotFound, `data` = topic)
+  instead of status 10 `"unauthorized"`; the authorization check now also
+  precedes direct (targeted) routing.
+
 - **Breaking:** an RPC request with an empty or reserved (`__…__`) topic is
   answered with status 10 (`"invalid topic"`).
 

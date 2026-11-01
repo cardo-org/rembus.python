@@ -80,8 +80,7 @@ def test_authorize():
 
     with pytest.raises(rb.RembusError) as exc:
         unauth_client.rpc("mymethod")
-    assert exc.value.status == rp.STS_GENERIC_ERROR
-    assert "unauthorized" in str(exc.value)
+    assert exc.value.status == rp.STS_METHOD_NOT_FOUND
 
     auth_client.publish("mytopic", auth_client_name)
     unauth_client.publish("mytopic", unauth_client_name)
