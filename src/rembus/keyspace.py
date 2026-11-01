@@ -27,21 +27,22 @@ def build_space_re(topic: str) -> re.Pattern:
     """Create a regex from a topic pattern with wildcards.
 
     Supports:
-    - * → matches one path segment
-    - ** → matches zero or more segments
+    - * → exactly one non-empty segment
+    - ** → any (possibly empty) character sequence, including `/`
+    Wildcards are valid only as a whole `/`-separated segment.
     """
-    # Escape all regex special chars first
-    s = re.escape(topic)
+    parts = []
+    for seg in topic.split("/"):
+        if seg == "**":
+            parts.append(".*")
+        elif seg == "*":
+            parts.append("[^/]+")
+        else:
+            parts.append(re.escape(seg))
+    return re.compile("^" + "/".join(parts) + "$", re.DOTALL)
 
-    # Replace escaped wildcards with regex
-    s = s.replace(r"\*\*", "(.*)")  # ** → match any path
-    s = s.replace(r"\*", "([^/]+)")  # * → match single segment
 
-    # Add start/end anchors
-    return re.compile(f"^{s}$")
-
-
-GLOB_STAR = re.compile("^(.*)$")
+GLOB_STAR = build_space_re("**")
 
 
 class KeySpaceRouter(rc.Supervised):
@@ -75,9 +76,8 @@ class KeySpaceRouter(rc.Supervised):
         """Setup the keyspace regular expression from the message topic"""
         logger.debug("[keyspace] registering %s", topic)
 
-        if "*" in topic:
+        if "*" in topic and rp.valid_pattern(topic):
             retopic = build_space_re(topic)
-
             if retopic == GLOB_STAR:
                 self.has_glob_star = True
 
@@ -133,20 +133,9 @@ class KeySpaceRouter(rc.Supervised):
         """Parse the topic and dispatch to all twins subscribed to spaces
         with regex matching the topic"""
         topic = msg.topic
-        if "/" in topic or self.has_glob_star:
-            for space_regex, space_twins in self.spaces.items():
-                m = space_regex.match(topic)
-                if m is not None:
-                    unsealed = True
-
-                    for capture in m.groups():
-                        if "@" in capture:
-                            # A regex chunk matched a verbatim chunk → reject
-                            unsealed = False
-                            break
-
-                    if unsealed:
-                        await self.broadcast(topic, msg, space_twins)
+        for space_regex, space_twins in self.spaces.items():
+            if space_regex.match(topic) is not None:
+                await self.broadcast(topic, msg, space_twins)
 
     async def _task_impl(self) -> None:
         """Override in subclasses for supervised task impl."""

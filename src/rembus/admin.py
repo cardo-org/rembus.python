@@ -217,6 +217,8 @@ async def admin_command(msg: rp.AdminMsg):
                 add_subscriber(router, twin, subscribed_topic, rp.Now)
             await reactive(router, twin, True)
     elif cmd == rp.EXPOSE_CMD:
+        if "*" in topic:
+            return await twin.response(rp.STS_GENERIC_ERROR, msg, "invalid topic")
         if router.isauthorized(topic, twin):
             if ismultipath(router) and await mark_and_broadcast(
                 router, twin, msg
@@ -235,6 +237,13 @@ async def admin_command(msg: rp.AdminMsg):
     elif cmd == rp.SUBSCRIBE_CMD:
         msgfrom = msg.data.get(rp.MSG_FROM, rp.Now)
         if not topic or (topic.startswith("__") and topic.endswith("__")):
+            return await twin.response(rp.STS_GENERIC_ERROR, msg, "invalid topic")
+        from rembus.keyspace import KeySpaceRouter  # avoid import cycle
+
+        if "*" in topic and (
+            not isinstance(router.upstream, KeySpaceRouter)
+            or not rp.valid_pattern(topic)
+        ):
             return await twin.response(rp.STS_GENERIC_ERROR, msg, "invalid topic")
         if (
             isinstance(msgfrom, bool)

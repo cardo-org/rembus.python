@@ -160,6 +160,13 @@ def json_dumps(obj: Any) -> bytes:
     return json.dumps(obj, default=_json_default)
 
 
+def valid_pattern(topic: str) -> bool:
+    """Return True if every `*`/`**` in topic is a whole `/`-separated segment."""
+    return all(
+        "*" not in seg or seg in ("*", "**") for seg in topic.split("/")
+    )
+
+
 def timestamp():
     return time.time_ns()
 

@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Breaking:** wildcard topics follow a segment-based grammar: `*` is exactly
+  one non-empty segment, `**` any (possibly empty) character sequence, and
+  both are valid only as a whole segment (`a*` is rejected). The `@` verbatim
+  rule is removed, and patterns without `/` are supported. A subscribe with
+  `*` is rejected with status 10 when the keyspace extension is not enabled,
+  and `*` in an RPC or expose topic is rejected with status 10.
+
 - **Breaking:** an RPC request from a requestor not authorized for the topic
   is answered with status 42 (methodImplementorNotFound, `data` = topic)
   instead of status 10 `"unauthorized"`; the authorization check now also
