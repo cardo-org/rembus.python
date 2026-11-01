@@ -197,17 +197,23 @@ def save_twin(twin):
     name = router.id
     db = router.db
 
-    # Save subscriber data
-    if twin.msg_from:
-        current_df = pl.DataFrame(
-            {
-                "name": [name] * len(twin.msg_from),
-                "twin": [tid] * len(twin.msg_from),
-                "topic": list(twin.msg_from.keys()),
-                "msg_from": list(twin.msg_from.values()),
-            }
-        )
-        sync_twin(db, name, tid, "subscriber", current_df)
+    # Save subscriber data (also when empty, to persist the removal of the
+    # last subscription)
+    current_df = pl.DataFrame(
+        {
+            "name": [name] * len(twin.msg_from),
+            "twin": [tid] * len(twin.msg_from),
+            "topic": list(twin.msg_from.keys()),
+            "msg_from": list(twin.msg_from.values()),
+        },
+        schema={
+            "name": pl.String,
+            "twin": pl.String,
+            "topic": pl.String,
+            "msg_from": pl.Float64,
+        },
+    )
+    sync_twin(db, name, tid, "subscriber", current_df)
 
     # Save exposer data
     exposed_topics = exposed_topics_for_twin(router, twin)

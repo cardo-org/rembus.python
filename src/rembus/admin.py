@@ -45,6 +45,7 @@ def remove_subscriber(router, twin, topic):
     if topic in router.subscribers:
         if twin in router.subscribers[topic]:
             router.subscribers[topic].remove(twin)
+    twin.msg_from.pop(topic, None)
     logger.debug(
         "[%s] removed [%s] subscriber for topic [%s]", router, twin, topic
     )
@@ -252,6 +253,8 @@ async def admin_command(msg: rp.AdminMsg):
         else:
             return await twin.response(rp.STS_GENERIC_ERROR, msg, "unauthorized")
     elif cmd == rp.UNSUBSCRIBE_CMD:
+        if not topic or (topic.startswith("__") and topic.endswith("__")):
+            return await twin.response(rp.STS_GENERIC_ERROR, msg, "invalid topic")
         if router.isauthorized(topic, twin):
             if ismultipath(router) and await mark_and_broadcast(
                 router, twin, msg
