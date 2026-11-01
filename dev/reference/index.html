@@ -1399,16 +1399,21 @@ components may then connect using the same identifier.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="rembus.twin.Twin.reactive">
-<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">reactive</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.Twin.reactive" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">reactive</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">msg_from</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.Twin.reactive" title="Link to this definition">¶</a></dt>
 <dd><p>Enable reactive mode for the component.</p>
 <p>In reactive mode, the component receives messages published on topics
 it has subscribed to.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>None</p>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>msg_from</strong> (<em>float</em><em>, </em><em>optional</em>) – Upper bound (nanoseconds look-back, or <code class="docutils literal notranslate"><span class="pre">LastReceived</span></code>) of the
+window of stored messages replayed to the component. When omitted
+the broker applies its default window.</p>
 </dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><ul class="simple">
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
 <li><p><strong>RembusError</strong> – If the broker rejects the reactive request.</p></li>
 <li><p><strong>RembusTimeout</strong> – If no response is received within the configured timeout.</p></li>
 </ul>
