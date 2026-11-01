@@ -155,6 +155,9 @@ class KeySpaceRouter(rc.Supervised):
             return False
         if tw.tenant != msg.twin.tenant:
             return False
+        # An exact-topic subscription wins: one message per publish.
+        if tw in self.broker.subscribers.get(msg.topic, []):
+            return False
         return self.broker.isauthorized(msg.topic, tw)
 
     async def publish_interceptor(self, msg):

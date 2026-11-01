@@ -108,3 +108,25 @@ def test_reactive_invalid_msg_from(broker):
         cli.reactive(msg_from=-1)
     cli.reactive(msg_from=0)
     cli.close()
+
+
+def test_exact_and_wildcard_single_delivery(broker):
+    calls = []
+
+    def exact(x):
+        calls.append(("exact", x))
+
+    def wild(topic, *args):
+        calls.append(("wild", topic, args))
+
+    sub = rb.node(f"ws://:{PORT}/md_dup")
+    sub.subscribe(exact, topic="dup/a")
+    sub.subscribe(wild, topic="dup/*")
+    sub.reactive()
+    pub = rb.node(f"ws://:{PORT}/md_duppub")
+    pub.publish("dup/a", 1)
+    assert wait_for(lambda: len(calls) >= 1)
+    time.sleep(0.5)
+    assert calls == [("exact", 1)]
+    sub.close()
+    pub.close()
