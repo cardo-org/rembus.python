@@ -232,11 +232,22 @@ async def admin_command(msg: rp.AdminMsg):
         else:
             return await twin.response(rp.STS_GENERIC_ERROR, msg, "unauthorized")
     elif cmd == rp.SUBSCRIBE_CMD:
+        msgfrom = msg.data.get(rp.MSG_FROM, rp.Now)
+        if not topic or (topic.startswith("__") and topic.endswith("__")):
+            return await twin.response(rp.STS_GENERIC_ERROR, msg, "invalid topic")
+        if (
+            isinstance(msgfrom, bool)
+            or not isinstance(msgfrom, (int, float))
+            or msgfrom != msgfrom
+            or msgfrom < 0
+        ):
+            return await twin.response(
+                rp.STS_GENERIC_ERROR, msg, "invalid msg_from"
+            )
         if router.isauthorized(topic, twin):
             if ismultipath(router) and await mark_and_broadcast(
                 router, twin, msg
             ):
-                msgfrom = msg.data.get(rp.MSG_FROM, rp.Now)
                 add_subscriber(router, twin, topic, msgfrom)
         else:
             return await twin.response(rp.STS_GENERIC_ERROR, msg, "unauthorized")

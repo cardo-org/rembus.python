@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Breaking:** a `subscribe` command with an empty or reserved (`__…__`)
+  topic, or with a negative, NaN or non-numeric `msg_from`, is rejected with
+  status 10 (`"invalid topic"` / `"invalid msg_from"`).
+
 - An RPC whose return value cannot be encoded is answered with status 40 and
   the encoding error instead of leaving the caller waiting for the timeout.
 
