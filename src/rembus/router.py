@@ -700,6 +700,13 @@ class Router(Supervised):
         topic = msg.topic
         if not await self.command_permitted(msg.twin):
             return
+        if not topic or (topic.startswith("__") and topic.endswith("__")):
+            await msg.twin.send(
+                rp.ResMsg(
+                    id=msg.id, status=rp.STS_GENERIC_ERROR, data="invalid topic"
+                )
+            )
+            return
         if msg.twin.isbroker():
             await self.send_message(msg)
         elif (
