@@ -1338,7 +1338,16 @@ class Twin(Supervised):
 
         exposers, subscribers = self.router.local_exports()
         await self.broker_setting(
-            rp.SETUP_CMD, {"exposers": exposers, "subscribers": subscribers}
+            rp.SETUP_CMD,
+            {
+                "exposers": exposers,
+                "subscribers": subscribers,
+                # replay window of each subscription
+                rp.MSG_FROM: {
+                    topic: self.router.local_subscriber[topic]
+                    for topic in subscribers
+                },
+            },
         )
         return True
 

@@ -211,11 +211,26 @@ async def admin_command(msg: rp.AdminMsg):
     cmd = msg.data[rp.COMMAND]
     if cmd == rp.SETUP_CMD:
         if ismultipath(router):
+            # Optional replay windows of the subscriptions (default Now).
+            windows = msg.data.get(rp.MSG_FROM, {})
+            if not isinstance(windows, dict) or not all(
+                rp.valid_msg_from(w) for w in windows.values()
+            ):
+                return await twin.response(
+                    rp.STS_GENERIC_ERROR, msg, "invalid msg_from"
+                )
             for implemented_topic in msg.data.get("exposers", []):
                 add_exposer(router, twin, implemented_topic)
             for subscribed_topic in msg.data.get("subscribers", []):
-                add_subscriber(router, twin, subscribed_topic, rp.Now)
-            await reactive(router, twin, True)
+                add_subscriber(
+                    router,
+                    twin,
+                    subscribed_topic,
+                    windows.get(subscribed_topic, rp.Now),
+                )
+            await reactive(
+                router, twin, True, max(windows.values(), default=None)
+            )
     elif cmd == rp.EXPOSE_CMD:
         if "*" in topic:
             return await twin.response(rp.STS_GENERIC_ERROR, msg, "invalid topic")
