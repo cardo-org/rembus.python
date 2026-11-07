@@ -300,11 +300,13 @@
 </li>
           <li><a href="reference/index.html#rembus.protocol.RegisterMsg.cid">(rembus.protocol.RegisterMsg attribute)</a>
 </li>
-        </ul></li>
-        <li><a href="reference/index.html#rembus.twin.Twin.close">close() (rembus.twin.Twin method)</a>
+          <li><a href="reference/index.html#rembus.protocol.RekeyMsg.cid">(rembus.protocol.RekeyMsg attribute)</a>
 </li>
+        </ul></li>
     </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/index.html#rembus.twin.Twin.close">close() (rembus.twin.Twin method)</a>
+</li>
         <li><a href="reference/index.html#rembus.router.Router.command_permitted">command_permitted() (rembus.router.Router method)</a>
 </li>
         <li><a href="reference/index.html#rembus.twin.MqttTwin.connect">connect() (rembus.twin.MqttTwin method)</a>
@@ -430,6 +432,8 @@
 </li>
           <li><a href="reference/index.html#rembus.protocol.RegisterMsg.id">(rembus.protocol.RegisterMsg attribute)</a>
 </li>
+          <li><a href="reference/index.html#rembus.protocol.RekeyMsg.id">(rembus.protocol.RekeyMsg attribute)</a>
+</li>
           <li><a href="reference/index.html#rembus.protocol.ResMsg.id">(rembus.protocol.ResMsg attribute)</a>
 </li>
           <li><a href="reference/index.html#rembus.protocol.RpcReqMsg.id">(rembus.protocol.RpcReqMsg attribute)</a>
@@ -441,10 +445,10 @@
 </li>
         <li><a href="reference/index.html#rembus.twin.init_twin">init_twin() (in module rembus.twin)</a>
 </li>
-        <li><a href="reference/index.html#rembus.twin.Twin.inject">inject() (rembus.twin.Twin method)</a>
-</li>
     </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="reference/index.html#rembus.twin.Twin.inject">inject() (rembus.twin.Twin method)</a>
+</li>
         <li><a href="reference/index.html#rembus.twin.Twin.isadmin">isadmin() (rembus.twin.Twin method)</a>
 </li>
         <li><a href="reference/index.html#rembus.router.Router.isauthorized">isauthorized() (rembus.router.Router method)</a>
@@ -573,11 +577,19 @@
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="reference/index.html#rembus.protocol.RegisterMsg.pin">pin (rembus.protocol.RegisterMsg attribute)</a>
+
+        <ul>
+          <li><a href="reference/index.html#rembus.protocol.RekeyMsg.pin">(rembus.protocol.RekeyMsg attribute)</a>
 </li>
+        </ul></li>
         <li><a href="reference/index.html#rembus.twin.Twin.private_topic">private_topic() (rembus.twin.Twin method)</a>
 </li>
         <li><a href="reference/index.html#rembus.protocol.RegisterMsg.pubkey">pubkey (rembus.protocol.RegisterMsg attribute)</a>
+
+        <ul>
+          <li><a href="reference/index.html#rembus.protocol.RekeyMsg.pubkey">(rembus.protocol.RekeyMsg attribute)</a>
 </li>
+        </ul></li>
     </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="reference/index.html#rembus.twin.Twin.public_topic">public_topic() (rembus.twin.Twin method)</a>
@@ -616,6 +628,10 @@
 </li>
         <li><a href="reference/index.html#rembus.protocol.RegisterMsg">RegisterMsg (class in rembus.protocol)</a>
 </li>
+        <li><a href="reference/index.html#rembus.twin.Twin.rekey">rekey() (rembus.twin.Twin method)</a>
+</li>
+        <li><a href="reference/index.html#rembus.protocol.RekeyMsg">RekeyMsg (class in rembus.protocol)</a>
+</li>
         <li>
     rembus.core
 
@@ -630,6 +646,8 @@
           <li><a href="reference/index.html#module-rembus.protocol">module</a>
 </li>
         </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
         <li>
     rembus.router
 
@@ -637,8 +655,6 @@
           <li><a href="reference/index.html#module-rembus.router">module</a>
 </li>
         </ul></li>
-    </ul></td>
-    <td style="width: 33%; vertical-align: top;"><ul>
         <li>
     rembus.sync
 
@@ -754,6 +770,8 @@
 </li>
           <li><a href="reference/index.html#rembus.protocol.RegisterMsg.to_payload">(rembus.protocol.RegisterMsg method)</a>
 </li>
+          <li><a href="reference/index.html#rembus.protocol.RekeyMsg.to_payload">(rembus.protocol.RekeyMsg method)</a>
+</li>
           <li><a href="reference/index.html#rembus.protocol.RembusMsg.to_payload">(rembus.protocol.RembusMsg method)</a>
 </li>
           <li><a href="reference/index.html#rembus.protocol.ResMsg.to_payload">(rembus.protocol.ResMsg method)</a>
@@ -796,7 +814,11 @@
 </li>
         </ul></li>
         <li><a href="reference/index.html#rembus.protocol.RegisterMsg.type">type (rembus.protocol.RegisterMsg attribute)</a>
+
+        <ul>
+          <li><a href="reference/index.html#rembus.protocol.RekeyMsg.type">(rembus.protocol.RekeyMsg attribute)</a>
 </li>
+        </ul></li>
     </ul></td>
   </tr></table>
 </section>

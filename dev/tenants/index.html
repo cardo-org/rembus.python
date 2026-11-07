@@ -383,6 +383,25 @@ match the secret configured for the tenant of the component name.</p>
 <p>Single-tenant setups need only the default tenant <code class="docutils literal notranslate"><span class="pre">.</span></code>. A component without
 a domain can be registered only if the <code class="docutils literal notranslate"><span class="pre">.</span></code> tenant is configured.</p>
 </section>
+<section id="replacing-a-component-key">
+<h2>Replacing a component key<a class="headerlink" href="#replacing-a-component-key" title="Link to this heading">¶</a></h2>
+<p>An authenticated component can replace its key pair with
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">rembus.sync.Node.rekey()</span></code> (or <code class="docutils literal notranslate"><span class="pre">Twin.rekey</span></code> in the async API). It sends
+a <code class="docutils literal notranslate"><span class="pre">Rekey</span></code> packet (type <code class="docutils literal notranslate"><span class="pre">0x07</span></code>) with the same fields as <code class="docutils literal notranslate"><span class="pre">Register</span></code>; the
+<code class="docutils literal notranslate"><span class="pre">cid</span></code> is always the authenticated name of the component and <code class="docutils literal notranslate"><span class="pre">pin</span></code> is the
+tenant secret.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">rb</span> <span class="o">=</span> <span class="n">rembus</span><span class="o">.</span><span class="n">node</span><span class="p">(</span><span class="s2">"ws://host:8000/foo.org"</span><span class="p">)</span>   <span class="c1"># authenticated connection</span>
+<span class="n">rb</span><span class="o">.</span><span class="n">rekey</span><span class="p">(</span><span class="s2">"11223344"</span><span class="p">)</span>                          <span class="c1"># or rb.rekey(pin, rp.SIG_ECDSA)</span>
+</pre></div>
+</div>
+<p>On success the broker atomically replaces the stored public key and the new
+private key is saved locally; the connection stays open and the new key is
+used from the next authentication. On any failure (wrong <code class="docutils literal notranslate"><span class="pre">pin</span></code>, component
+not registered, invalid public key, <code class="docutils literal notranslate"><span class="pre">cid</span></code> different from the authenticated
+one, unauthenticated sender) the old key is kept and the broker answers with
+<code class="docutils literal notranslate"><span class="pre">STS_GENERIC_ERROR</span></code>. As for <code class="docutils literal notranslate"><span class="pre">register</span></code>, avoid sending it over a plaintext
+connection.</p>
+</section>
 <section id="managing-tenants">
 <h2>Managing tenants<a class="headerlink" href="#managing-tenants" title="Link to this heading">¶</a></h2>
 <p>Tenants and secrets are stored in the <code class="docutils literal notranslate"><span class="pre">tenant</span></code> table of the broker
@@ -466,6 +485,9 @@ brokerd
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">register</span></code></p></td>
 <td><p>requires the secret of the component’s tenant; tenant must be enabled</p></td>
 </tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">rekey</span></code></p></td>
+<td><p>requires an authenticated component and the secret of its tenant</p></td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -529,6 +551,7 @@ brokerd
 </ul>
 </li>
 <li><a class="reference internal" href="#registration-and-tenants">Registration and tenants</a></li>
+<li><a class="reference internal" href="#replacing-a-component-key">Replacing a component key</a></li>
 <li><a class="reference internal" href="#managing-tenants">Managing tenants</a></li>
 <li><a class="reference internal" href="#complete-example">Complete example</a></li>
 <li><a class="reference internal" href="#summary-of-behaviours">Summary of behaviours</a></li>
