@@ -991,6 +991,8 @@ class Router(Supervised):
                     await self._handle_admin(msg)
                 case rp.RegisterMsg():
                     await self._register_node(msg)
+                case rp.RekeyMsg():
+                    await self._rekey_node(msg)
                 case rp.UnregisterMsg():
                     await self._unregister_node(msg)
             # Log any dispatch iteration that took a suspiciously long
@@ -1206,23 +1208,51 @@ class Router(Supervised):
         try:
             if tenant not in self.tenants:
                 reason = f"tenant [{tenant}] not enabled"
-            elif msg.type not in (rp.SIG_RSA, rp.SIG_ECDSA):
-                reason = f"invalid key type {msg.type}"
-            elif not isinstance(msg.pubkey, bytes) or not msg.pubkey:
-                reason = "invalid pubkey"
             elif token is None:
                 reason = "wrong tenant/pin"
             elif rp.isregistered(self.id, msg.cid):
                 sts = rp.STS_NAME_ALREADY_TAKEN
                 reason = f"[{msg.cid}] not available"
             else:
+                rp.validate_pubkey(msg.pubkey, msg.type)
                 kdir = rs.keys_dir(self.id)
                 os.makedirs(kdir, exist_ok=True)
                 rp.save_pubkey(self.id, msg.cid, msg.pubkey, msg.type)
                 sts = rp.STS_OK
                 logger.debug("cid %s registered", msg.cid)
+        except ValueError as e:
+            reason = str(e)
         finally:
             await msg.twin.response(sts, msg, reason)
+
+    async def _rekey_node(self, msg: rp.RekeyMsg):
+        """Replace the public key of the authenticated component."""
+        sts = rp.STS_GENERIC_ERROR
+        reason = None
+        twin = msg.twin
+        try:
+            if not await self.command_permitted(twin) or not twin.isauth:
+                reason = "invalid operation"
+            elif msg.cid != twin.rid:
+                reason = "cid does not match the authenticated cid"
+            else:
+                tenant = tenant_of(msg.cid, self.config.tenants_enabled)
+                if tenant not in self.tenants:
+                    reason = f"tenant [{tenant}] not enabled"
+                elif self._get_token(tenant, msg.cid, msg.pin) is None:
+                    reason = "wrong tenant/pin"
+                elif not rp.isregistered(self.id, msg.cid):
+                    reason = f"[{msg.cid}] not registered"
+                else:
+                    rp.validate_pubkey(msg.pubkey, msg.type)
+                    rp.replace_pubkey(self.id, msg.cid, msg.pubkey, msg.type)
+                    sts = rp.STS_OK
+                    logger.debug("cid %s rekeyed", msg.cid)
+        except (ValueError, OSError) as e:
+            sts = rp.STS_GENERIC_ERROR
+            reason = str(e)
+        finally:
+            await twin.response(sts, msg, reason)
 
     async def _unregister_node(self, msg: rp.UnregisterMsg):
         """Unprovisions the component."""

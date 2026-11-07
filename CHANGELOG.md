@@ -5,7 +5,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Rekey` packet (type 7) and `rekey(pin, scheme)` on connected components
+  (async `Twin.rekey`, sync `Node.rekey`) to replace the public key of a
+  registered component. The sender must be authenticated as `cid` and prove
+  knowledge of the registration pin; on any failure the old key is kept and
+  the response has status 10. The local private key is replaced only on
+  success.
+
 ### Changed
+
+- `Register` validates the public key before storing it: it must parse as
+  the declared type, RSA keys must be at least 2048 bits and ECDSA keys must
+  use curve P-256; otherwise the response has status 10 and nothing is
+  stored. Previously only a non-empty key was required. The pin is now
+  checked before the key.
+
+- The public key of a component is stored in `keys/<cid>.pub` (no type or
+  format in the name) and is replaced atomically. Files with the previous
+  `<cid>.{rsa,ecdsa}.{pem,der}` names are still read and are removed after a
+  successful `register` or `rekey`. A broker older than this version does not
+  find keys stored with the new name.
+
 - **Breaking:** wildcard topics follow a segment-based grammar: `*` is exactly
   one non-empty segment, `**` any (possibly empty) character sequence, and
   both are valid only as a whole segment (`a*` is rejected). The `@` verbatim

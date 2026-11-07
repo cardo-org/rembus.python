@@ -1219,6 +1219,54 @@ class Twin(Supervised):
         rp.save_private_key(rid, privkey)
         return None
 
+    async def rekey(self, pin: str, scheme: int = rp.SIG_RSA):
+        """
+        Replace the key pair of the current (authenticated) component.
+
+        A new key pair is generated according to `scheme` and the new public
+        key is sent to the broker in a Rekey packet. The local private key is
+        replaced only after the broker accepts the new key; on failure the
+        old key pair remains in use. The current connection stays open and
+        the new key is used from the next authentication.
+
+        Parameters
+        ----------
+        pin : str
+            The secret of the component tenant (not sent on the wire).
+        scheme : int, optional
+            `rp.SIG_RSA` (default) or `rp.SIG_ECDSA`.
+
+        Raises
+        ------
+        RembusError
+            If the broker rejects the Rekey (for example unregistered
+            component, wrong pin, invalid key or unauthenticated session).
+        RembusTimeout
+            If no response is received within the configured timeout.
+        """
+        if scheme == rp.SIG_RSA:
+            privkey = rp.rsa_private_key()
+        else:
+            privkey = rp.ecdsa_private_key()
+
+        pubkey = rp.pem_public_key(privkey)
+        proof = rp.pin_proof(pin, self.rid)
+        if self.enc == rp.JSON:
+            pubkey = base64.b64encode(pubkey).decode("utf-8")
+            proof = base64.b64encode(proof).decode("utf-8")
+
+        futreq = await self._send_message(
+            lambda id: rp.RekeyMsg(
+                id=id, cid=self.rid, pin=proof, pubkey=pubkey, type=scheme
+            )
+        )
+        response = await self.wait_response(futreq)
+        response_data(response)
+
+        rp.save_private_key(self.rid, privkey)
+        logger.debug("cid %s rekeyed", self.rid)
+        return None
+
     async def unregister(self):
         """
         Unregister and unprovision the current component.

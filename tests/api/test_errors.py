@@ -1,5 +1,6 @@
 """Tests for miscellaneous error conditions."""
 
+import logging
 import os
 import stat
 import pytest
@@ -8,6 +9,8 @@ import rembus
 import rembus.protocol as rp
 import rembus.settings as rs
 from tools.tenant import add_tenant
+
+logger = logging.getLogger(__name__)
 
 
 def test_add_tenant():
@@ -22,6 +25,10 @@ def test_register_error(server):
     key_dir = rs.keys_dir(server.router.id)
     curr_mode = os.stat(key_dir).st_mode
     os.chmod(key_dir, curr_mode & ~(stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
+    logger.info(
+        "EXPECTED: the broker will log a PermissionError and restart its "
+        "router task, because the keys directory was made read-only on purpose"
+    )
     try:
         myname = rembus.node(cid)
         myname.unregister()

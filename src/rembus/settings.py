@@ -155,15 +155,33 @@ def key_base(broker_name: str, cid: str) -> str:
     return os.path.join(rembus_dir(), broker_name, "keys", cid)
 
 
-def key_file(broker_name: str, cid: str):
-    """The public key file for the given component."""
+def canonical_key_file(broker_name: str, cid: str) -> str:
+    """The canonical public key file name, independent of type and format."""
+    return f"{key_base(broker_name, cid)}.pub"
+
+
+def legacy_key_files(broker_name: str, cid: str) -> list[str]:
+    """Existing legacy key files (name encodes key type and format)."""
     basename = key_base(broker_name, cid)
+    names = [
+        f"{basename}.{keytype}.{keyformat}"
+        for keyformat in ["pem", "der"]
+        for keytype in ["rsa", "ecdsa"]
+    ]
+    return [fn for fn in names if os.path.isfile(fn)]
 
-    for keyformat in ["pem", "der"]:
-        for keytype in ["rsa", "ecdsa"]:
-            fn = f"{basename}.{keytype}.{keyformat}"
-            logger.debug("looking for %s", fn)
-            if os.path.isfile(fn):
-                return fn
 
-    raise FileNotFoundError(f"key file not found: {basename}")
+def key_file(broker_name: str, cid: str):
+    """The public key file for the given component.
+
+    The canonical file wins; legacy names are read as fallback.
+    """
+    fn = canonical_key_file(broker_name, cid)
+    if os.path.isfile(fn):
+        return fn
+
+    legacy = legacy_key_files(broker_name, cid)
+    if legacy:
+        return legacy[0]
+
+    raise FileNotFoundError(f"key file not found: {fn}")

@@ -174,6 +174,10 @@ class Node:
         """Register a component with the given rid."""
         return self.exec(self._rb.register, rid, pin, scheme)
 
+    def rekey(self, pin: str, scheme: int = SIG_RSA):
+        """Replace the key pair of the authenticated component."""
+        return self.exec(self._rb.rekey, pin, scheme)
+
     def unregister(self):
         """Unregister the component."""
         return self.exec(self._rb.unregister)

@@ -36,6 +36,7 @@ __all__ = [
     "RegisterMsg",
     "ResMsg",
     "RpcReqMsg",
+    "RekeyMsg",
     "UnregisterMsg",
 ]
 
@@ -80,6 +81,7 @@ TYPE_ADMIN = 3
 TYPE_RESPONSE = 4
 TYPE_ACK = 5
 TYPE_ACK2 = 6
+TYPE_REKEY = 7
 TYPE_UNREGISTER = 9
 TYPE_REGISTER = 10
 TYPE_ATTESTATION = 11
@@ -688,6 +690,46 @@ class RegisterMsg(RembusMsg):
         ).decode()
 
 
+class RekeyMsg(RembusMsg):
+    """Rekey message (same fields as Rekey)."""
+
+    id: int
+    cid: str
+    # SHA256(CBOR([pin, cid])), see pin_proof; base64 text in JSON
+    pin: bytes | str
+    pubkey: bytes | str
+    type: int
+
+    def to_payload(self, enc: int) -> bytes | str:
+        """Serialize the Rekey message (same fields as Rekey)."""
+        if enc == CBOR:
+            return cbor2.dumps(
+                [
+                    TYPE_REKEY | self.flags,
+                    to_bytes(self.id),
+                    self.cid,
+                    self.pin,
+                    self.pubkey,
+                    self.type,
+                    *self.extra,
+                ]
+            )
+
+        return json_dumps(
+            {
+                "rembus": "1.0",
+                "id": str(self.id),
+                "method": self.cid,
+                "params": {
+                    "type": TYPE_REKEY,
+                    "pin": self.pin,
+                    "key_val": self.pubkey,
+                    "key_type": self.type,
+                },
+            }
+        ).decode()
+
+
 class UnregisterMsg(RembusMsg):
     """Unregister message."""
 
@@ -773,6 +815,21 @@ def jsonrpc_request(pkt, msg_id, params) -> RembusMsg:
                 pin = base64.b64decode(pin)
 
             return RegisterMsg(
+                id=msg_id,
+                cid=pkt["method"],
+                pin=pin,
+                pubkey=pubkey,
+                type=params.get("key_type"),
+            )
+        elif msg_type == TYPE_REKEY:
+            pubkey = params.get("key_val")
+            if isinstance(pubkey, str):
+                pubkey = base64.b64decode(pubkey)
+            pin = params.get("pin")
+            if isinstance(pin, str):
+                pin = base64.b64decode(pin)
+
+            return RekeyMsg(
                 id=msg_id,
                 cid=pkt["method"],
                 pin=pin,
@@ -928,6 +985,13 @@ def cbor_parse(pkt) -> RembusMsg:
             pubkey=pkt[4],
             type=pkt[5],
         ),
+        TYPE_REKEY: lambda: RekeyMsg(
+            id=from_bytes(pkt[1]),
+            cid=pkt[2],
+            pin=pkt[3],
+            pubkey=pkt[4],
+            type=pkt[5],
+        ),
         TYPE_UNREGISTER: lambda: UnregisterMsg(id=from_bytes(pkt[1])),
     }
 
@@ -940,6 +1004,7 @@ def cbor_parse(pkt) -> RembusMsg:
         TYPE_IDENTITY: 4,
         TYPE_ATTESTATION: 5,
         TYPE_REGISTER: 6,
+        TYPE_REKEY: 6,
         TYPE_UNREGISTER: 2,
     }
 
@@ -1088,26 +1153,68 @@ def load_public_key(router, cid: str):
 
 
 def save_pubkey(router_id: str, cid: str, pubkey: bytes, keytype: int):
-    """Save the public key to a file in the rembus directory."""
-    name = rs.key_base(router_id, cid)
-    keyformat = "der"
-    # check if pubkey start with -----BEGIN chars
-    if pubkey[0:10] == bytes(
-        [0x2D, 0x2D, 0x2D, 0x2D, 0x2D, 0x42, 0x45, 0x47, 0x49, 0x4E]
-    ):
-        keyformat = "pem"
+    """Store the public key of `cid` with a single atomic rename.
+
+    The key is stored in the canonical file (see
+    `rs.canonical_key_file`); legacy files are removed only after the
+    rename succeeded.
+    """
+    fn = rs.canonical_key_file(router_id, cid)
+    tmp = f"{fn}.tmp"
+    try:
+        with open(tmp, "wb") as f:
+            f.write(pubkey)
+        os.replace(tmp, fn)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except FileNotFoundError:
+            pass
+        raise
+
+    for legacy in rs.legacy_key_files(router_id, cid):
+        os.remove(legacy)
+    return fn
+
+
+def validate_pubkey(pubkey: bytes, keytype: int):
+    """Check that `pubkey` parses as a `keytype` key (RSA >= 2048 bits or
+    ECDSA P-256). Raise ValueError otherwise."""
+    if not isinstance(pubkey, bytes) or not pubkey:
+        raise ValueError("invalid pubkey")
+    try:
+        try:
+            key = serialization.load_pem_public_key(pubkey)
+        except ValueError:
+            key = serialization.load_der_public_key(pubkey)
+    except Exception as e:
+        raise ValueError("invalid pubkey") from e
 
     if keytype == SIG_RSA:
-        typestr = "rsa"
+        if not isinstance(key, rsa.RSAPublicKey) or key.key_size < 2048:
+            raise ValueError("invalid RSA pubkey")
+    elif keytype == SIG_ECDSA:
+        if not isinstance(key, ec.EllipticCurvePublicKey) or not isinstance(
+            key.curve, ec.SECP256R1
+        ):
+            raise ValueError("invalid ECDSA pubkey")
     else:
-        typestr = "ecdsa"
+        raise ValueError(f"invalid key type {keytype}")
 
-    fn = f"{name}.{typestr}.{keyformat}"
-    with open(fn, "wb") as f:
-        f.write(pubkey)
+
+def replace_pubkey(router_id: str, cid: str, pubkey: bytes, keytype: int):
+    """Replace the public key of the registered `cid`.
+
+    Raise FileNotFoundError if `cid` is not registered. On any failure the
+    old key is left untouched.
+    """
+    rs.key_file(router_id, cid)
+    save_pubkey(router_id, cid, pubkey, keytype)
 
 
 def remove_pubkey(router, cid: str):
     """Remove the public key file for a component."""
     fn = rs.key_file(router.id, cid)
     os.remove(fn)
+    for legacy in rs.legacy_key_files(router.id, cid):
+        os.remove(legacy)
