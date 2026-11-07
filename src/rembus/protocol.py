@@ -819,7 +819,7 @@ def jsonrpc_request(pkt, msg_id, params) -> RembusMsg:
                 cid=pkt["method"],
                 pin=pin,
                 pubkey=pubkey,
-                type=params.get("key_type"),
+                type=params.get("key_type", SIG_RSA),
             )
         elif msg_type == TYPE_REKEY:
             pubkey = params.get("key_val")
@@ -834,7 +834,7 @@ def jsonrpc_request(pkt, msg_id, params) -> RembusMsg:
                 cid=pkt["method"],
                 pin=pin,
                 pubkey=pubkey,
-                type=params.get("key_type"),
+                type=params.get("key_type", SIG_RSA),
             )
         elif msg_type == TYPE_UNREGISTER:
             return UnregisterMsg(id=msg_id)

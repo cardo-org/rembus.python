@@ -12,9 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registered component. The sender must be authenticated as `cid` and prove
   knowledge of the registration pin; on any failure the old key is kept and
   the response has status 10. The local private key is replaced only on
-  success.
+  success. Over JSON-RPC it is a request whose `method` is the `cid`, with
+  `params` `{"type": 7, "pin": BASE64, "key_val": BASE64, "key_type": INT}`
+  (same as Register, with `type` 7).
 
 ### Changed
+
+- JSON-RPC `Register` and `Rekey`: an absent `key_type` is now decoded as RSA
+  (1) instead of no value, so an RSA key without `key_type` is accepted and
+  any other key type is rejected with status 10 (type mismatch). Senders
+  SHOULD still include `key_type`.
 
 - `Register` validates the public key before storing it: it must parse as
   the declared type, RSA keys must be at least 2048 bits and ECDSA keys must
