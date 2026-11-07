@@ -158,7 +158,10 @@ private key is saved locally; the connection stays open and the new key is
 used from the next authentication. On any failure (wrong ``pin``, component
 not registered, invalid public key, ``cid`` different from the authenticated
 one, unauthenticated sender) the old key is kept and the broker answers with
-``STS_GENERIC_ERROR``. As for ``register``, avoid sending it over a plaintext
+``STS_GENERIC_ERROR``. With the JSON-RPC encoding the request has the
+component name as ``method`` and ``params`` ``{"type": 7, "pin": BASE64,
+"key_val": BASE64, "key_type": INT}`` (an absent ``key_type`` defaults to
+RSA). As for ``register``, avoid sending it over a plaintext
 connection.
 
 Managing tenants

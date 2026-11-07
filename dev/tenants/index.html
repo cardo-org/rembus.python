@@ -399,7 +399,10 @@ private key is saved locally; the connection stays open and the new key is
 used from the next authentication. On any failure (wrong <code class="docutils literal notranslate"><span class="pre">pin</span></code>, component
 not registered, invalid public key, <code class="docutils literal notranslate"><span class="pre">cid</span></code> different from the authenticated
 one, unauthenticated sender) the old key is kept and the broker answers with
-<code class="docutils literal notranslate"><span class="pre">STS_GENERIC_ERROR</span></code>. As for <code class="docutils literal notranslate"><span class="pre">register</span></code>, avoid sending it over a plaintext
+<code class="docutils literal notranslate"><span class="pre">STS_GENERIC_ERROR</span></code>. With the JSON-RPC encoding the request has the
+component name as <code class="docutils literal notranslate"><span class="pre">method</span></code> and <code class="docutils literal notranslate"><span class="pre">params</span></code> <code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">7,</span> <span class="pre">&quot;pin&quot;:</span> <span class="pre">BASE64,</span>
+<span class="pre">&quot;key_val&quot;:</span> <span class="pre">BASE64,</span> <span class="pre">&quot;key_type&quot;:</span> <span class="pre">INT}</span></code> (an absent <code class="docutils literal notranslate"><span class="pre">key_type</span></code> defaults to
+RSA). As for <code class="docutils literal notranslate"><span class="pre">register</span></code>, avoid sending it over a plaintext
 connection.</p>
 </section>
 <section id="managing-tenants">
