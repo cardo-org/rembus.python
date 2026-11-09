@@ -832,7 +832,7 @@ class Router(Supervised):
             logger.debug("[%s] closed before the identity response", twin)
 
     async def _handle_identity(self, msg: rp.IdentityMsg) -> None:
-        if "challenge" in msg.twin.handler:
+        if "challenge" in msg.twin.handler and not self._anonymous_ok(msg):
             # Run as a task: the router loop must keep dispatching the
             # Attestation this Identity waits for.
             task = asyncio.create_task(self._await_attestation(msg))
@@ -1173,12 +1173,18 @@ class Router(Supervised):
             data=bytes_to_b64(challenge_val, twin.enc),
         )
 
+    def _anonymous_ok(self, msg: rp.IdentityMsg) -> bool:
+        """A loopback component that is not provisioned may stay anonymous."""
+        return self._is_loopback(msg.twin) and not self._needs_auth(msg.cid)
+
     async def _auth_identity(self, msg: rp.IdentityMsg):
         """Authenticate the identity of the component."""
         twin = msg.twin
         identity = msg.cid
 
-        if self.authenticated or self._needs_auth(identity):
+        if not self._anonymous_ok(msg) and (
+            self.authenticated or self._needs_auth(identity)
+        ):
             # Component is provisioned (or the router requires
             # authentication), send the challenge
             response = self._challenge(msg.id, twin)

@@ -86,6 +86,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the new `core.tenant_of(cid, enabled)` returns the root domain when tenants
   are disabled.
 
+### Fixed
+
+- Login of a provisioned component to a router in `authenticated` mode no
+  longer times out when the client is not itself created with
+  `authenticated=True`: the challenge sent on connect is now used to
+  authenticate, since the router defers the `Identity` response until the
+  attestation.
+
+- In `authenticated` mode, a named component that is not provisioned and
+  connects from the loopback interface is now accepted as anonymous instead
+  of waiting for an attestation it cannot send. The client ignores the
+  connect-time challenge when it has no private key.
+
 ## [0.9.2] 2026-10-30
 
 ### Changed

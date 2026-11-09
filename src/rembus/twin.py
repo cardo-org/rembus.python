@@ -790,6 +790,13 @@ class Twin(Supervised):
 
         return {}
 
+    def _has_private_key(self) -> bool:
+        try:
+            rp.load_private_key(self.uid.id)
+            return True
+        except OSError:
+            return False
+
     async def login(self):
         """
         Perform the login handshake with the remote peer.
@@ -827,8 +834,30 @@ class Twin(Supervised):
                     id=id, cid=self.uid.id, meta=self.mesh_meta()
                 )
             )
-            response = await self.wait_response(futreq)
             reqid = None
+            if self._challenge_fut is None:
+                response = await self.wait_response(futreq)
+            else:
+                # An authenticated router sends the challenge on connect
+                # and defers the Identity response until the attestation.
+                await asyncio.wait(
+                    [futreq.future, self._challenge_fut.future],
+                    timeout=self.router.config.request_timeout,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if not (
+                    futreq.future.done() or self._challenge_fut.future.done()
+                ):
+                    raise rp.RembusTimeout()
+                if futreq.future.done():
+                    response = futreq.future.result()
+                elif self._has_private_key():
+                    response = self._challenge_fut.future.result()
+                    reqid = rp.CONNECTION_ID
+                else:
+                    # Not provisioned: ignore the challenge, the router may
+                    # accept the identity anyway (e.g. loopback).
+                    response = await self.wait_response(futreq)
         challenge = response_data(response)
         if isinstance(challenge, bytes | str):
             if isinstance(challenge, str):
@@ -1865,7 +1894,7 @@ class WsTwin(Twin):
         else:
             raise error
         self.handler["phase"] = lambda: "CONNECTING"
-        if self.uid.hasname and self.router.authenticated:
+        if self.uid.hasname:
             # Registered before the receiver starts: the router sends the
             # challenge as soon as the connection is accepted.
             self._challenge_fut = FutureResponse(None)
