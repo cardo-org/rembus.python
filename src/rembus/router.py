@@ -15,6 +15,7 @@ import traceback
 from typing import Callable, Any, Optional, List, cast
 import socket
 import ssl
+import websockets
 from websockets.asyncio.server import serve
 import cbor2
 from cryptography.hazmat.primitives import hashes
@@ -825,7 +826,10 @@ class Router(Supervised):
         finally:
             if twin.handler.get("att") is _set:
                 twin.handler.pop("att")
-        await twin.response(sts, msg)
+        try:
+            await twin.response(sts, msg)
+        except websockets.ConnectionClosed:
+            logger.debug("[%s] closed before the identity response", twin)
 
     async def _handle_identity(self, msg: rp.IdentityMsg) -> None:
         if "challenge" in msg.twin.handler:
