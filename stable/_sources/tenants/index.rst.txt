@@ -139,6 +139,31 @@ The broker rejects the registration when:
 Single-tenant setups need only the default tenant ``.``. A component without
 a domain can be registered only if the ``.`` tenant is configured.
 
+Replacing a component key
+-------------------------
+
+An authenticated component can replace its key pair with
+:meth:`rembus.sync.Node.rekey` (or ``Twin.rekey`` in the async API). It sends
+a ``Rekey`` packet (type ``0x07``) with the same fields as ``Register``; the
+``cid`` is always the authenticated name of the component and ``pin`` is the
+tenant secret.
+
+.. code-block:: python
+
+   rb = rembus.node("ws://host:8000/foo.org")   # authenticated connection
+   rb.rekey("11223344")                          # or rb.rekey(pin, rp.SIG_ECDSA)
+
+On success the broker atomically replaces the stored public key and the new
+private key is saved locally; the connection stays open and the new key is
+used from the next authentication. On any failure (wrong ``pin``, component
+not registered, invalid public key, ``cid`` different from the authenticated
+one, unauthenticated sender) the old key is kept and the broker answers with
+``STS_GENERIC_ERROR``. With the JSON-RPC encoding the request has the
+component name as ``method`` and ``params`` ``{"type": 7, "pin": BASE64,
+"key_val": BASE64, "key_type": INT}`` (an absent ``key_type`` defaults to
+RSA). As for ``register``, avoid sending it over a plaintext
+connection.
+
 Managing tenants
 ----------------
 
@@ -227,3 +252,5 @@ Summary of behaviours
      - other tenants' exposers are never selected (method unavailable)
    * - ``register``
      - requires the secret of the component's tenant; tenant must be enabled
+   * - ``rekey``
+     - requires an authenticated component and the secret of its tenant
