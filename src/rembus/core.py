@@ -8,6 +8,7 @@ import asyncio
 import base64
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Any, List, Optional
 from urllib.parse import urlparse
@@ -59,6 +60,19 @@ def domain(s: str) -> str:
         return s[dot_index + 1 :]
 
     return "."
+
+
+_CID_RE = re.compile(r"[A-Za-z0-9._-]{1,255}")
+
+
+def valid_cid(cid: Any) -> bool:
+    """Check `cid` against the protocol grammar (REQ-AUTH-001)."""
+    return (
+        isinstance(cid, str)
+        and _CID_RE.fullmatch(cid) is not None
+        and not cid.startswith(".")
+        and ".." not in cid
+    )
 
 
 def tenant_of(cid: str, enabled: bool) -> str:

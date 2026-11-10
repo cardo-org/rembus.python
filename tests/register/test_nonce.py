@@ -10,6 +10,7 @@ import rembus
 import rembus.protocol as rp
 import rembus.router as rr
 import rembus.settings as rs
+from rembus.core import valid_cid
 from tools.tenant import add_tenant
 
 PIN = "11223344"
@@ -204,6 +205,20 @@ def test_outstanding_nonces_bounded(server):
         assert res.status == rp.STS_GENERIC_ERROR
         # reissuing for an already challenged cid is not blocked
         _challenge(ws, "test_nonce_many0")
+
+
+@pytest.mark.parametrize(
+    "cid", ["", ".hidden", "a..b", "a/b", "a b", "a@b", "x" * 256, "a\n"]
+)
+def test_invalid_cid_rejected(server, cid):
+    with connect(f"ws://127.0.0.1:{PORT}") as ws:
+        for cls in (rp.RegisterMsg, rp.RekeyMsg):
+            assert _send(ws, cls, cid, b"").status == rp.STS_GENERIC_ERROR
+
+
+def test_valid_cid_grammar():
+    assert all(valid_cid(c) for c in ("a", "a.b", "A_z-9", "x" * 255))
+    assert not any(valid_cid(c) for c in ("", ".a", "a..b", "x" * 256, None))
 
 
 def test_rekey_nonce(server):

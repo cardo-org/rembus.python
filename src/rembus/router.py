@@ -27,7 +27,15 @@ import rembus.builtins as builtins
 import rembus.telemetry as telemetry
 from . import __version__
 from .admin import admin_command, add_exposer, add_subscriber, ismultipath
-from .core import Supervised, RbURL, tenant_of, bytes_to_b64, Node, mesh_nodes
+from .core import (
+    Supervised,
+    RbURL,
+    tenant_of,
+    valid_cid,
+    bytes_to_b64,
+    Node,
+    mesh_nodes,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -851,8 +859,8 @@ class Router(Supervised):
             return
 
         twin_id = msg.cid
-        if not twin_id:
-            await msg.twin.response(rp.STS_GENERIC_ERROR, msg, "empty cid")
+        if not valid_cid(twin_id):
+            await msg.twin.response(rp.STS_GENERIC_ERROR, msg, "invalid cid")
             return
 
         # twins are keyed by cid and the netlink of the listening endpoint
@@ -877,6 +885,9 @@ class Router(Supervised):
         await self._auth_identity(msg)
 
     async def _handle_attestation(self, msg: rp.AttestationMsg) -> None:
+        if not valid_cid(msg.cid):
+            await msg.twin.response(rp.STS_GENERIC_ERROR, msg, "invalid cid")
+            return
         if msg.twin.uid.hasname or "challenge" not in msg.twin.handler:
             # Already identified or no pending challenge.
             await msg.twin.response(
@@ -1265,6 +1276,9 @@ class Router(Supervised):
         sts = rp.STS_GENERIC_ERROR
         reason = None
         twin = msg.twin
+        if not valid_cid(msg.cid):
+            await twin.response(sts, msg, "invalid cid")
+            return
         step = self._pin_step(msg)
         if step == "challenge":
             await self._pin_challenge(twin, rp.TYPE_REGISTER, msg)
@@ -1300,7 +1314,9 @@ class Router(Supervised):
         reason = None
         twin = msg.twin
         try:
-            if not await self.command_permitted(twin) or not twin.isauth:
+            if not valid_cid(msg.cid):
+                reason = "invalid cid"
+            elif not await self.command_permitted(twin) or not twin.isauth:
                 reason = "invalid operation"
             elif msg.cid != twin.rid:
                 reason = "cid does not match the authenticated cid"
