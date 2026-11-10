@@ -32,6 +32,9 @@ from .core import Supervised, RbURL, tenant_of, bytes_to_b64, Node, mesh_nodes
 
 logger = logging.getLogger(__name__)
 
+PIN_NONCE_SIZE = 32
+PIN_NONCE_TTL = 60.0  # seconds
+MAX_PIN_NONCES = 8  # outstanding nonces per connection
 BUILTIN_TOPICS = frozenset({"rid", "version", "uptime"})
 """
 Topic names registered in `Router.handler` that are built-in admin
@@ -1196,27 +1199,83 @@ class Router(Supervised):
 
         await twin.send(response)
 
-    def _get_token(self, tenant, cid: str, proof):
-        """Check the pin proof SHA256(CBOR([pin, cid])) of the tenant."""
+    def _issue_nonce(self, twin, op: int, cid: str) -> bytes | None:
+        """Issue a single-use nonce bound to the connection, op and cid."""
+        now = time.monotonic()
+        nonces = twin.pin_nonces
+        for key in [k for k, (_, t) in nonces.items() if t <= now]:
+            del nonces[key]
+        if (op, cid) not in nonces and len(nonces) >= MAX_PIN_NONCES:
+            return None
+        nonce = os.urandom(PIN_NONCE_SIZE)
+        nonces[(op, cid)] = (nonce, now + PIN_NONCE_TTL)
+        return nonce
+
+    def _get_token(self, twin, op: int, msg) -> bytes | None:
+        """Check the pin proof of a Register/Rekey proof request.
+
+        The outstanding nonce is discarded whatever the outcome.
+        """
+        tenant = tenant_of(msg.cid, self.config.tenants_enabled)
         pin = self.tenants.get(tenant)
-        if (
-            pin is None
-            or not isinstance(proof, bytes)
-            or not hmac.compare_digest(rp.pin_proof(pin, cid), proof)
-        ):
+        entry = twin.pin_nonces.pop((op, msg.cid), None)
+        valid = (
+            entry is not None
+            and isinstance(msg.pin, bytes)
+            and entry[1] > time.monotonic()
+            and pin is not None
+            and isinstance(msg.pubkey, bytes)
+            and isinstance(msg.type, int)
+            and not isinstance(msg.type, bool)
+        )
+        if valid:
+            expected = rp.pin_proof(
+                pin, msg.cid, entry[0], msg.pubkey, msg.type
+            )
+            valid = hmac.compare_digest(expected, msg.pin)
+        if not valid:
             logger.warning("tenant %s: invalid token", tenant)
             return None
         logger.debug("tenant %s: token is valid", tenant)
-        return proof
+        return msg.pin
+
+    async def _pin_challenge(self, twin, op: int, msg) -> None:
+        """Answer a challenge request with a nonce (status 11)."""
+        nonce = self._issue_nonce(twin, op, msg.cid)
+        if nonce is None:
+            await twin.response(rp.STS_GENERIC_ERROR, msg, "too many nonces")
+        else:
+            await twin.send(
+                rp.ResMsg(
+                    id=msg.id,
+                    status=rp.STS_CHALLENGE,
+                    data=bytes_to_b64(nonce, twin.enc),
+                )
+            )
+
+    @staticmethod
+    def _pin_step(msg) -> str:
+        """Classify the pin of a Register/Rekey: challenge, proof or invalid."""
+        if not isinstance(msg.pin, bytes) or len(msg.pin) not in (0, 32):
+            return "invalid"
+        return "challenge" if len(msg.pin) == 0 else "proof"
 
     async def _register_node(self, msg: rp.RegisterMsg):
         """Provision a new node."""
         sts = rp.STS_GENERIC_ERROR
         reason = None
+        twin = msg.twin
+        step = self._pin_step(msg)
+        if step == "challenge":
+            await self._pin_challenge(twin, rp.TYPE_REGISTER, msg)
+            return
+        # Any proof request consumes the nonce, even a malformed one.
+        token = self._get_token(twin, rp.TYPE_REGISTER, msg)
         tenant = tenant_of(msg.cid, self.config.tenants_enabled)
-        token = self._get_token(tenant, msg.cid, msg.pin)
         try:
-            if tenant not in self.tenants:
+            if step == "invalid":
+                reason = "invalid pin length"
+            elif tenant not in self.tenants:
                 reason = f"tenant [{tenant}] not enabled"
             elif token is None:
                 reason = "wrong tenant/pin"
@@ -1233,7 +1292,7 @@ class Router(Supervised):
         except ValueError as e:
             reason = str(e)
         finally:
-            await msg.twin.response(sts, msg, reason)
+            await twin.response(sts, msg, reason)
 
     async def _rekey_node(self, msg: rp.RekeyMsg):
         """Replace the public key of the authenticated component."""
@@ -1245,11 +1304,18 @@ class Router(Supervised):
                 reason = "invalid operation"
             elif msg.cid != twin.rid:
                 reason = "cid does not match the authenticated cid"
+            elif self._pin_step(msg) == "challenge":
+                await self._pin_challenge(twin, rp.TYPE_REKEY, msg)
+                return
             else:
+                step = self._pin_step(msg)
+                token = self._get_token(twin, rp.TYPE_REKEY, msg)
                 tenant = tenant_of(msg.cid, self.config.tenants_enabled)
-                if tenant not in self.tenants:
+                if step == "invalid":
+                    reason = "invalid pin length"
+                elif tenant not in self.tenants:
                     reason = f"tenant [{tenant}] not enabled"
-                elif self._get_token(tenant, msg.cid, msg.pin) is None:
+                elif token is None:
                     reason = "wrong tenant/pin"
                 elif not rp.isregistered(self.id, msg.cid):
                     reason = f"[{msg.cid}] not registered"
@@ -1261,8 +1327,7 @@ class Router(Supervised):
         except (ValueError, OSError) as e:
             sts = rp.STS_GENERIC_ERROR
             reason = str(e)
-        finally:
-            await twin.response(sts, msg, reason)
+        await twin.response(sts, msg, reason)
 
     async def _unregister_node(self, msg: rp.UnregisterMsg):
         """Unprovisions the component."""

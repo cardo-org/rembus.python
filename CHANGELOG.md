@@ -3,6 +3,18 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- `Register` and `Rekey` use a two-step, nonce-bound exchange: an empty `pin`
+  requests a challenge (status 11, `data` = 32-byte nonce) and the proof is
+  `SHA256(CBOR([pin, cid, nonce, pubkey, type]))`. The nonce is single-use,
+  bound to connection, cid and operation, and expires after 60 s. The legacy
+  one-step proof `SHA256(CBOR([pin, cid]))` is rejected (status 10); there is
+  no downgrade. `rp.pin_proof` takes the new arguments. Not interoperable
+  with earlier versions for `Register`/`Rekey`.
+
 ## [0.9.3] 2026-11-09
 
 ### Added

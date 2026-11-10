@@ -136,19 +136,13 @@ def test_jsonrpc_rekey(server):
 
     # raw invalid key: the error member carries status 10
     async def bad_rekey():
-        twin = rb._rb
-        fut = await twin._send_message(
-            lambda id: rembus.protocol.RekeyMsg(
-                id=id,
-                cid=cid,
-                pin=base64.b64encode(
-                    rembus.protocol.pin_proof(pin, cid)
-                ).decode(),
-                pubkey=base64.b64encode(b"garbage").decode(),
-                type=rembus.protocol.SIG_RSA,
-            )
+        return await rb._rb._pin_exchange(
+            rembus.protocol.RekeyMsg,
+            cid,
+            pin,
+            b"garbage",
+            rembus.protocol.SIG_RSA,
         )
-        return await twin.wait_response(fut)
 
     res = rb.exec(bad_rekey)
     assert res.status == rembus.protocol.STS_GENERIC_ERROR
@@ -228,17 +222,9 @@ def test_jsonrpc_register_rekey_default_key_type(server):
 
     def send(rb, cls, pubkey):
         async def go():
-            twin = rb._rb
-            fut = await twin._send_message(
-                lambda id: _without_key_type(cls)(
-                    id=id,
-                    cid=cid,
-                    pin=base64.b64encode(rp.pin_proof(pin, cid)).decode(),
-                    pubkey=base64.b64encode(pubkey).decode(),
-                    type=rp.SIG_RSA,
-                )
+            return await rb._rb._pin_exchange(
+                _without_key_type(cls), cid, pin, pubkey, rp.SIG_RSA
             )
-            return await twin.wait_response(fut)
 
         return rb.exec(go)
 

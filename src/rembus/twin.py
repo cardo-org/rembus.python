@@ -268,6 +268,8 @@ class Twin(Supervised):
         self.overwritten = False
         # True after the component has proved its identity (attestation).
         self.isauth: bool = False
+        # Outstanding Register/Rekey nonces: (op, cid) => (nonce, deadline).
+        self.pin_nonces: dict[tuple[int, str], tuple[bytes, float]] = {}
         # True for a twin created for a component connected to this router.
         self.inbound: bool = False
         self._challenge_fut: Optional[FutureResponse] = None
@@ -1189,6 +1191,37 @@ class Twin(Supervised):
         response = await self.wait_response(futreq)
         return response_data(response)
 
+    async def _pin_exchange(
+        self, msg_cls, cid: str, pin: str, pubkey: bytes, scheme: int
+    ):
+        """Run the two-step Register/Rekey exchange and return the response.
+
+        The challenge request (empty pin) yields a nonce; the proof request
+        carries SHA256(CBOR([pin, cid, nonce, pubkey, type])).
+        """
+        isjson = self.enc == rp.JSON
+        empty = "" if isjson else b""
+        futreq = await self._send_message(
+            lambda id: msg_cls(id=id, cid=cid, pin=empty, pubkey=empty, type=0)
+        )
+        response = await self.wait_response(futreq)
+        if response.status != rp.STS_CHALLENGE:
+            return response
+        nonce = response.data
+        if isinstance(nonce, str):
+            nonce = base64.b64decode(nonce)
+
+        proof = rp.pin_proof(pin, cid, nonce, pubkey, scheme)
+        if isjson:
+            proof = base64.b64encode(proof).decode("utf-8")
+            pubkey = base64.b64encode(pubkey).decode("utf-8")
+        futreq = await self._send_message(
+            lambda id: msg_cls(
+                id=id, cid=cid, pin=proof, pubkey=pubkey, type=scheme
+            )
+        )
+        return await self.wait_response(futreq)
+
     async def register(self, rid: str, pin: str, scheme: int = rp.SIG_RSA):
         """
         Provision a new component with the specified identifier.
@@ -1205,7 +1238,8 @@ class Twin(Supervised):
             The unique identifier for the component to register.
         pin : str
             A PIN code used for component authentication. It is not sent
-            on the wire: the broker receives ``SHA256(CBOR([pin, cid]))``.
+            on the wire: the broker receives
+            ``SHA256(CBOR([pin, cid, nonce, pubkey, type]))``.
         scheme : int, optional
             The cryptographic signature scheme to use for key generation.
             Supported values are:
@@ -1229,19 +1263,9 @@ class Twin(Supervised):
             privkey = rp.ecdsa_private_key()
 
         pubkey = rp.pem_public_key(privkey)
-        if self.enc == rp.JSON:
-            pubkey = base64.b64encode(pubkey).decode("utf-8")
-
-        proof = rp.pin_proof(pin, rid)
-        if self.enc == rp.JSON:
-            proof = base64.b64encode(proof).decode("utf-8")
-
-        futreq = await self._send_message(
-            lambda id: rp.RegisterMsg(
-                id=id, cid=rid, pin=proof, pubkey=pubkey, type=scheme
-            )
+        response = await self._pin_exchange(
+            rp.RegisterMsg, rid, pin, pubkey, scheme
         )
-        response = await self.wait_response(futreq)
         response_data(response)
 
         logger.debug("cid %s registered", rid)
@@ -1279,17 +1303,9 @@ class Twin(Supervised):
             privkey = rp.ecdsa_private_key()
 
         pubkey = rp.pem_public_key(privkey)
-        proof = rp.pin_proof(pin, self.rid)
-        if self.enc == rp.JSON:
-            pubkey = base64.b64encode(pubkey).decode("utf-8")
-            proof = base64.b64encode(proof).decode("utf-8")
-
-        futreq = await self._send_message(
-            lambda id: rp.RekeyMsg(
-                id=id, cid=self.rid, pin=proof, pubkey=pubkey, type=scheme
-            )
+        response = await self._pin_exchange(
+            rp.RekeyMsg, self.rid, pin, pubkey, scheme
         )
-        response = await self.wait_response(futreq)
         response_data(response)
 
         rp.save_private_key(self.rid, privkey)

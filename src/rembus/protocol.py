@@ -655,7 +655,8 @@ class RegisterMsg(RembusMsg):
 
     id: int
     cid: str
-    # SHA256(CBOR([pin, cid])), see pin_proof; base64 text in JSON
+    # empty (challenge request) or the nonce-bound proof (see pin_proof);
+    # base64 text in JSON
     pin: bytes | str
     pubkey: bytes | str
     type: int
@@ -695,7 +696,8 @@ class RekeyMsg(RembusMsg):
 
     id: int
     cid: str
-    # SHA256(CBOR([pin, cid])), see pin_proof; base64 text in JSON
+    # empty (challenge request) or the nonce-bound proof (see pin_proof);
+    # base64 text in JSON
     pin: bytes | str
     pubkey: bytes | str
     type: int
@@ -756,12 +758,18 @@ class UnregisterMsg(RembusMsg):
         ).decode()
 
 
-def pin_proof(pin: str, cid: str) -> bytes:
-    """Return the Register `pin` field value: SHA256(CBOR([pin, cid])).
+def pin_proof(
+    pin: str, cid: str, nonce: bytes, pubkey: bytes, keytype: int
+) -> bytes:
+    """Return the Register/Rekey proof SHA256(CBOR([pin, cid, nonce, pubkey,
+    type])).
 
-    The pin itself is never sent on the wire.
+    The pin itself is never sent on the wire; `pubkey` are the bytes exactly
+    as sent.
     """
-    return hashlib.sha256(cbor2.dumps([pin, cid])).digest()
+    return hashlib.sha256(
+        cbor2.dumps([pin, cid, nonce, pubkey, keytype])
+    ).digest()
 
 
 def isregistered(router_id, rid: str):

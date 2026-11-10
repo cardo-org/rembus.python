@@ -197,17 +197,9 @@ def _rekey_raw(rb, cid, pin, pubkey, keytype=rp.SIG_RSA):
     """Send a Rekey packet with arbitrary fields and wait for the response."""
 
     async def go():
-        twin = rb._rb
-        futreq = await twin._send_message(
-            lambda id: rp.RekeyMsg(
-                id=id,
-                cid=cid,
-                pin=rp.pin_proof(pin, cid),
-                pubkey=pubkey,
-                type=keytype,
-            )
+        return await rb._rb._pin_exchange(
+            rp.RekeyMsg, cid, pin, pubkey, keytype
         )
-        return await twin.wait_response(futreq)
 
     return rb.exec(go)
 
@@ -307,17 +299,9 @@ def _register_raw(rb, cid, pubkey, keytype):
     """Send a Register packet with arbitrary key fields."""
 
     async def go():
-        twin = rb._rb
-        futreq = await twin._send_message(
-            lambda id: rp.RegisterMsg(
-                id=id,
-                cid=cid,
-                pin=rp.pin_proof(PIN, cid),
-                pubkey=pubkey,
-                type=keytype,
-            )
+        return await rb._rb._pin_exchange(
+            rp.RegisterMsg, cid, PIN, pubkey, keytype
         )
-        return await twin.wait_response(futreq)
 
     return rb.exec(go)
 
