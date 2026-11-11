@@ -6,7 +6,6 @@ import pytest
 import rembus
 import rembus.protocol as rp
 import rembus.settings
-from tools.tenant import add_tenant
 
 logger = logging.getLogger(__name__)
 NAME = "test_register"
@@ -15,7 +14,7 @@ PIN = "11223344"
 
 def test_add_tenant():
     # Setup tenant settings
-    add_tenant(".", "11223344")
+    rembus.add_tenant(".", "11223344")
 
 
 def test_register():
@@ -207,7 +206,7 @@ def _rekey_raw(rb, cid, pin, pubkey, keytype=rp.SIG_RSA):
 @pytest.mark.parametrize("scheme", [rp.SIG_RSA, rp.SIG_ECDSA])
 def test_rekey(scheme):
     """The new key replaces the old one: only the new key authenticates."""
-    add_tenant(".", PIN)
+    rembus.add_tenant(".", PIN)
     server = rembus.node(port=REKEY_PORT)
     _fresh_registration(REKEY_NAME)
     old_secret = _read(_secret_path(REKEY_NAME))
@@ -245,7 +244,7 @@ def test_rekey(scheme):
 
 def test_rekey_failures_keep_old_key():
     """Wrong pin, unregistered cid, bad pubkey and cid mismatch fail (10)."""
-    add_tenant(".", PIN)
+    rembus.add_tenant(".", PIN)
     server = rembus.node(port=REKEY_PORT)
     _fresh_registration(REKEY_NAME)
     old_pub = _read(_pubkey_file(REKEY_NAME))
@@ -283,7 +282,7 @@ def test_rekey_failures_keep_old_key():
 
 def test_rekey_unauthenticated_or_unregistered():
     """An anonymous component cannot rekey, nor can an unregistered cid."""
-    add_tenant(".", PIN)
+    rembus.add_tenant(".", PIN)
     server = rembus.node(port=REKEY_PORT)
     rb = rembus.node(f"ws://:{REKEY_PORT}/{REKEY_NAME}_free")
     with pytest.raises(rp.RembusError):
@@ -311,7 +310,7 @@ def test_register_invalid_keys():
     from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
     cid = "test_register_badkey"
-    add_tenant(".", PIN)
+    rembus.add_tenant(".", PIN)
     server = rembus.node(port=REKEY_PORT)
     rb = rembus.node(f"ws://:{REKEY_PORT}/{cid}")
 
@@ -344,7 +343,7 @@ def test_register_invalid_keys():
 def test_legacy_key_file_compat():
     """A legacy key file is still honored and migrated by Rekey."""
     cid = "test_legacy_key"
-    add_tenant(".", PIN)
+    rembus.add_tenant(".", PIN)
     server = rembus.node(port=REKEY_PORT)
     _fresh_registration(cid)
     canonical = _pubkey_file(cid)

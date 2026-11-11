@@ -13,7 +13,6 @@ from websockets.sync.client import connect
 import rembus
 import rembus.protocol as rp
 import rembus.settings as rs
-from tools.tenant import add_tenant
 
 def echo(x):
     return x
@@ -26,7 +25,7 @@ PORT = 8991
 
 def test_authenticated_mode():
     """Only authenticated components can send commands."""
-    add_tenant(".", PIN)
+    rembus.add_tenant(".", PIN)
     try:
         os.remove(rs.key_file(rs.DEFAULT_BROKER, NAME))
     except FileNotFoundError:
@@ -95,7 +94,7 @@ def _recv_response(ws, timeout=5):
 def test_identity_during_pending_challenge():
     """The Identity response is deferred until the attestation outcome."""
     name = "test_identity_pending"
-    add_tenant(".", PIN)
+    rembus.add_tenant(".", PIN)
     try:
         os.remove(rs.key_file(rs.DEFAULT_BROKER, name))
     except FileNotFoundError:
@@ -148,7 +147,7 @@ def test_identity_during_pending_challenge():
 def test_failed_attestation_closes_connection():
     """A failed attestation is answered, then the connection is closed."""
     name = "test_failed_attestation"
-    add_tenant(".", PIN)
+    rembus.add_tenant(".", PIN)
     try:
         os.remove(rs.key_file(rs.DEFAULT_BROKER, name))
     except FileNotFoundError:

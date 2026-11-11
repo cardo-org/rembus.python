@@ -262,6 +262,9 @@ class Router(Supervised):
         )
         self.policy = Policy(policy)
         self.tenants: dict = {}
+        # tenant -> OPAQUE password file
+        self.opaque_tenants: dict[str, bytes] = {}
+        self._opaque_setup: Any = None
         self.start_ts = rp.timestamp()
         self.msg_cache: list[rp.PubSubMsg] = []
         self.msg_topic_cache: dict[str, List[rp.PubSubMsg]] = {}
@@ -1011,6 +1014,8 @@ class Router(Supervised):
                     await self._register_node(msg)
                 case rp.RekeyMsg():
                     await self._rekey_node(msg)
+                case rp.OpaqueMsg():
+                    await self._opaque_register(msg)
                 case rp.UnregisterMsg():
                     await self._unregister_node(msg)
             # Log any dispatch iteration that took a suspiciously long
@@ -1308,6 +1313,84 @@ class Router(Supervised):
         finally:
             await twin.response(sts, msg, reason)
 
+    async def _opaque_register(self, msg: rp.OpaqueMsg):
+        """Register a node authorized by an OPAQUE login to the tenant."""
+        # Imported here to keep the dependency optional at import time.
+        # pylint: disable-next=import-outside-toplevel
+        import opaque_ke_py as ok
+
+        # pylint: disable-next=import-outside-toplevel
+        from . import opaque
+
+        twin = msg.twin
+        sts = rp.STS_GENERIC_ERROR
+        data = None
+        tenant = tenant_of(msg.cid, self.config.tenants_enabled)
+        try:
+            if msg.stage == rp.OPAQUE_START:
+                record = self.opaque_tenants.get(tenant)
+                if record is None:
+                    data = f"tenant [{tenant}] not enabled"
+                else:
+                    if self._opaque_setup is None:
+                        self._opaque_setup = opaque.load_setup(self.id)
+                    out = ok.server_login_start(
+                        self._opaque_setup,
+                        record,
+                        bytes(msg.data),
+                        tenant.encode(),
+                    )
+                    twin.handler["opaque"] = (out.get_state(), msg.cid)
+                    data = bytes_to_b64(out.get_message(), twin.enc)
+                    sts = rp.STS_OK
+            elif msg.stage == rp.OPAQUE_FINISH:
+                # A login state is valid for one finalization only.
+                state = twin.handler.pop("opaque", None)
+                if state is None or state[1] != msg.cid:
+                    data = "unexpected opaque message"
+                else:
+                    sts, data = self._opaque_finish(msg, state[0], ok, opaque)
+            else:
+                data = "invalid opaque stage"
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.warning("[%s] opaque register: %s", twin, e)
+            sts = rp.STS_GENERIC_ERROR
+            data = "opaque register failed"
+        finally:
+            await twin.response(sts, msg, data)
+
+    def _opaque_finish(self, msg: rp.OpaqueMsg, state, ok, opaque):
+        """Verify the OPAQUE login and store the public key.
+
+        Returns the response status and reason.
+        """
+        err = rp.STS_GENERIC_ERROR
+        try:
+            session_key = ok.server_login_finish(
+                state, bytes(msg.data)
+            ).get_session_key()
+        except Exception:  # pylint: disable=broad-exception-caught
+            return err, "wrong tenant/pin"
+
+        pubkey = msg.pubkey
+        if not isinstance(pubkey, bytes) or not isinstance(msg.type, int):
+            return err, "invalid public key"
+        expected = opaque.key_mac(session_key, msg.cid, msg.type, pubkey)
+        if not isinstance(msg.mac, bytes) or not hmac.compare_digest(
+            expected, msg.mac
+        ):
+            return err, "wrong tenant/pin"
+        if rp.isregistered(self.id, msg.cid):
+            return rp.STS_NAME_ALREADY_TAKEN, f"[{msg.cid}] not available"
+        try:
+            rp.validate_pubkey(pubkey, msg.type)
+        except ValueError as e:
+            return err, str(e)
+        os.makedirs(rs.keys_dir(self.id), exist_ok=True)
+        rp.save_pubkey(self.id, msg.cid, pubkey, msg.type)
+        logger.debug("cid %s registered (opaque)", msg.cid)
+        return rp.STS_OK, None
+
     async def _rekey_node(self, msg: rp.RekeyMsg):
         """Replace the public key of the authenticated component."""
         sts = rp.STS_GENERIC_ERROR
@@ -1455,6 +1538,13 @@ def load_tenants(router):
         "SELECT tenant, secret FROM tenant WHERE name = ?", params=[router.id]
     )
     router.tenants = {row[0]: row[1] for row in result.fetchall()}
+    result = db.sql(
+        "SELECT tenant, password_file FROM tenant_opaque WHERE name = ?",
+        params=[router.id],
+    )
+    router.opaque_tenants = {
+        row[0]: bytes(row[1]) for row in result.fetchall()
+    }
 
 
 def load_twin(twin):

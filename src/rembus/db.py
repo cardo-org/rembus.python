@@ -286,6 +286,12 @@ def init_db(router, schema):
             secret TEXT NOT NULL
         )""",
         """
+        CREATE TABLE IF NOT EXISTS tenant_opaque (
+            name TEXT NOT NULL,
+            tenant TEXT NOT NULL,
+            password_file BLOB NOT NULL
+        )""",
+        """
         CREATE TABLE IF NOT EXISTS wait_ack2 (
             name TEXT NOT NULL,
             twin TEXT NOT NULL,

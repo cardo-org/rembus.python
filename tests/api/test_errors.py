@@ -8,14 +8,13 @@ import cbor2
 import rembus
 import rembus.protocol as rp
 import rembus.settings as rs
-from tools.tenant import add_tenant
 
 logger = logging.getLogger(__name__)
 
 
 def test_add_tenant():
     # Setup tenant settings
-    add_tenant(".", "11223344")
+    rembus.add_tenant(".", "11223344")
 
 
 def test_register_error(server):

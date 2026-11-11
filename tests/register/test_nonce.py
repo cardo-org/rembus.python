@@ -11,7 +11,7 @@ import rembus.protocol as rp
 import rembus.router as rr
 import rembus.settings as rs
 from rembus.core import valid_cid
-from tools.tenant import add_tenant
+from rembus.tenant import add_tenant
 
 PIN = "11223344"
 PORT = 8992

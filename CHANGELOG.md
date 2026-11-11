@@ -3,7 +3,7 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.5] Unreleased
 
 ### Changed
 
@@ -14,6 +14,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one-step proof `SHA256(CBOR([pin, cid]))` is rejected (status 10); there is
   no downgrade. `rp.pin_proof` takes the new arguments. Not interoperable
   with earlier versions for `Register`/`Rekey`.
+
+- A `cid` must match `[A-Za-z0-9._-]{1,255}`, must not start with `.` and must
+  not contain `..`; otherwise the connection, `Register`, `Rekey` and `Opaque`
+  requests are rejected with an "invalid cid" error (`core.valid_cid`).
+
+## [0.9.5]
+
+### Changed
+
+- The minimum supported Python version is now 3.12 (required by the
+  `opaque-ke-py` dependency).
+
+## [0.9.4] 2026-11-11
+
+### Added
+
+- `rembus-tenant` console script (also `python -m rembus.tenant`) to manage
+  tenants (`--secret`, `--opaque`, `--delete`, `--broker`) from an installed
+  package.
 
 ## [0.9.3] 2026-11-09
 
@@ -27,6 +46,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   success. Over JSON-RPC it is a request whose `method` is the `cid`, with
   `params` `{"type": 7, "pin": BASE64, "key_val": BASE64, "key_type": INT}`
   (same as Register, with `type` 7).
+
+- `Opaque` packet (type 8) and OPAQUE (RFC 9807) based registration:
+  `rb.register(url, pin, opaque=True)` (also `Node.register` and
+  `Twin.register`) proves the knowledge of the tenant pin without sending it,
+  and the broker stores an OPAQUE record (table `tenant_opaque`, created with
+  `tools/tenant.py --opaque`) instead of the plain secret. The broker server
+  setup is kept in the `opaque_setup` file (mode 0600) of the broker
+  directory. The standard `Register` is unchanged. Adds the `opaque-ke-py`
+  dependency.
 
 ### Changed
 

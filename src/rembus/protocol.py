@@ -32,6 +32,7 @@ __all__ = [
     "AdminMsg",
     "AttestationMsg",
     "IdentityMsg",
+    "OpaqueMsg",
     "PubSubMsg",
     "RegisterMsg",
     "ResMsg",
@@ -82,9 +83,13 @@ TYPE_RESPONSE = 4
 TYPE_ACK = 5
 TYPE_ACK2 = 6
 TYPE_REKEY = 7
+TYPE_OPAQUE = 8
 TYPE_UNREGISTER = 9
 TYPE_REGISTER = 10
 TYPE_ATTESTATION = 11
+
+OPAQUE_START = 1
+OPAQUE_FINISH = 2
 
 STS_OK = 0
 STS_GENERIC_ERROR = 0x0A
@@ -691,6 +696,60 @@ class RegisterMsg(RembusMsg):
         ).decode()
 
 
+class OpaqueMsg(RembusMsg):
+    """OPAQUE register message (two stages).
+
+    Stage 1 carries the OPAQUE credential request in ``data``. Stage 2
+    carries the credential finalization in ``data`` together with the public
+    key to register and ``mac``, an HMAC of the key under the session key
+    derived by the OPAQUE exchange. Byte fields are base64 text in JSON.
+    """
+
+    id: int
+    cid: str
+    stage: int
+    data: bytes | str
+    pubkey: Optional[bytes | str] = None
+    type: Optional[int] = None
+    mac: Optional[bytes | str] = None
+
+    def to_payload(self, enc: int) -> bytes | str:
+        """Serialize the OPAQUE message."""
+        if enc == CBOR:
+            return cbor2.dumps(
+                [
+                    TYPE_OPAQUE | self.flags,
+                    to_bytes(self.id),
+                    self.cid,
+                    self.stage,
+                    self.data,
+                    self.pubkey,
+                    self.type,
+                    self.mac,
+                    *self.extra,
+                ]
+            )
+
+        params: dict[str, Any] = {
+            "type": TYPE_OPAQUE,
+            "stage": self.stage,
+            "data": self.data,
+        }
+        if self.stage == OPAQUE_FINISH:
+            params["key_val"] = self.pubkey
+            params["key_type"] = self.type
+            params["mac"] = self.mac
+
+        return json_dumps(
+            {
+                "rembus": "1.0",
+                "id": str(self.id),
+                "method": self.cid,
+                "params": params,
+            }
+        ).decode()
+
+
 class RekeyMsg(RembusMsg):
     """Rekey message (same fields as Rekey)."""
 
@@ -786,6 +845,11 @@ def tohex(bs: bytes):
     return " ".join(f"0x{x:02x}" for x in bs)
 
 
+def _b64_field(val):
+    """Decode a base64 JSON text field, leaving other values unchanged."""
+    return base64.b64decode(val) if isinstance(val, str) else val
+
+
 def jsonrpc_request(pkt, msg_id, params) -> RembusMsg:
     """Parse a JSON_RPC request"""
     target = pkt.get("target")
@@ -843,6 +907,16 @@ def jsonrpc_request(pkt, msg_id, params) -> RembusMsg:
                 pin=pin,
                 pubkey=pubkey,
                 type=params.get("key_type", SIG_RSA),
+            )
+        elif msg_type == TYPE_OPAQUE:
+            return OpaqueMsg(
+                id=msg_id,
+                cid=pkt["method"],
+                stage=params.get("stage"),
+                data=_b64_field(params.get("data")),
+                pubkey=_b64_field(params.get("key_val")),
+                type=params.get("key_type", SIG_RSA),
+                mac=_b64_field(params.get("mac")),
             )
         elif msg_type == TYPE_UNREGISTER:
             return UnregisterMsg(id=msg_id)
@@ -1000,6 +1074,15 @@ def cbor_parse(pkt) -> RembusMsg:
             pubkey=pkt[4],
             type=pkt[5],
         ),
+        TYPE_OPAQUE: lambda: OpaqueMsg(
+            id=from_bytes(pkt[1]),
+            cid=pkt[2],
+            stage=pkt[3],
+            data=pkt[4],
+            pubkey=pkt[5],
+            type=pkt[6],
+            mac=pkt[7],
+        ),
         TYPE_UNREGISTER: lambda: UnregisterMsg(id=from_bytes(pkt[1])),
     }
 
@@ -1013,6 +1096,7 @@ def cbor_parse(pkt) -> RembusMsg:
         TYPE_ATTESTATION: 5,
         TYPE_REGISTER: 6,
         TYPE_REKEY: 6,
+        TYPE_OPAQUE: 8,
         TYPE_UNREGISTER: 2,
     }
 
