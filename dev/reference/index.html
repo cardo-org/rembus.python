@@ -210,6 +210,7 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../tenants/index.html">Multi-tenancy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../opaque/index.html">OPAQUE registration</a></li>
 </ul>
 
 </div>
@@ -480,6 +481,66 @@ broker.</p>
 <dt class="sig sig-object py" id="rembus.protocol.IdentityMsg.to_payload">
 <span class="sig-name descname"><span class="pre">to_payload</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">enc</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.protocol.IdentityMsg.to_payload" title="Link to this definition">¶</a></dt>
 <dd><p>Serialize the Identity message.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>enc</strong> (<em>int</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>bytes | str</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="rembus.protocol.OpaqueMsg">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">rembus.protocol.</span></span><span class="sig-name descname"><span class="pre">OpaqueMsg</span></span><a class="headerlink" href="#rembus.protocol.OpaqueMsg" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#rembus.protocol.RembusMsg" title="rembus.protocol.RembusMsg"><code class="xref py py-class docutils literal notranslate"><span class="pre">RembusMsg</span></code></a></p>
+<p>OPAQUE register message (two stages).</p>
+<p>Stage 1 carries the OPAQUE credential request in <code class="docutils literal notranslate"><span class="pre">data</span></code>. Stage 2
+carries the credential finalization in <code class="docutils literal notranslate"><span class="pre">data</span></code> together with the public
+key to register and <code class="docutils literal notranslate"><span class="pre">mac</span></code>, an HMAC of the key under the session key
+derived by the OPAQUE exchange. Byte fields are base64 text in JSON.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="rembus.protocol.OpaqueMsg.id">
+<span class="sig-name descname"><span class="pre">id</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><a class="headerlink" href="#rembus.protocol.OpaqueMsg.id" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="rembus.protocol.OpaqueMsg.cid">
+<span class="sig-name descname"><span class="pre">cid</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#rembus.protocol.OpaqueMsg.cid" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="rembus.protocol.OpaqueMsg.stage">
+<span class="sig-name descname"><span class="pre">stage</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><a class="headerlink" href="#rembus.protocol.OpaqueMsg.stage" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="rembus.protocol.OpaqueMsg.data">
+<span class="sig-name descname"><span class="pre">data</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bytes</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#rembus.protocol.OpaqueMsg.data" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="rembus.protocol.OpaqueMsg.pubkey">
+<span class="sig-name descname"><span class="pre">pubkey</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">bytes</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#rembus.protocol.OpaqueMsg.pubkey" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="rembus.protocol.OpaqueMsg.type">
+<span class="sig-name descname"><span class="pre">type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#rembus.protocol.OpaqueMsg.type" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="rembus.protocol.OpaqueMsg.mac">
+<span class="sig-name descname"><span class="pre">mac</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">bytes</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#rembus.protocol.OpaqueMsg.mac" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="rembus.protocol.OpaqueMsg.to_payload">
+<span class="sig-name descname"><span class="pre">to_payload</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">enc</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.protocol.OpaqueMsg.to_payload" title="Link to this definition">¶</a></dt>
+<dd><p>Serialize the OPAQUE message.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>enc</strong> (<em>int</em>)</p>
@@ -1391,7 +1452,7 @@ from the target.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="rembus.twin.Twin.register">
-<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">register</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rid</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scheme</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.Twin.register" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">register</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rid</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scheme</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">opaque</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.Twin.register" title="Link to this definition">¶</a></dt>
 <dd><p>Provision a new component with the specified identifier.</p>
 <p>This method registers a component in the Rembus system by
 associating it with a unique component name (<cite>rid</cite>) and a
@@ -1408,6 +1469,9 @@ on the wire: the broker receives <code class="docutils literal notranslate"><spa
 Supported values are:
 - <cite>rp.SIG_RSA</cite> (default)
 - <cite>rp.SIG_ECDSA</cite></p></li>
+<li><p><strong>opaque</strong> (<em>bool</em><em>, </em><em>optional</em>) – Prove the knowledge of the tenant pin with an OPAQUE login
+(RFC 9807) instead of the pin proof. The broker must hold an
+OPAQUE record for the tenant (see <code class="docutils literal notranslate"><span class="pre">rembus-tenant</span></code>).</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -2530,6 +2594,17 @@ messages towards <cite>twin</cite> without waiting for individual
 <li><a class="reference internal" href="#rembus.protocol.IdentityMsg.cid"><code class="docutils literal notranslate"><span class="pre">IdentityMsg.cid</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.IdentityMsg.meta"><code class="docutils literal notranslate"><span class="pre">IdentityMsg.meta</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.IdentityMsg.to_payload"><code class="docutils literal notranslate"><span class="pre">IdentityMsg.to_payload()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#rembus.protocol.OpaqueMsg"><code class="docutils literal notranslate"><span class="pre">OpaqueMsg</span></code></a><ul>
+<li><a class="reference internal" href="#rembus.protocol.OpaqueMsg.id"><code class="docutils literal notranslate"><span class="pre">OpaqueMsg.id</span></code></a></li>
+<li><a class="reference internal" href="#rembus.protocol.OpaqueMsg.cid"><code class="docutils literal notranslate"><span class="pre">OpaqueMsg.cid</span></code></a></li>
+<li><a class="reference internal" href="#rembus.protocol.OpaqueMsg.stage"><code class="docutils literal notranslate"><span class="pre">OpaqueMsg.stage</span></code></a></li>
+<li><a class="reference internal" href="#rembus.protocol.OpaqueMsg.data"><code class="docutils literal notranslate"><span class="pre">OpaqueMsg.data</span></code></a></li>
+<li><a class="reference internal" href="#rembus.protocol.OpaqueMsg.pubkey"><code class="docutils literal notranslate"><span class="pre">OpaqueMsg.pubkey</span></code></a></li>
+<li><a class="reference internal" href="#rembus.protocol.OpaqueMsg.type"><code class="docutils literal notranslate"><span class="pre">OpaqueMsg.type</span></code></a></li>
+<li><a class="reference internal" href="#rembus.protocol.OpaqueMsg.mac"><code class="docutils literal notranslate"><span class="pre">OpaqueMsg.mac</span></code></a></li>
+<li><a class="reference internal" href="#rembus.protocol.OpaqueMsg.to_payload"><code class="docutils literal notranslate"><span class="pre">OpaqueMsg.to_payload()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#rembus.protocol.PubSubMsg"><code class="docutils literal notranslate"><span class="pre">PubSubMsg</span></code></a><ul>

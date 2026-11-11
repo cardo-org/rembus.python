@@ -139,6 +139,14 @@ The broker rejects the registration when:
 Single-tenant setups need only the default tenant ``.``. A component without
 a domain can be registered only if the ``.`` tenant is configured.
 
+OPAQUE registration
+-------------------
+
+The tenant secret can be verified with an OPAQUE exchange so that the broker
+stores neither the ``pin`` nor a hash of it: register with
+``rb.register(url, "11223344", opaque=True)``. See :doc:`/opaque/index` for
+usage and design.
+
 Replacing a component key
 -------------------------
 
@@ -178,16 +186,16 @@ database, one row per ``(broker name, tenant)``:
        secret TEXT NOT NULL
    )
 
-The ``tools/tenant.py`` script manages them:
+The ``rembus-tenant`` script manages them:
 
 .. code-block:: shell
 
    # add or update a tenant (default broker name: "broker")
-   python tools/tenant.py org --secret deadbeef
-   python tools/tenant.py . --secret deadbeef --broker mybroker
+   rembus-tenant org --secret deadbeef
+   rembus-tenant . --secret deadbeef --broker mybroker
 
    # remove a tenant
-   python tools/tenant.py org --delete
+   rembus-tenant org --delete
 
 The same operations are available from Python:
 
@@ -216,8 +224,8 @@ Complete example
 .. code-block:: shell
 
    # 1. configure the tenants (broker stopped)
-   python tools/tenant.py org --secret orgsecret
-   python tools/tenant.py com --secret comsecret
+   rembus-tenant org --secret orgsecret
+   rembus-tenant com --secret comsecret
 
    # 2. start the broker
    brokerd

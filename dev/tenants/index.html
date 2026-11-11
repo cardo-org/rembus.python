@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="prev" title="RPC" href="../rpc/index.html">
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="OPAQUE registration" href="../opaque/index.html"><link rel="prev" title="RPC" href="../rpc/index.html">
         <link rel="canonical" href="https://cardo-org.github.io/rembus.python/tenants/index.html">
 
     <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
@@ -210,6 +210,7 @@
 </ul>
 </li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Multi-tenancy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../opaque/index.html">OPAQUE registration</a></li>
 </ul>
 
 </div>
@@ -383,6 +384,13 @@ match the secret configured for the tenant of the component name.</p>
 <p>Single-tenant setups need only the default tenant <code class="docutils literal notranslate"><span class="pre">.</span></code>. A component without
 a domain can be registered only if the <code class="docutils literal notranslate"><span class="pre">.</span></code> tenant is configured.</p>
 </section>
+<section id="opaque-registration">
+<h2>OPAQUE registration<a class="headerlink" href="#opaque-registration" title="Link to this heading">¶</a></h2>
+<p>The tenant secret can be verified with an OPAQUE exchange so that the broker
+stores neither the <code class="docutils literal notranslate"><span class="pre">pin</span></code> nor a hash of it: register with
+<code class="docutils literal notranslate"><span class="pre">rb.register(url,</span> <span class="pre">&quot;11223344&quot;,</span> <span class="pre">opaque=True)</span></code>. See <a class="reference internal" href="../opaque/index.html"><span class="doc">OPAQUE registration</span></a> for
+usage and design.</p>
+</section>
 <section id="replacing-a-component-key">
 <h2>Replacing a component key<a class="headerlink" href="#replacing-a-component-key" title="Link to this heading">¶</a></h2>
 <p>An authenticated component can replace its key pair with
@@ -416,13 +424,13 @@ database, one row per <code class="docutils literal notranslate"><span class="pr
 <span class="p">)</span>
 </pre></div>
 </div>
-<p>The <code class="docutils literal notranslate"><span class="pre">tools/tenant.py</span></code> script manages them:</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">rembus-tenant</span></code> script manages them:</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># add or update a tenant (default broker name: "broker")</span>
-python<span class="w"> </span>tools/tenant.py<span class="w"> </span>org<span class="w"> </span>--secret<span class="w"> </span>deadbeef
-python<span class="w"> </span>tools/tenant.py<span class="w"> </span>.<span class="w"> </span>--secret<span class="w"> </span>deadbeef<span class="w"> </span>--broker<span class="w"> </span>mybroker
+rembus-tenant<span class="w"> </span>org<span class="w"> </span>--secret<span class="w"> </span>deadbeef
+rembus-tenant<span class="w"> </span>.<span class="w"> </span>--secret<span class="w"> </span>deadbeef<span class="w"> </span>--broker<span class="w"> </span>mybroker
 
 <span class="c1"># remove a tenant</span>
-python<span class="w"> </span>tools/tenant.py<span class="w"> </span>org<span class="w"> </span>--delete
+rembus-tenant<span class="w"> </span>org<span class="w"> </span>--delete
 </pre></div>
 </div>
 <p>The same operations are available from Python:</p>
@@ -446,8 +454,8 @@ supported: tenants are read only from the broker database.</p>
 <section id="complete-example">
 <h2>Complete example<a class="headerlink" href="#complete-example" title="Link to this heading">¶</a></h2>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># 1. configure the tenants (broker stopped)</span>
-python<span class="w"> </span>tools/tenant.py<span class="w"> </span>org<span class="w"> </span>--secret<span class="w"> </span>orgsecret
-python<span class="w"> </span>tools/tenant.py<span class="w"> </span>com<span class="w"> </span>--secret<span class="w"> </span>comsecret
+rembus-tenant<span class="w"> </span>org<span class="w"> </span>--secret<span class="w"> </span>orgsecret
+rembus-tenant<span class="w"> </span>com<span class="w"> </span>--secret<span class="w"> </span>comsecret
 
 <span class="c1"># 2. start the broker</span>
 brokerd
@@ -502,7 +510,15 @@ brokerd
       <footer>
         
         <div class="related-pages">
-          
+          <a class="next-page" href="../opaque/index.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">OPAQUE registration</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
           <a class="prev-page" href="../rpc/index.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
@@ -554,6 +570,7 @@ brokerd
 </ul>
 </li>
 <li><a class="reference internal" href="#registration-and-tenants">Registration and tenants</a></li>
+<li><a class="reference internal" href="#opaque-registration">OPAQUE registration</a></li>
 <li><a class="reference internal" href="#replacing-a-component-key">Replacing a component key</a></li>
 <li><a class="reference internal" href="#managing-tenants">Managing tenants</a></li>
 <li><a class="reference internal" href="#complete-example">Complete example</a></li>
