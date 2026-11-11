@@ -5,7 +5,6 @@ import pytest
 import rembus
 import rembus.protocol as rp
 import rembus.settings as rs
-from tools.tenant import add_tenant_opaque
 
 PIN = "11223344"
 PORT = 8997
@@ -23,7 +22,7 @@ def test_opaque_register(enc):
     """Register with the tenant pin verified by OPAQUE, without storing it."""
     name = f"test_opaque_{enc}"
     _cleanup(name)
-    add_tenant_opaque(".", PIN)
+    rembus.add_tenant_opaque(".", PIN)
 
     server = rembus.node(port=PORT)
     try:

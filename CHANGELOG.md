@@ -3,6 +3,14 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.4] 2026-11-11
+
+### Added
+
+- `rembus-tenant` console script (also `python -m rembus.tenant`) to manage
+  tenants (`--secret`, `--opaque`, `--delete`, `--broker`) from an installed
+  package.
+
 ## [0.9.3] 2026-11-09
 
 ### Added

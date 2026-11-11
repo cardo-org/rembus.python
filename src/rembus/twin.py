@@ -1220,7 +1220,7 @@ class Twin(Supervised):
         opaque : bool, optional
             Prove the knowledge of the tenant pin with an OPAQUE login
             (RFC 9807) instead of the pin proof. The broker must hold an
-            OPAQUE record for the tenant (see ``tools/tenant.py``).
+            OPAQUE record for the tenant (see ``rembus-tenant``).
 
         Returns
         -------

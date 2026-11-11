@@ -26,18 +26,18 @@ Enable the tenant (broker host)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The administrator stores an OPAQUE record for the tenant with
-``tools/tenant.py``. The command must run where the broker directory is
+``rembus-tenant``. The command must run where the broker directory is
 readable, because it creates (if missing) and uses the broker *server setup*
 file:
 
 .. code-block:: console
 
-   $ python tools/tenant.py --opaque -s 11223344 .        # default tenant
-   $ python tools/tenant.py --opaque -s 11223344 acme.com # tenant "acme.com"
-   $ python tools/tenant.py --opaque -s 11223344 --broker mybroker acme.com
+   $ rembus-tenant --opaque -s 11223344 .        # default tenant
+   $ rembus-tenant --opaque -s 11223344 acme.com # tenant "acme.com"
+   $ rembus-tenant --opaque -s 11223344 --broker mybroker acme.com
 
 Running the command again for the same tenant replaces its record (pin
-change). ``tools/tenant.py -d TENANT`` removes both the plain secret and the
+change). ``rembus-tenant -d TENANT`` removes both the plain secret and the
 OPAQUE record. A running broker loads the records at startup, so restart it
 after changing them.
 
@@ -253,4 +253,4 @@ Implementation map
    * - ``tenant_opaque`` table and ``Router.opaque_tenants``
      - ``rembus/db.py``, ``rembus/router.py``
    * - administration tool
-     - ``tools/tenant.py``
+     - ``rembus-tenant``

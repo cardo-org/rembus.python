@@ -27,6 +27,7 @@ from .router import add_plugin
 from .sync import node, register
 from .keyspace import KeySpaceRouter
 from .db import dbconnect
+from .tenant import add_tenant, add_tenant_opaque, remove_tenant
 
 if os.environ.get("REMBUS_KEEP_PROXY", "0") == "0":
     os.environ.pop("http_proxy", None)
@@ -36,6 +37,9 @@ if os.environ.get("REMBUS_KEEP_PROXY", "0") == "0":
 
 __all__ = [
     "add_plugin",
+    "add_tenant",
+    "add_tenant_opaque",
+    "remove_tenant",
     "anonym",
     "nowbucket",
     "connect",
