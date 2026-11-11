@@ -88,7 +88,8 @@ def test_challenge_hides_registration(server, pubkey):
         nonce = _challenge(ws, NAME)
         res = _proof_req(ws, NAME, nonce, pubkey)
         assert res.status == rp.STS_NAME_ALREADY_TAKEN
-    rembus.node(f"ws://:{PORT}/{NAME}").unregister()
+    with rembus.node(f"ws://:{PORT}/{NAME}") as rb:
+        rb.unregister()
 
 
 def test_register_proof_failures(server, pubkey):
@@ -134,7 +135,8 @@ def test_replay_and_reuse(server, privkey, pubkey):
         # replay of the captured proof on the same connection
         res = _proof_req(ws, cid, nonce, pubkey)
         assert res.status == rp.STS_GENERIC_ERROR
-    rembus.node(f"ws://:{PORT}/{cid}").unregister()
+    with rembus.node(f"ws://:{PORT}/{cid}") as rb:
+        rb.unregister()
 
     with connect(f"ws://127.0.0.1:{PORT}") as ws:
         # replay on another connection
@@ -182,7 +184,8 @@ def test_nonce_binding(server, privkey, pubkey):
         nonce = _challenge(ws1, cid)
         assert _proof_req(ws1, cid, nonce, pubkey).status == rp.STS_OK
         rp.save_private_key(cid, privkey)
-    rembus.node(f"ws://:{PORT}/{cid}").unregister()
+    with rembus.node(f"ws://:{PORT}/{cid}") as rb:
+        rb.unregister()
 
 
 def test_expired_nonce(server, pubkey, monkeypatch):
@@ -268,7 +271,8 @@ def test_rekey_nonce(server):
     with connect(f"ws://127.0.0.1:{PORT}") as ws:
         res = _send(ws, rp.RekeyMsg, cid, b"")
         assert res.status == rp.STS_GENERIC_ERROR
-    rembus.node(f"ws://:{PORT}/{cid}").unregister()
+    with rembus.node(f"ws://:{PORT}/{cid}") as rb:
+        rb.unregister()
 
 
 def test_json_two_step(server):

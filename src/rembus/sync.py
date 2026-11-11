@@ -92,20 +92,24 @@ class Node:
         authenticated: bool = False,
     ):
         self._runner = AsyncLoopRunner(thread)
-        self._rb = self._runner.run(
-            _component(
-                url,
-                name,
-                port,
-                secure,
-                policy,
-                schema,
-                enc,
-                keyspace,
-                mqtt,
-                authenticated=authenticated,
+        try:
+            self._rb = self._runner.run(
+                _component(
+                    url,
+                    name,
+                    port,
+                    secure,
+                    policy,
+                    schema,
+                    enc,
+                    keyspace,
+                    mqtt,
+                    authenticated=authenticated,
+                )
             )
-        )
+        except BaseException:
+            self._runner.shutdown()
+            raise
         self.url = node_url(url)
 
     def __enter__(self):
