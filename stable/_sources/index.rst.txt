@@ -81,6 +81,7 @@ for interacting with the broker.
    pubsub/index
    rpc/index
    tenants/index
+   opaque/index
 
 Indices and tables
 ==================
