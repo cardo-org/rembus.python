@@ -139,6 +139,14 @@ The broker rejects the registration when:
 Single-tenant setups need only the default tenant ``.``. A component without
 a domain can be registered only if the ``.`` tenant is configured.
 
+OPAQUE registration
+-------------------
+
+The tenant secret can be verified with an OPAQUE exchange so that the broker
+stores neither the ``pin`` nor a hash of it: register with
+``rb.register(url, "11223344", opaque=True)``. See :doc:`/opaque/index` for
+usage and design.
+
 Replacing a component key
 -------------------------
 

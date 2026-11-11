@@ -1189,7 +1189,13 @@ class Twin(Supervised):
         response = await self.wait_response(futreq)
         return response_data(response)
 
-    async def register(self, rid: str, pin: str, scheme: int = rp.SIG_RSA):
+    async def register(
+        self,
+        rid: str,
+        pin: str,
+        scheme: int = rp.SIG_RSA,
+        opaque: bool = False,
+    ):
         """
         Provision a new component with the specified identifier.
 
@@ -1211,6 +1217,10 @@ class Twin(Supervised):
             Supported values are:
             - `rp.SIG_RSA` (default)
             - `rp.SIG_ECDSA`
+        opaque : bool, optional
+            Prove the knowledge of the tenant pin with an OPAQUE login
+            (RFC 9807) instead of the pin proof. The broker must hold an
+            OPAQUE record for the tenant (see ``tools/tenant.py``).
 
         Returns
         -------
@@ -1229,6 +1239,11 @@ class Twin(Supervised):
             privkey = rp.ecdsa_private_key()
 
         pubkey = rp.pem_public_key(privkey)
+        if opaque:
+            await self._opaque_register(rid, pin, scheme, pubkey)
+            rp.save_private_key(rid, privkey)
+            return None
+
         if self.enc == rp.JSON:
             pubkey = base64.b64encode(pubkey).decode("utf-8")
 
@@ -1247,6 +1262,56 @@ class Twin(Supervised):
         logger.debug("cid %s registered", rid)
         rp.save_private_key(rid, privkey)
         return None
+
+    async def _opaque_register(
+        self, rid: str, pin: str, scheme: int, pubkey: bytes
+    ):
+        """Register `pubkey` authorized by an OPAQUE login to the tenant."""
+        # pylint: disable-next=import-outside-toplevel
+        import opaque_ke_py as ok
+
+        # pylint: disable-next=import-outside-toplevel
+        from . import opaque
+
+        password = pin.encode()
+        start = ok.client_login_start(password)
+        futreq = await self._send_message(
+            lambda id: rp.OpaqueMsg(
+                id=id,
+                cid=rid,
+                stage=rp.OPAQUE_START,
+                data=bytes_to_b64(start.get_message(), self.enc),
+            )
+        )
+        response = await self.wait_response(futreq)
+        reply = response_data(response)
+        if isinstance(reply, str):
+            reply = base64.b64decode(reply)
+
+        try:
+            finish = ok.client_login_finish(
+                password, start.get_state(), bytes(reply)
+            )
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            raise rp.RembusError(
+                rp.STS_GENERIC_ERROR, "wrong tenant/pin"
+            ) from e
+
+        mac = opaque.key_mac(finish.get_session_key(), rid, scheme, pubkey)
+        futreq = await self._send_message(
+            lambda id: rp.OpaqueMsg(
+                id=id,
+                cid=rid,
+                stage=rp.OPAQUE_FINISH,
+                data=bytes_to_b64(finish.get_message(), self.enc),
+                pubkey=bytes_to_b64(pubkey, self.enc),
+                type=scheme,
+                mac=bytes_to_b64(mac, self.enc),
+            )
+        )
+        response = await self.wait_response(futreq)
+        response_data(response)
+        logger.debug("cid %s registered (opaque)", rid)
 
     async def rekey(self, pin: str, scheme: int = rp.SIG_RSA):
         """

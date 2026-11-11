@@ -170,9 +170,18 @@ class Node:
 
         raise RembusConnectionClosed()
 
-    def register(self, rid: str, pin: str, scheme: int = SIG_RSA):
-        """Register a component with the given rid."""
-        return self.exec(self._rb.register, rid, pin, scheme)
+    def register(
+        self,
+        rid: str,
+        pin: str,
+        scheme: int = SIG_RSA,
+        opaque: bool = False,
+    ):
+        """Register a component with the given rid.
+
+        With `opaque` the tenant pin is verified with an OPAQUE login.
+        """
+        return self.exec(self._rb.register, rid, pin, scheme, opaque)
 
     def rekey(self, pin: str, scheme: int = SIG_RSA):
         """Replace the key pair of the authenticated component."""
@@ -306,14 +315,24 @@ class Node:
             _registry.pop(self.url, None)
 
 
-def register(rid: str, pin: str, scheme: int = SIG_RSA, enc: int = CBOR):
-    """Provisions the component with rid identifier."""
+def register(
+    rid: str,
+    pin: str,
+    scheme: int = SIG_RSA,
+    enc: int = CBOR,
+    opaque: bool = False,
+):
+    """Provisions the component with rid identifier.
+
+    With `opaque` the tenant pin is verified with an OPAQUE login: the pin
+    is never sent nor stored by the broker.
+    """
     rburl = RbURL(rid)
     # An anonymous connection: the component is not provisioned yet, so it
     # cannot authenticate.
     rb = Node(rburl.netlink, enc=enc)
     try:
-        rb.register(rburl.id, pin, scheme)
+        rb.register(rburl.id, pin, scheme, opaque)
     except Exception as e:
         logger.error("[%s] register: %s", rid, e)
         raise

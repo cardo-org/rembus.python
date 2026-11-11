@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `params` `{"type": 7, "pin": BASE64, "key_val": BASE64, "key_type": INT}`
   (same as Register, with `type` 7).
 
+- `Opaque` packet (type 8) and OPAQUE (RFC 9807) based registration:
+  `rb.register(url, pin, opaque=True)` (also `Node.register` and
+  `Twin.register`) proves the knowledge of the tenant pin without sending it,
+  and the broker stores an OPAQUE record (table `tenant_opaque`, created with
+  `tools/tenant.py --opaque`) instead of the plain secret. The broker server
+  setup is kept in the `opaque_setup` file (mode 0600) of the broker
+  directory. The standard `Register` is unchanged. Adds the `opaque-ke-py`
+  dependency.
+
 ### Changed
 
 - JSON-RPC `Register` and `Rekey`: an absent `key_type` is now decoded as RSA
