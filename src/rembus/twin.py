@@ -1222,7 +1222,13 @@ class Twin(Supervised):
         )
         return await self.wait_response(futreq)
 
-    async def register(self, rid: str, pin: str, scheme: int = rp.SIG_RSA):
+    async def register(
+        self,
+        rid: str,
+        pin: str,
+        scheme: int = rp.SIG_RSA,
+        opaque: bool = False,
+    ):
         """
         Provision a new component with the specified identifier.
 
@@ -1272,20 +1278,8 @@ class Twin(Supervised):
             rp.save_private_key(rid, privkey)
             return None
 
-        if self.enc == rp.JSON:
-            pubkey = base64.b64encode(pubkey).decode("utf-8")
-
-        proof = rp.pin_proof(pin, rid)
-        if self.enc == rp.JSON:
-            proof = base64.b64encode(proof).decode("utf-8")
-
-        futreq = await self._send_message(
-            lambda id: rp.RegisterMsg(
-                id=id, cid=rid, pin=proof, pubkey=pubkey, type=scheme
-            )
-        )
         response = await self._pin_exchange(
-                    rp.RegisterMsg, rid, pin, pubkey, scheme
+            rp.RegisterMsg, rid, pin, pubkey, scheme
         )
         response_data(response)
 
