@@ -396,8 +396,8 @@ usage and design.</p>
 <p>An authenticated component can replace its key pair with
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">rembus.sync.Node.rekey()</span></code> (or <code class="docutils literal notranslate"><span class="pre">Twin.rekey</span></code> in the async API). It sends
 a <code class="docutils literal notranslate"><span class="pre">Rekey</span></code> packet (type <code class="docutils literal notranslate"><span class="pre">0x07</span></code>) with the same fields as <code class="docutils literal notranslate"><span class="pre">Register</span></code>; the
-<code class="docutils literal notranslate"><span class="pre">cid</span></code> is always the authenticated name of the component and <code class="docutils literal notranslate"><span class="pre">pin</span></code> is the
-tenant secret.</p>
+<code class="docutils literal notranslate"><span class="pre">cid</span></code> is always the authenticated name of the component and <code class="docutils literal notranslate"><span class="pre">pin</span></code> is the registration secret resolved for the <code class="docutils literal notranslate"><span class="pre">cid</span></code>
+(its own secret, otherwise its tenant’s; see below).</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">rb</span> <span class="o">=</span> <span class="n">rembus</span><span class="o">.</span><span class="n">node</span><span class="p">(</span><span class="s2">"ws://host:8000/foo.org"</span><span class="p">)</span>   <span class="c1"># authenticated connection</span>
 <span class="n">rb</span><span class="o">.</span><span class="n">rekey</span><span class="p">(</span><span class="s2">"11223344"</span><span class="p">)</span>                          <span class="c1"># or rb.rekey(pin, rp.SIG_ECDSA)</span>
 </pre></div>
@@ -424,23 +424,70 @@ database, one row per <code class="docutils literal notranslate"><span class="pr
 <span class="p">)</span>
 </pre></div>
 </div>
-<p>The <code class="docutils literal notranslate"><span class="pre">rembus-tenant</span></code> script manages them:</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">rembus-secure</span></code> script manages them:</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># add or update a tenant (default broker name: "broker")</span>
-rembus-tenant<span class="w"> </span>org<span class="w"> </span>--secret<span class="w"> </span>deadbeef
-rembus-tenant<span class="w"> </span>.<span class="w"> </span>--secret<span class="w"> </span>deadbeef<span class="w"> </span>--broker<span class="w"> </span>mybroker
+rembus-secure<span class="w"> </span>org<span class="w"> </span>--secret<span class="w"> </span>deadbeef
+rembus-secure<span class="w"> </span>.<span class="w"> </span>--secret<span class="w"> </span>deadbeef<span class="w"> </span>--broker<span class="w"> </span>mybroker
 
 <span class="c1"># remove a tenant</span>
-rembus-tenant<span class="w"> </span>org<span class="w"> </span>--delete
+rembus-secure<span class="w"> </span>org<span class="w"> </span>--delete
 </pre></div>
 </div>
 <p>The same operations are available from Python:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">tools.tenant</span><span class="w"> </span><span class="kn">import</span> <span class="n">add_tenant</span><span class="p">,</span> <span class="n">remove_tenant</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">rembus</span><span class="w"> </span><span class="kn">import</span> <span class="n">add_tenant</span><span class="p">,</span> <span class="n">remove_tenant</span>
 
 <span class="n">add_tenant</span><span class="p">(</span><span class="s2">"org"</span><span class="p">,</span> <span class="s2">"deadbeef"</span><span class="p">,</span> <span class="s2">"broker"</span><span class="p">)</span>
 <span class="n">remove_tenant</span><span class="p">(</span><span class="s2">"org"</span><span class="p">,</span> <span class="s2">"broker"</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Adding a tenant that already exists replaces its secret.</p>
+<section id="secrets-per-component-cid">
+<h3>Secrets per component (<code class="docutils literal notranslate"><span class="pre">cid</span></code>)<a class="headerlink" href="#secrets-per-component-cid" title="Link to this heading">¶</a></h3>
+<p>A registration secret can also be associated with a single <code class="docutils literal notranslate"><span class="pre">cid</span></code>. For
+<code class="docutils literal notranslate"><span class="pre">Register</span></code> and <code class="docutils literal notranslate"><span class="pre">Rekey</span></code> the broker resolves the secret of a <code class="docutils literal notranslate"><span class="pre">cid</span></code> as:</p>
+<ol class="arabic simple">
+<li><p>the secret associated with the <code class="docutils literal notranslate"><span class="pre">cid</span></code>, if any;</p></li>
+<li><p>otherwise the secret of its tenant;</p></li>
+<li><p>otherwise none: the request fails with <code class="docutils literal notranslate"><span class="pre">wrong</span> <span class="pre">tenant/pin</span></code>.</p></li>
+</ol>
+<p>If a <code class="docutils literal notranslate"><span class="pre">cid</span></code> has its own secret the tenant secret is <strong>never</strong> accepted for it,
+and a wrong <code class="docutils literal notranslate"><span class="pre">cid</span></code> pin is not retried against the tenant pin. The <code class="docutils literal notranslate"><span class="pre">cid</span></code>
+secret authorizes only <code class="docutils literal notranslate"><span class="pre">Register</span></code> and <code class="docutils literal notranslate"><span class="pre">Rekey</span></code> of that <code class="docutils literal notranslate"><span class="pre">cid</span></code> (it does not
+change how the component authenticates) and is kept after they succeed. A
+secret can be set before the <code class="docutils literal notranslate"><span class="pre">cid</span></code> is registered.</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>rembus-secure<span class="w"> </span>--cid<span class="w"> </span>node1.acme<span class="w"> </span>--secret<span class="w"> </span><span class="m">99887766</span><span class="w">     </span><span class="c1"># secret of one cid</span>
+rembus-secure<span class="w"> </span>--cid<span class="w"> </span>node1.acme<span class="w"> </span>--delete<span class="w">               </span><span class="c1"># back to the tenant's</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">rembus</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">rembus</span><span class="w"> </span><span class="kn">import</span> <span class="n">add_cid</span><span class="p">,</span> <span class="n">add_cid_opaque</span><span class="p">,</span> <span class="n">remove_cid</span>
+
+<span class="n">add_cid</span><span class="p">(</span><span class="s2">"node1.acme"</span><span class="p">,</span> <span class="s2">"99887766"</span><span class="p">)</span>
+<span class="n">remove_cid</span><span class="p">(</span><span class="s2">"node1.acme"</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Removing the secret of a <code class="docutils literal notranslate"><span class="pre">cid</span></code> does not unregister it: its key stays valid
+and a later <code class="docutils literal notranslate"><span class="pre">Rekey</span></code> uses the tenant secret. <code class="docutils literal notranslate"><span class="pre">Unregister</span></code> removes the key
+and the <code class="docutils literal notranslate"><span class="pre">cid</span></code> secret together; afterwards the tenant secret can register the
+<code class="docutils literal notranslate"><span class="pre">cid</span></code> again.</p>
+</section>
+<section id="registration-mode">
+<h3>Registration mode<a class="headerlink" href="#registration-mode" title="Link to this heading">¶</a></h3>
+<p>A tenant is either <code class="docutils literal notranslate"><span class="pre">pin-proof</span></code> or <code class="docutils literal notranslate"><span class="pre">opaque-only</span></code> (see <a class="reference internal" href="../opaque/index.html"><span class="doc">OPAQUE registration</span></a>),
+and every secret of the tenant and of its <code class="docutils literal notranslate"><span class="pre">cid</span></code> s must be in that mode.
+The mode is derived from the secrets held (all pins: <code class="docutils literal notranslate"><span class="pre">pin-proof</span></code>; all OPAQUE
+records: <code class="docutils literal notranslate"><span class="pre">opaque-only</span></code>) unless set explicitly:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>rembus-secure<span class="w"> </span>acme<span class="w"> </span>--mode<span class="w"> </span>opaque-only
+rembus-secure<span class="w"> </span>acme<span class="w"> </span>--mode<span class="w"> </span>derived<span class="w">       </span><span class="c1"># clear the explicit mode</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">add_tenant</span></code>, <code class="docutils literal notranslate"><span class="pre">add_tenant_opaque</span></code>, <code class="docutils literal notranslate"><span class="pre">add_cid</span></code>, <code class="docutils literal notranslate"><span class="pre">add_cid_opaque</span></code> and
+<code class="docutils literal notranslate"><span class="pre">set_tenant_mode</span></code> raise <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> instead of adding a secret of the
+other mode or changing the mode while secrets of the old mode exist. Remove
+them first (<code class="docutils literal notranslate"><span class="pre">remove_tenant</span></code> removes the secret and the explicit mode of the
+tenant and keeps the <code class="docutils literal notranslate"><span class="pre">cid</span></code> secrets).</p>
+<p>The secrets are stored in the tables <code class="docutils literal notranslate"><span class="pre">tenant</span></code>, <code class="docutils literal notranslate"><span class="pre">tenant_opaque</span></code>,
+<code class="docutils literal notranslate"><span class="pre">cid_secret</span></code>, <code class="docutils literal notranslate"><span class="pre">cid_opaque</span></code> and <code class="docutils literal notranslate"><span class="pre">tenant_mode</span></code>.</p>
 <div class="admonition important">
 <p class="admonition-title">Important</p>
 <p>The broker loads the tenants once, at startup, when it is started with a
@@ -451,11 +498,12 @@ single process at a time.</p>
 <p>Unlike Rembus.jl, the <code class="docutils literal notranslate"><span class="pre">tenants.json</span></code> file based configuration is not
 supported: tenants are read only from the broker database.</p>
 </section>
+</section>
 <section id="complete-example">
 <h2>Complete example<a class="headerlink" href="#complete-example" title="Link to this heading">¶</a></h2>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># 1. configure the tenants (broker stopped)</span>
-rembus-tenant<span class="w"> </span>org<span class="w"> </span>--secret<span class="w"> </span>orgsecret
-rembus-tenant<span class="w"> </span>com<span class="w"> </span>--secret<span class="w"> </span>comsecret
+rembus-secure<span class="w"> </span>org<span class="w"> </span>--secret<span class="w"> </span>orgsecret
+rembus-secure<span class="w"> </span>com<span class="w"> </span>--secret<span class="w"> </span>comsecret
 
 <span class="c1"># 2. start the broker</span>
 brokerd
@@ -572,7 +620,11 @@ brokerd
 <li><a class="reference internal" href="#registration-and-tenants">Registration and tenants</a></li>
 <li><a class="reference internal" href="#opaque-registration">OPAQUE registration</a></li>
 <li><a class="reference internal" href="#replacing-a-component-key">Replacing a component key</a></li>
-<li><a class="reference internal" href="#managing-tenants">Managing tenants</a></li>
+<li><a class="reference internal" href="#managing-tenants">Managing tenants</a><ul>
+<li><a class="reference internal" href="#secrets-per-component-cid">Secrets per component (<code class="docutils literal notranslate"><span class="pre">cid</span></code>)</a></li>
+<li><a class="reference internal" href="#registration-mode">Registration mode</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#complete-example">Complete example</a></li>
 <li><a class="reference internal" href="#summary-of-behaviours">Summary of behaviours</a></li>
 </ul>

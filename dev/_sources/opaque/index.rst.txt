@@ -16,8 +16,13 @@ OPAQUE registration (`RFC 9807 <https://www.rfc-editor.org/rfc/rfc9807>`_, an
 * the component also verifies that it is talking to the broker that holds the
   tenant record.
 
-It is opt-in: the standard ``Register`` keeps working and ``Rekey`` still uses
-the standard pin proof.
+It is opt-in: the standard ``Register`` keeps working. ``Rekey`` can use
+either the standard pin proof or OPAQUE (``rekey(pin, opaque=True)``), as the
+mode of the tenant requires.
+
+A tenant is in one mode only: ``pin-proof`` or ``opaque-only``. In an
+``opaque-only`` tenant the broker holds no pin at all (tenant or ``cid``) and a
+standard pin proof always fails. See :doc:`/tenants/index` for the mode rules.
 
 Usage
 -----
@@ -26,23 +31,38 @@ Enable the tenant (broker host)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The administrator stores an OPAQUE record for the tenant with
-``rembus-tenant``. The command must run where the broker directory is
+``rembus-secure``. The command must run where the broker directory is
 readable, because it creates (if missing) and uses the broker *server setup*
 file:
 
 .. code-block:: console
 
-   $ rembus-tenant --opaque -s 11223344 .        # default tenant
-   $ rembus-tenant --opaque -s 11223344 acme.com # tenant "acme.com"
-   $ rembus-tenant --opaque -s 11223344 --broker mybroker acme.com
+   $ rembus-secure --opaque -s 11223344 .        # default tenant
+   $ rembus-secure --opaque -s 11223344 acme.com # tenant "acme.com"
+   $ rembus-secure --opaque -s 11223344 --broker mybroker acme.com
 
 Running the command again for the same tenant replaces its record (pin
-change). ``rembus-tenant -d TENANT`` removes both the plain secret and the
-OPAQUE record. A running broker loads the records at startup, so restart it
-after changing them.
+change). ``rembus-secure -d TENANT`` removes the tenant secret. A running
+broker loads the records at startup, so restart it after changing them.
 
-The same tenant can have a plain secret and an OPAQUE record: the protocol
-used is chosen by the component.
+A tenant cannot hold both a plain secret and an OPAQUE record: adding one of
+the other mode raises ``ValueError`` until the old one is removed.
+
+Record for a single component
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A component can have its own pin, stored as its own OPAQUE record. The
+record is bound to the identifier ``cid:<cid>``, so it cannot be used for the
+tenant or for another ``cid``. The tenant record is used for the ``cid`` s
+without one; a ``cid`` with its own record never accepts the tenant pin:
+
+.. code-block:: console
+
+   $ rembus-secure --cid --opaque -s 99887766 sensor1.acme.com
+   $ rembus-secure --cid -d sensor1.acme.com    # back to the tenant record
+
+From Python: ``rembus.add_cid_opaque(cid, pin)`` and ``rembus.remove_cid(cid)``.
+``Unregister`` removes the key and the record of the ``cid``.
 
 Register a component
 ^^^^^^^^^^^^^^^^^^^^
@@ -74,9 +94,9 @@ Errors
 
 ``RembusError`` is raised with the same reasons of the standard registration:
 
-* ``tenant [acme.com] not enabled``: no OPAQUE record for the tenant;
-* ``wrong tenant/pin``: the pin does not match the tenant record (detected by
-  the component, when the broker proof does not verify, or by the broker);
+* ``wrong tenant/pin``: no secret applies to the ``cid`` or the pin does not
+  match the resolved record (detected by the component, when the broker proof
+  does not verify, or by the broker). The reply does not tell which;
 * ``[sensor1] not available`` (``STS_NAME_ALREADY_TAKEN``): the name is
   already registered;
 * invalid public key (type mismatch, RSA smaller than 2048 bits, ECDSA curve
@@ -115,18 +135,22 @@ Roles and data
    * - Server setup (``opaque_setup``)
      - broker, file mode 0600
      - OPRF seed and server long-term keypair; one per broker
-   * - Password file (table ``tenant_opaque``: ``name``, ``tenant``,
+   * - Password file (tables ``tenant_opaque``: ``name``, ``tenant``,
+       ``password_file``; ``cid_opaque``: ``name``, ``cid``,
        ``password_file``)
      - broker, database
-     - OPAQUE record of the tenant: client public key and the encrypted
-       *envelope*; contains no pin and no pin hash
+     - OPAQUE record of the tenant or of a ``cid``: client public key and the
+       encrypted *envelope*; contains no pin and no pin hash
    * - Pin
      - component only
      - never leaves the component
 
-The OPRF key of a tenant is derived from the seed and the OPAQUE credential
-identifier, so no per-tenant secret has to be stored. The OPAQUE *username* is
-the tenant name: one record serves all the components of the tenant.
+The OPRF key of a record is derived from the seed and the OPAQUE credential
+identifier, so no per-record secret has to be stored. The identifier is the
+tenant name for a tenant record and ``cid:`` followed by the ``cid`` for a
+``cid`` record (``:`` is not allowed in a ``cid``, so there are no
+collisions). One tenant record serves all the components of the tenant that
+have no record of their own.
 
 Enrollment (administrator)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -149,10 +173,12 @@ public key to register to the resulting session with a MAC:
    component                                      broker
    ---------                                      ------
    KE1 = client_login_start(pin)
-   Opaque(stage=1, cid, data=KE1)        ----->   tenant = tenant_of(cid)
-                                                  record = tenant_opaque[tenant]
+   Opaque(stage=1, cid, data=KE1)        ----->   record = cid_opaque[cid], else
+                                                  tenant_opaque[tenant_of(cid)],
+                                                  else a fake record
                                                   KE2, state = server_login_start(
-                                                       setup, record, KE1, tenant)
+                                                       setup, record, KE1,
+                                                       "cid:"+cid | tenant)
                                          <-----   Response(OK, KE2)
                                                   (state kept on the connection)
    KE3, session_key = client_login_finish(
@@ -184,8 +210,9 @@ Properties and decisions:
 * A wrong pin is reported as ``wrong tenant/pin``: the component cannot
   recover the envelope, and cannot tell a bad pin from a broker that does not
   hold the real record.
-* The existence of a tenant record is revealed by the stage 1 error
-  (``tenant [x] not enabled``), as in the standard registration.
+* A tenant, a ``cid`` or the tenant of a ``cid`` without record all get the same
+  stage 1 reply (a fake record is used), so the stage 1 does not reveal
+  whether a record exists; every failure surfaces at stage 2.
 * The login state is per connection and not persisted: a broker restart
   between the two stages makes the component retry.
 
@@ -250,7 +277,8 @@ Implementation map
      - ``rembus/router.py``
    * - component side ``Twin.register(..., opaque=True)``
      - ``rembus/twin.py``
-   * - ``tenant_opaque`` table and ``Router.opaque_tenants``
+   * - ``tenant_opaque`` / ``cid_opaque`` / ``cid_secret`` / ``tenant_mode``
+       tables, ``Router._resolve_secret``
      - ``rembus/db.py``, ``rembus/router.py``
-   * - administration tool
-     - ``rembus-tenant``
+   * - administration tool and API (``add_cid``, ``set_tenant_mode``, ...)
+     - ``rembus-secure``, ``rembus/tenant.py``

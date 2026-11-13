@@ -265,27 +265,43 @@ offline from a captured exchange;</p></li>
 <li><p>the component also verifies that it is talking to the broker that holds the
 tenant record.</p></li>
 </ul>
-<p>It is opt-in: the standard <code class="docutils literal notranslate"><span class="pre">Register</span></code> keeps working and <code class="docutils literal notranslate"><span class="pre">Rekey</span></code> still uses
-the standard pin proof.</p>
+<p>It is opt-in: the standard <code class="docutils literal notranslate"><span class="pre">Register</span></code> keeps working. <code class="docutils literal notranslate"><span class="pre">Rekey</span></code> can use
+either the standard pin proof or OPAQUE (<code class="docutils literal notranslate"><span class="pre">rekey(pin,</span> <span class="pre">opaque=True)</span></code>), as the
+mode of the tenant requires.</p>
+<p>A tenant is in one mode only: <code class="docutils literal notranslate"><span class="pre">pin-proof</span></code> or <code class="docutils literal notranslate"><span class="pre">opaque-only</span></code>. In an
+<code class="docutils literal notranslate"><span class="pre">opaque-only</span></code> tenant the broker holds no pin at all (tenant or <code class="docutils literal notranslate"><span class="pre">cid</span></code>) and a
+standard pin proof always fails. See <a class="reference internal" href="../tenants/index.html"><span class="doc">Multi-tenancy</span></a> for the mode rules.</p>
 <section id="usage">
 <h2>Usage<a class="headerlink" href="#usage" title="Link to this heading">¶</a></h2>
 <section id="enable-the-tenant-broker-host">
 <h3>Enable the tenant (broker host)<a class="headerlink" href="#enable-the-tenant-broker-host" title="Link to this heading">¶</a></h3>
 <p>The administrator stores an OPAQUE record for the tenant with
-<code class="docutils literal notranslate"><span class="pre">rembus-tenant</span></code>. The command must run where the broker directory is
+<code class="docutils literal notranslate"><span class="pre">rembus-secure</span></code>. The command must run where the broker directory is
 readable, because it creates (if missing) and uses the broker <em>server setup</em>
 file:</p>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>rembus-tenant<span class="w"> </span>--opaque<span class="w"> </span>-s<span class="w"> </span><span class="m">11223344</span><span class="w"> </span>.<span class="w">        </span><span class="c1"># default tenant</span>
-<span class="gp">$ </span>rembus-tenant<span class="w"> </span>--opaque<span class="w"> </span>-s<span class="w"> </span><span class="m">11223344</span><span class="w"> </span>acme.com<span class="w"> </span><span class="c1"># tenant "acme.com"</span>
-<span class="gp">$ </span>rembus-tenant<span class="w"> </span>--opaque<span class="w"> </span>-s<span class="w"> </span><span class="m">11223344</span><span class="w"> </span>--broker<span class="w"> </span>mybroker<span class="w"> </span>acme.com
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>rembus-secure<span class="w"> </span>--opaque<span class="w"> </span>-s<span class="w"> </span><span class="m">11223344</span><span class="w"> </span>.<span class="w">        </span><span class="c1"># default tenant</span>
+<span class="gp">$ </span>rembus-secure<span class="w"> </span>--opaque<span class="w"> </span>-s<span class="w"> </span><span class="m">11223344</span><span class="w"> </span>acme.com<span class="w"> </span><span class="c1"># tenant "acme.com"</span>
+<span class="gp">$ </span>rembus-secure<span class="w"> </span>--opaque<span class="w"> </span>-s<span class="w"> </span><span class="m">11223344</span><span class="w"> </span>--broker<span class="w"> </span>mybroker<span class="w"> </span>acme.com
 </pre></div>
 </div>
 <p>Running the command again for the same tenant replaces its record (pin
-change). <code class="docutils literal notranslate"><span class="pre">rembus-tenant</span> <span class="pre">-d</span> <span class="pre">TENANT</span></code> removes both the plain secret and the
-OPAQUE record. A running broker loads the records at startup, so restart it
-after changing them.</p>
-<p>The same tenant can have a plain secret and an OPAQUE record: the protocol
-used is chosen by the component.</p>
+change). <code class="docutils literal notranslate"><span class="pre">rembus-secure</span> <span class="pre">-d</span> <span class="pre">TENANT</span></code> removes the tenant secret. A running
+broker loads the records at startup, so restart it after changing them.</p>
+<p>A tenant cannot hold both a plain secret and an OPAQUE record: adding one of
+the other mode raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> until the old one is removed.</p>
+</section>
+<section id="record-for-a-single-component">
+<h3>Record for a single component<a class="headerlink" href="#record-for-a-single-component" title="Link to this heading">¶</a></h3>
+<p>A component can have its own pin, stored as its own OPAQUE record. The
+record is bound to the identifier <code class="docutils literal notranslate"><span class="pre">cid:&lt;cid&gt;</span></code>, so it cannot be used for the
+tenant or for another <code class="docutils literal notranslate"><span class="pre">cid</span></code>. The tenant record is used for the <code class="docutils literal notranslate"><span class="pre">cid</span></code> s
+without one; a <code class="docutils literal notranslate"><span class="pre">cid</span></code> with its own record never accepts the tenant pin:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>rembus-secure<span class="w"> </span>--cid<span class="w"> </span>--opaque<span class="w"> </span>-s<span class="w"> </span><span class="m">99887766</span><span class="w"> </span>sensor1.acme.com
+<span class="gp">$ </span>rembus-secure<span class="w"> </span>--cid<span class="w"> </span>-d<span class="w"> </span>sensor1.acme.com<span class="w">    </span><span class="c1"># back to the tenant record</span>
+</pre></div>
+</div>
+<p>From Python: <code class="docutils literal notranslate"><span class="pre">rembus.add_cid_opaque(cid,</span> <span class="pre">pin)</span></code> and <code class="docutils literal notranslate"><span class="pre">rembus.remove_cid(cid)</span></code>.
+<code class="docutils literal notranslate"><span class="pre">Unregister</span></code> removes the key and the record of the <code class="docutils literal notranslate"><span class="pre">cid</span></code>.</p>
 </section>
 <section id="register-a-component">
 <h3>Register a component<a class="headerlink" href="#register-a-component" title="Link to this heading">¶</a></h3>
@@ -313,9 +329,9 @@ API) behave the same.</p>
 <h3>Errors<a class="headerlink" href="#errors" title="Link to this heading">¶</a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">RembusError</span></code> is raised with the same reasons of the standard registration:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">tenant</span> <span class="pre">[acme.com]</span> <span class="pre">not</span> <span class="pre">enabled</span></code>: no OPAQUE record for the tenant;</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">wrong</span> <span class="pre">tenant/pin</span></code>: the pin does not match the tenant record (detected by
-the component, when the broker proof does not verify, or by the broker);</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">wrong</span> <span class="pre">tenant/pin</span></code>: no secret applies to the <code class="docutils literal notranslate"><span class="pre">cid</span></code> or the pin does not
+match the resolved record (detected by the component, when the broker proof
+does not verify, or by the broker). The reply does not tell which;</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">[sensor1]</span> <span class="pre">not</span> <span class="pre">available</span></code> (<code class="docutils literal notranslate"><span class="pre">STS_NAME_ALREADY_TAKEN</span></code>): the name is
 already registered;</p></li>
 <li><p>invalid public key (type mismatch, RSA smaller than 2048 bits, ECDSA curve
@@ -358,11 +374,12 @@ Python bindings of the Rust <code class="docutils literal notranslate"><span cla
 <td><p>broker, file mode 0600</p></td>
 <td><p>OPRF seed and server long-term keypair; one per broker</p></td>
 </tr>
-<tr class="row-odd"><td><p>Password file (table <code class="docutils literal notranslate"><span class="pre">tenant_opaque</span></code>: <code class="docutils literal notranslate"><span class="pre">name</span></code>, <code class="docutils literal notranslate"><span class="pre">tenant</span></code>,
+<tr class="row-odd"><td><p>Password file (tables <code class="docutils literal notranslate"><span class="pre">tenant_opaque</span></code>: <code class="docutils literal notranslate"><span class="pre">name</span></code>, <code class="docutils literal notranslate"><span class="pre">tenant</span></code>,
+<code class="docutils literal notranslate"><span class="pre">password_file</span></code>; <code class="docutils literal notranslate"><span class="pre">cid_opaque</span></code>: <code class="docutils literal notranslate"><span class="pre">name</span></code>, <code class="docutils literal notranslate"><span class="pre">cid</span></code>,
 <code class="docutils literal notranslate"><span class="pre">password_file</span></code>)</p></td>
 <td><p>broker, database</p></td>
-<td><p>OPAQUE record of the tenant: client public key and the encrypted
-<em>envelope</em>; contains no pin and no pin hash</p></td>
+<td><p>OPAQUE record of the tenant or of a <code class="docutils literal notranslate"><span class="pre">cid</span></code>: client public key and the
+encrypted <em>envelope</em>; contains no pin and no pin hash</p></td>
 </tr>
 <tr class="row-even"><td><p>Pin</p></td>
 <td><p>component only</p></td>
@@ -371,9 +388,12 @@ Python bindings of the Rust <code class="docutils literal notranslate"><span cla
 </tbody>
 </table>
 </div>
-<p>The OPRF key of a tenant is derived from the seed and the OPAQUE credential
-identifier, so no per-tenant secret has to be stored. The OPAQUE <em>username</em> is
-the tenant name: one record serves all the components of the tenant.</p>
+<p>The OPRF key of a record is derived from the seed and the OPAQUE credential
+identifier, so no per-record secret has to be stored. The identifier is the
+tenant name for a tenant record and <code class="docutils literal notranslate"><span class="pre">cid:</span></code> followed by the <code class="docutils literal notranslate"><span class="pre">cid</span></code> for a
+<code class="docutils literal notranslate"><span class="pre">cid</span></code> record (<code class="docutils literal notranslate"><span class="pre">:</span></code> is not allowed in a <code class="docutils literal notranslate"><span class="pre">cid</span></code>, so there are no
+collisions). One tenant record serves all the components of the tenant that
+have no record of their own.</p>
 </section>
 <section id="enrollment-administrator">
 <h3>Enrollment (administrator)<a class="headerlink" href="#enrollment-administrator" title="Link to this heading">¶</a></h3>
@@ -391,10 +411,12 @@ public key to register to the resulting session with a MAC:</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>component                                      broker
 ---------                                      ------
 KE1 = client_login_start(pin)
-Opaque(stage=1, cid, data=KE1)        -----&gt;   tenant = tenant_of(cid)
-                                               record = tenant_opaque[tenant]
+Opaque(stage=1, cid, data=KE1)        -----&gt;   record = cid_opaque[cid], else
+                                               tenant_opaque[tenant_of(cid)],
+                                               else a fake record
                                                KE2, state = server_login_start(
-                                                    setup, record, KE1, tenant)
+                                                    setup, record, KE1,
+                                                    "cid:"+cid | tenant)
                                       &lt;-----   Response(OK, KE2)
                                                (state kept on the connection)
 KE3, session_key = client_login_finish(
@@ -427,8 +449,9 @@ after the broker accepts the registration.</p></li>
 <li><p>A wrong pin is reported as <code class="docutils literal notranslate"><span class="pre">wrong</span> <span class="pre">tenant/pin</span></code>: the component cannot
 recover the envelope, and cannot tell a bad pin from a broker that does not
 hold the real record.</p></li>
-<li><p>The existence of a tenant record is revealed by the stage 1 error
-(<code class="docutils literal notranslate"><span class="pre">tenant</span> <span class="pre">[x]</span> <span class="pre">not</span> <span class="pre">enabled</span></code>), as in the standard registration.</p></li>
+<li><p>A tenant, a <code class="docutils literal notranslate"><span class="pre">cid</span></code> or the tenant of a <code class="docutils literal notranslate"><span class="pre">cid</span></code> without record all get the same
+stage 1 reply (a fake record is used), so the stage 1 does not reveal
+whether a record exists; every failure surfaces at stage 2.</p></li>
 <li><p>The login state is per connection and not persisted: a broker restart
 between the two stages makes the component retry.</p></li>
 </ul>
@@ -506,11 +529,12 @@ unchanged, like in the other packets.</p>
 <tr class="row-odd"><td><p>component side <code class="docutils literal notranslate"><span class="pre">Twin.register(...,</span> <span class="pre">opaque=True)</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">rembus/twin.py</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tenant_opaque</span></code> table and <code class="docutils literal notranslate"><span class="pre">Router.opaque_tenants</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tenant_opaque</span></code> / <code class="docutils literal notranslate"><span class="pre">cid_opaque</span></code> / <code class="docutils literal notranslate"><span class="pre">cid_secret</span></code> / <code class="docutils literal notranslate"><span class="pre">tenant_mode</span></code>
+tables, <code class="docutils literal notranslate"><span class="pre">Router._resolve_secret</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">rembus/db.py</span></code>, <code class="docutils literal notranslate"><span class="pre">rembus/router.py</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p>administration tool</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">rembus-tenant</span></code></p></td>
+<tr class="row-odd"><td><p>administration tool and API (<code class="docutils literal notranslate"><span class="pre">add_cid</span></code>, <code class="docutils literal notranslate"><span class="pre">set_tenant_mode</span></code>, …)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">rembus-secure</span></code>, <code class="docutils literal notranslate"><span class="pre">rembus/tenant.py</span></code></p></td>
 </tr>
 </tbody>
 </table>
@@ -569,6 +593,7 @@ unchanged, like in the other packets.</p>
 <li><a class="reference internal" href="#">OPAQUE registration</a><ul>
 <li><a class="reference internal" href="#usage">Usage</a><ul>
 <li><a class="reference internal" href="#enable-the-tenant-broker-host">Enable the tenant (broker host)</a></li>
+<li><a class="reference internal" href="#record-for-a-single-component">Record for a single component</a></li>
 <li><a class="reference internal" href="#register-a-component">Register a component</a></li>
 <li><a class="reference internal" href="#errors">Errors</a></li>
 <li><a class="reference internal" href="#operational-notes">Operational notes</a></li>
