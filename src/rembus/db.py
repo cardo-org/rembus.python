@@ -292,6 +292,24 @@ def init_db(router, schema):
             password_file BLOB NOT NULL
         )""",
         """
+        CREATE TABLE IF NOT EXISTS cid_secret (
+            name TEXT NOT NULL,
+            cid TEXT NOT NULL,
+            secret TEXT NOT NULL
+        )""",
+        """
+        CREATE TABLE IF NOT EXISTS cid_opaque (
+            name TEXT NOT NULL,
+            cid TEXT NOT NULL,
+            password_file BLOB NOT NULL
+        )""",
+        """
+        CREATE TABLE IF NOT EXISTS tenant_mode (
+            name TEXT NOT NULL,
+            tenant TEXT NOT NULL,
+            mode TEXT NOT NULL
+        )""",
+        """
         CREATE TABLE IF NOT EXISTS wait_ack2 (
             name TEXT NOT NULL,
             twin TEXT NOT NULL,

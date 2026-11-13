@@ -268,8 +268,9 @@ class Twin(Supervised):
         self.overwritten = False
         # True after the component has proved its identity (attestation).
         self.isauth: bool = False
-        # Outstanding Register/Rekey nonces: (op, cid) => (nonce, deadline).
-        self.pin_nonces: dict[tuple[int, str], tuple[bytes, float]] = {}
+        # Outstanding Register/Rekey nonces:
+        # (op, cid) => (nonce, deadline, secret resolved at the challenge).
+        self.pin_nonces: dict[tuple[int, str], tuple[bytes, float, Any]] = {}
         # True for a twin created for a component connected to this router.
         self.inbound: bool = False
         self._challenge_fut: Optional[FutureResponse] = None
@@ -1254,7 +1255,7 @@ class Twin(Supervised):
         opaque : bool, optional
             Prove the knowledge of the tenant pin with an OPAQUE login
             (RFC 9807) instead of the pin proof. The broker must hold an
-            OPAQUE record for the tenant (see ``rembus-tenant``).
+            OPAQUE record for the tenant (see ``rembus-secure``).
 
         Returns
         -------

@@ -41,8 +41,18 @@ def load_setup(router_id: str) -> ok.ServerSetupData:
     return setup
 
 
+def cid_identifier(cid: str) -> str:
+    """The OPAQUE credential identifier of a cid record (``cid:`` + cid).
+
+    The character ``:`` is outside the cid grammar, so it cannot collide with
+    a tenant identifier.
+    """
+    return "cid:" + cid
+
+
 def enroll(router_id: str, tenant: str, pin: str) -> bytes:
-    """Return the password file of the tenant, to be stored by the broker.
+    """Return the password file of the tenant (or, given the identifier of
+    :func:`cid_identifier`, of a cid), to be stored by the broker.
 
     The registration runs locally, so it must be executed where the server
     setup file is readable (see :func:`load_setup`).

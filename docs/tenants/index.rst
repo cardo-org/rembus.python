@@ -153,8 +153,8 @@ Replacing a component key
 An authenticated component can replace its key pair with
 :meth:`rembus.sync.Node.rekey` (or ``Twin.rekey`` in the async API). It sends
 a ``Rekey`` packet (type ``0x07``) with the same fields as ``Register``; the
-``cid`` is always the authenticated name of the component and ``pin`` is the
-tenant secret.
+``cid`` is always the authenticated name of the component and ``pin`` is the registration secret resolved for the ``cid``
+(its own secret, otherwise its tenant's; see below).
 
 .. code-block:: python
 
@@ -186,27 +186,83 @@ database, one row per ``(broker name, tenant)``:
        secret TEXT NOT NULL
    )
 
-The ``rembus-tenant`` script manages them:
+The ``rembus-secure`` script manages them:
 
 .. code-block:: shell
 
    # add or update a tenant (default broker name: "broker")
-   rembus-tenant org --secret deadbeef
-   rembus-tenant . --secret deadbeef --broker mybroker
+   rembus-secure org --secret deadbeef
+   rembus-secure . --secret deadbeef --broker mybroker
 
    # remove a tenant
-   rembus-tenant org --delete
+   rembus-secure org --delete
 
 The same operations are available from Python:
 
 .. code-block:: python
 
-   from tools.tenant import add_tenant, remove_tenant
+   from rembus import add_tenant, remove_tenant
 
    add_tenant("org", "deadbeef", "broker")
    remove_tenant("org", "broker")
 
 Adding a tenant that already exists replaces its secret.
+
+Secrets per component (``cid``)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A registration secret can also be associated with a single ``cid``. For
+``Register`` and ``Rekey`` the broker resolves the secret of a ``cid`` as:
+
+1. the secret associated with the ``cid``, if any;
+2. otherwise the secret of its tenant;
+3. otherwise none: the request fails with ``wrong tenant/pin``.
+
+If a ``cid`` has its own secret the tenant secret is **never** accepted for it,
+and a wrong ``cid`` pin is not retried against the tenant pin. The ``cid``
+secret authorizes only ``Register`` and ``Rekey`` of that ``cid`` (it does not
+change how the component authenticates) and is kept after they succeed. A
+secret can be set before the ``cid`` is registered.
+
+.. code-block:: shell
+
+   rembus-secure --cid node1.acme --secret 99887766     # secret of one cid
+   rembus-secure --cid node1.acme --delete               # back to the tenant's
+
+.. code-block:: python
+
+   import rembus
+   from rembus import add_cid, add_cid_opaque, remove_cid
+
+   add_cid("node1.acme", "99887766")
+   remove_cid("node1.acme")
+
+Removing the secret of a ``cid`` does not unregister it: its key stays valid
+and a later ``Rekey`` uses the tenant secret. ``Unregister`` removes the key
+and the ``cid`` secret together; afterwards the tenant secret can register the
+``cid`` again.
+
+Registration mode
+^^^^^^^^^^^^^^^^^
+
+A tenant is either ``pin-proof`` or ``opaque-only`` (see :doc:`/opaque/index`),
+and every secret of the tenant and of its ``cid`` s must be in that mode.
+The mode is derived from the secrets held (all pins: ``pin-proof``; all OPAQUE
+records: ``opaque-only``) unless set explicitly:
+
+.. code-block:: shell
+
+   rembus-secure acme --mode opaque-only
+   rembus-secure acme --mode derived       # clear the explicit mode
+
+``add_tenant``, ``add_tenant_opaque``, ``add_cid``, ``add_cid_opaque`` and
+``set_tenant_mode`` raise ``ValueError`` instead of adding a secret of the
+other mode or changing the mode while secrets of the old mode exist. Remove
+them first (``remove_tenant`` removes the secret and the explicit mode of the
+tenant and keeps the ``cid`` secrets).
+
+The secrets are stored in the tables ``tenant``, ``tenant_opaque``,
+``cid_secret``, ``cid_opaque`` and ``tenant_mode``.
 
 .. important::
 
@@ -224,8 +280,8 @@ Complete example
 .. code-block:: shell
 
    # 1. configure the tenants (broker stopped)
-   rembus-tenant org --secret orgsecret
-   rembus-tenant com --secret comsecret
+   rembus-secure org --secret orgsecret
+   rembus-secure com --secret comsecret
 
    # 2. start the broker
    brokerd

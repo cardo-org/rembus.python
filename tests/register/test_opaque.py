@@ -8,6 +8,7 @@ import rembus.settings as rs
 
 PIN = "11223344"
 PORT = 8997
+pytestmark = pytest.mark.usefixtures("clean_secrets")
 
 
 def _cleanup(name):
@@ -163,6 +164,10 @@ def test_opaque_tenant_modes():
         server.close()
 
         # opaque-only tenant: the pin proof fails, OPAQUE works.
+        # Changing the mode is refused while a secret of the old mode exists.
+        with pytest.raises(ValueError):
+            rembus.add_tenant_opaque(".", PIN)
+        rembus.remove_tenant(".")
         rembus.add_tenant_opaque(".", PIN)
         server = rembus.node(port=PORT)
         url = _fresh("test_mode_opaque")

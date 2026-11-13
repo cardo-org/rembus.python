@@ -27,6 +27,7 @@ import rembus.builtins as builtins
 import rembus.telemetry as telemetry
 from . import __version__
 from .admin import admin_command, add_exposer, add_subscriber, ismultipath
+from .tenant import MODE_OPAQUE, MODE_PIN
 from .core import (
     Supervised,
     RbURL,
@@ -266,6 +267,11 @@ class Router(Supervised):
         self.tenants: dict = {}
         # tenant -> OPAQUE password file
         self.opaque_tenants: dict[str, bytes] = {}
+        # cid -> pin and cid -> OPAQUE password file (secrets of a cid)
+        self.cid_pins: dict[str, str] = {}
+        self.cid_opaque: dict[str, bytes] = {}
+        # tenant -> explicitly set mode (otherwise derived from the secrets)
+        self.tenant_modes: dict[str, str] = {}
         self._opaque_setup: Any = None
         self.start_ts = rp.timestamp()
         self.msg_cache: list[rp.PubSubMsg] = []
@@ -1217,16 +1223,48 @@ class Router(Supervised):
 
         await twin.send(response)
 
+    def _resolve_secret(self, cid: str, mode: str):
+        """Resolve the registration secret of `cid` (REQ-AUTH-065/066/068).
+
+        The secret of the cid if it has one, otherwise the secret of its
+        tenant; there is no fallback after a cid secret is found. Returns
+        ``(scope, value)`` or None when no secret applies in `mode`.
+        """
+        tenant = tenant_of(cid, self.config.tenants_enabled)
+        if cid in self.cid_pins:
+            scope, kind, value = "cid", MODE_PIN, self.cid_pins[cid]
+        elif cid in self.cid_opaque:
+            scope, kind, value = "cid", MODE_OPAQUE, self.cid_opaque[cid]
+        elif tenant in self.tenants:
+            scope, kind, value = "tenant", MODE_PIN, self.tenants[tenant]
+        elif tenant in self.opaque_tenants:
+            scope = "tenant"
+            kind, value = MODE_OPAQUE, self.opaque_tenants[tenant]
+        else:
+            return None
+        explicit = self.tenant_modes.get(tenant)
+        if kind != mode or (explicit is not None and explicit != mode):
+            return None
+        return scope, value
+
     def _issue_nonce(self, twin, op: int, cid: str) -> bytes | None:
-        """Issue a single-use nonce bound to the connection, op and cid."""
+        """Issue a single-use nonce bound to the connection, op and cid.
+
+        The secret resolved now is remembered: the exchange fails if it is
+        not the one resolved at the final step (REQ-AUTH-071).
+        """
         now = time.monotonic()
         nonces = twin.pin_nonces
-        for key in [k for k, (_, t) in nonces.items() if t <= now]:
+        for key in [k for k, v in nonces.items() if v[1] <= now]:
             del nonces[key]
         if (op, cid) not in nonces and len(nonces) >= MAX_PIN_NONCES:
             return None
         nonce = os.urandom(PIN_NONCE_SIZE)
-        nonces[(op, cid)] = (nonce, now + PIN_NONCE_TTL)
+        nonces[(op, cid)] = (
+            nonce,
+            now + PIN_NONCE_TTL,
+            self._resolve_secret(cid, MODE_PIN),
+        )
         return nonce
 
     def _get_token(self, twin, op: int, msg) -> bytes | None:
@@ -1235,24 +1273,21 @@ class Router(Supervised):
         The outstanding nonce is discarded whatever the outcome.
         """
         tenant = tenant_of(msg.cid, self.config.tenants_enabled)
-        # A tenant is either pin-proof or opaque-only, never both: an
-        # OPAQUE record takes precedence and no pin proof can succeed.
-        pin = (
-            None if tenant in self.opaque_tenants else self.tenants.get(tenant)
-        )
+        resolved = self._resolve_secret(msg.cid, MODE_PIN)
         entry = twin.pin_nonces.pop((op, msg.cid), None)
         valid = (
             entry is not None
             and isinstance(msg.pin, bytes)
             and entry[1] > time.monotonic()
-            and pin is not None
+            and resolved is not None
+            and entry[2] == resolved
             and isinstance(msg.pubkey, bytes)
             and isinstance(msg.type, int)
             and not isinstance(msg.type, bool)
         )
         if valid:
             expected = rp.pin_proof(
-                pin, msg.cid, entry[0], msg.pubkey, msg.type
+                resolved[1], msg.cid, entry[0], msg.pubkey, msg.type
             )
             valid = hmac.compare_digest(expected, msg.pin)
         if not valid:
@@ -1296,12 +1331,9 @@ class Router(Supervised):
             return
         # Any proof request consumes the nonce, even a malformed one.
         token = self._get_token(twin, rp.TYPE_REGISTER, msg)
-        tenant = tenant_of(msg.cid, self.config.tenants_enabled)
         try:
             if step == "invalid":
                 reason = "invalid pin length"
-            elif tenant not in self.tenants:
-                reason = f"tenant [{tenant}] not enabled"
             elif token is None:
                 reason = "wrong tenant/pin"
             elif rp.isregistered(self.id, msg.cid):
@@ -1342,13 +1374,21 @@ class Router(Supervised):
             elif rekey and not self._rekey_session_ok(twin, msg.cid):
                 data = "invalid operation"
             elif msg.stage == rp.OPAQUE_START:
-                record = self.opaque_tenants.get(tenant)
+                resolved = self._resolve_secret(msg.cid, MODE_OPAQUE)
                 if self._opaque_setup is None:
                     self._opaque_setup = opaque.load_setup(self.id)
-                if record is None:
-                    # Same reply as for an existing tenant: the exchange
+                if resolved is None:
+                    # Same reply as for an existing record: the exchange
                     # fails at the finish stage (no enumeration oracle).
                     record = opaque.fake_record(self.id)
+                    identifier = tenant
+                else:
+                    scope, record = resolved
+                    identifier = (
+                        opaque.cid_identifier(msg.cid)
+                        if scope == "cid"
+                        else tenant
+                    )
                 states = twin.handler.setdefault("opaque", {})
                 now = time.monotonic()
                 for k in [k for k, v in states.items() if v[1] <= now]:
@@ -1361,9 +1401,9 @@ class Router(Supervised):
                         self._opaque_setup,
                         record,
                         bytes(msg.data),
-                        tenant.encode(),
+                        identifier.encode(),
                     )
-                    states[key] = (out.get_state(), now + OPAQUE_TTL)
+                    states[key] = (out.get_state(), now + OPAQUE_TTL, resolved)
                     data = bytes_to_b64(out.get_message(), twin.enc)
                     sts = rp.STS_OK
             elif msg.stage == rp.OPAQUE_FINISH:
@@ -1375,7 +1415,7 @@ class Router(Supervised):
                     data = "unexpected opaque message"
                 else:
                     sts, data = self._opaque_finish(
-                        msg, entry[0], ok, opaque
+                        msg, entry[0], ok, opaque, entry[2]
                     )
             else:
                 data = "invalid opaque stage"
@@ -1391,10 +1431,12 @@ class Router(Supervised):
         """An OPAQUE Rekey needs a connection authenticated as `cid`."""
         return bool(twin.isauth and twin.rid == cid)
 
-    def _opaque_finish(self, msg: rp.OpaqueMsg, state, ok, opaque):
+    def _opaque_finish(self, msg: rp.OpaqueMsg, state, ok, opaque, resolved):
         """Verify the OPAQUE login and store the public key.
 
-        Returns the response status and reason.
+        `resolved` is the secret resolved at stage 1: it must still be the
+        one that applies (REQ-AUTH-071). Returns the response status and
+        reason.
         """
         err = rp.STS_GENERIC_ERROR
         try:
@@ -1402,6 +1444,10 @@ class Router(Supervised):
                 state, bytes(msg.data)
             ).get_session_key()
         except Exception:  # pylint: disable=broad-exception-caught
+            return err, "wrong tenant/pin"
+        if resolved is None or resolved != self._resolve_secret(
+            msg.cid, MODE_OPAQUE
+        ):
             return err, "wrong tenant/pin"
 
         pubkey = msg.pubkey
@@ -1452,11 +1498,8 @@ class Router(Supervised):
             else:
                 step = self._pin_step(msg)
                 token = self._get_token(twin, rp.TYPE_REKEY, msg)
-                tenant = tenant_of(msg.cid, self.config.tenants_enabled)
                 if step == "invalid":
                     reason = "invalid pin length"
-                elif tenant not in self.tenants:
-                    reason = f"tenant [{tenant}] not enabled"
                 elif token is None:
                     reason = "wrong tenant/pin"
                 elif not rp.isregistered(self.id, msg.cid):
@@ -1482,10 +1525,48 @@ class Router(Supervised):
             ):
                 reason = "invalid operation"
             else:
-                rp.remove_pubkey(self, msg.twin.rid)
+                self._unregister_cid(msg.twin.rid)
                 sts = rp.STS_OK
         finally:
             await msg.twin.response(sts, msg, reason)
+
+    def _unregister_cid(self, cid: str):
+        """Remove the key and the secret of `cid` together (REQ-AUTH-074).
+
+        On a failure to remove the key the secret is restored.
+        """
+        pin = self.cid_pins.pop(cid, None)
+        record = self.cid_opaque.pop(cid, None)
+        saved = []
+        try:
+            if self.db is not None and (pin or record):
+                for table in ("cid_secret", "cid_opaque"):
+                    saved.append(
+                        (
+                            table,
+                            self.db.execute(
+                                f"SELECT * FROM {table}"
+                                " WHERE name = ? AND cid = ?",
+                                (self.id, cid),
+                            ).fetchall(),
+                        )
+                    )
+                    self.db.execute(
+                        f"DELETE FROM {table} WHERE name = ? AND cid = ?",
+                        (self.id, cid),
+                    )
+            rp.remove_pubkey(self, cid)
+        except BaseException:
+            if pin is not None:
+                self.cid_pins[cid] = pin
+            if record is not None:
+                self.cid_opaque[cid] = record
+            for table, rows in saved:
+                for row in rows:
+                    self.db.execute(
+                        f"INSERT INTO {table} VALUES (?, ?, ?)", tuple(row)
+                    )
+            raise
 
 
 async def twin_up(twin):
@@ -1587,6 +1668,27 @@ def load_tenants(router):
     )
     router.opaque_tenants = {
         row[0]: bytes(row[1]) for row in result.fetchall()
+    }
+    router.cid_pins = {
+        row[0]: row[1]
+        for row in db.sql(
+            "SELECT cid, secret FROM cid_secret WHERE name = ?",
+            params=[router.id],
+        ).fetchall()
+    }
+    router.cid_opaque = {
+        row[0]: bytes(row[1])
+        for row in db.sql(
+            "SELECT cid, password_file FROM cid_opaque WHERE name = ?",
+            params=[router.id],
+        ).fetchall()
+    }
+    router.tenant_modes = {
+        row[0]: row[1]
+        for row in db.sql(
+            "SELECT tenant, mode FROM tenant_mode WHERE name = ?",
+            params=[router.id],
+        ).fetchall()
     }
 
 

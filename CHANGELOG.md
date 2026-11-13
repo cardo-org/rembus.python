@@ -5,7 +5,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.5] Unreleased
 
+### Added
+
+- Registration secrets per `cid` (spec feature 003-cid-scoped-pin):
+  `Register` and `Rekey` resolve the pin of a `cid` from its own secret, else
+  from its tenant, with no fallback after a `cid` secret is found. Applies to
+  pin-proof and OPAQUE (record identifier `cid:<cid>`). New operator API
+  `add_cid`, `add_cid_opaque`, `remove_cid`, `set_tenant_mode` (also in the
+  `rembus-secure` CLI with `--cid` and `--mode`). `Unregister` removes the
+  secret of the `cid`.
+
 ### Changed
+
+- A tenant is in one mode (`pin-proof` or `opaque-only`) and `add_tenant`,
+  `add_tenant_opaque` and `add_cid*` now refuse a secret of the other mode
+  instead of silently replacing the old one; call `remove_tenant` first.
+  `remove_tenant` keeps the secrets of the cids of the tenant.
 
 - `Register` and `Rekey` use a two-step, nonce-bound exchange: an empty `pin`
   requests a challenge (status 11, `data` = 32-byte nonce) and the proof is
@@ -38,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `rembus-tenant` console script (also `python -m rembus.tenant`) to manage
+- `rembus-secure` console script (also `python -m rembus.tenant`) to manage
   tenants (`--secret`, `--opaque`, `--delete`, `--broker`) from an installed
   package.
 

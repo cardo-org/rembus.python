@@ -65,7 +65,7 @@ test = [
 
 [project.scripts]
 brokerd = "rembus.brokerd:main"
-rembus-tenant = "rembus.tenant:main"
+rembus-secure = "rembus.tenant:main"
 
 [project.urls]
 "Homepage" = "https://github.com/cardo-org/rembus.python"
