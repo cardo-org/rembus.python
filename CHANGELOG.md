@@ -19,9 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not contain `..`; otherwise the connection, `Register`, `Rekey` and `Opaque`
   requests are rejected with an "invalid cid" error (`core.valid_cid`).
 
-## [0.9.5]
-
-### Changed
+- `Opaque` packets carry an optional trailing `op` (1 Register, default and
+  omitted on the wire; 2 Rekey) and the key MAC label is `rembus-register` or
+  `rembus-rekey`. `rekey(pin, opaque=True)` authorizes the new key with an
+  OPAQUE login and requires a connection authenticated as the same cid. Stage 1
+  for a tenant without an OPAQUE record is answered from a fake record, so an
+  unknown tenant is no longer distinguishable from a wrong pin. A stage 1
+  exchange expires after 60 s (`router.OPAQUE_TTL`), a connection may hold at
+  most 8 (`router.OPAQUE_MAX_EXCHANGES`), and a tenant is either pin-proof or
+  opaque-only: `add_tenant` removes its OPAQUE record, `add_tenant_opaque`
+  removes its plain secret, and a pin proof never succeeds for a tenant that
+  has an OPAQUE record.
 
 - The minimum supported Python version is now 3.12 (required by the
   `opaque-ke-py` dependency).

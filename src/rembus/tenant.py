@@ -3,9 +3,22 @@ from .db import dbconnect
 
 
 def add_tenant(tenant: str, secret: str, broker_name: str = "broker"):
-    """Register `tenant` with a plain shared `secret`."""
+    """Register `tenant` with a plain shared `secret` (pin-proof mode).
+
+    Any OPAQUE record of the tenant is removed: a tenant is in one mode only.
+    """
     db = dbconnect(broker_name)
     try:
+        db.execute("""
+        CREATE TABLE IF NOT EXISTS tenant_opaque (
+            name TEXT NOT NULL,
+            tenant TEXT NOT NULL,
+            password_file BLOB NOT NULL)
+        """)
+        db.execute(
+            "DELETE FROM tenant_opaque WHERE name = ? AND tenant = ?",
+            (broker_name, tenant),
+        )
         db.execute("""
         CREATE TABLE IF NOT EXISTS tenant (
             name TEXT NOT NULL,
@@ -25,10 +38,24 @@ def add_tenant(tenant: str, secret: str, broker_name: str = "broker"):
 
 
 def add_tenant_opaque(tenant: str, secret: str, broker_name: str = "broker"):
-    """Enable the tenant for OPAQUE registrations: the secret is not stored."""
+    """Enable the tenant for OPAQUE registrations: the secret is not stored.
+
+    The plain secret of the tenant, if any, is removed: a tenant is in one
+    mode only (``opaque-only``).
+    """
     record = opaque.enroll(broker_name, tenant, secret)
     db = dbconnect(broker_name)
     try:
+        db.execute("""
+        CREATE TABLE IF NOT EXISTS tenant (
+            name TEXT NOT NULL,
+            tenant TEXT NOT NULL,
+            secret TEXT NOT NULL)
+        """)
+        db.execute(
+            "DELETE FROM tenant WHERE name = ? AND tenant = ?",
+            (broker_name, tenant),
+        )
         db.execute("""
         CREATE TABLE IF NOT EXISTS tenant_opaque (
             name TEXT NOT NULL,

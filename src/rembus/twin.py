@@ -1288,9 +1288,15 @@ class Twin(Supervised):
         return None
 
     async def _opaque_register(
-        self, rid: str, pin: str, scheme: int, pubkey: bytes
+        self,
+        rid: str,
+        pin: str,
+        scheme: int,
+        pubkey: bytes,
+        op: int = rp.OPAQUE_OP_REGISTER,
     ):
-        """Register `pubkey` authorized by an OPAQUE login to the tenant."""
+        """Register (or rekey, `op` 2) `pubkey` authorized by an OPAQUE login
+        to the tenant."""
         # pylint: disable-next=import-outside-toplevel
         import opaque_ke_py as ok
 
@@ -1305,6 +1311,7 @@ class Twin(Supervised):
                 cid=rid,
                 stage=rp.OPAQUE_START,
                 data=bytes_to_b64(start.get_message(), self.enc),
+                op=op,
             )
         )
         response = await self.wait_response(futreq)
@@ -1321,7 +1328,9 @@ class Twin(Supervised):
                 rp.STS_GENERIC_ERROR, "wrong tenant/pin"
             ) from e
 
-        mac = opaque.key_mac(finish.get_session_key(), rid, scheme, pubkey)
+        mac = opaque.key_mac(
+            finish.get_session_key(), rid, scheme, pubkey, op
+        )
         futreq = await self._send_message(
             lambda id: rp.OpaqueMsg(
                 id=id,
@@ -1331,13 +1340,16 @@ class Twin(Supervised):
                 pubkey=bytes_to_b64(pubkey, self.enc),
                 type=scheme,
                 mac=bytes_to_b64(mac, self.enc),
+                op=op,
             )
         )
         response = await self.wait_response(futreq)
         response_data(response)
-        logger.debug("cid %s registered (opaque)", rid)
+        logger.debug("cid %s opaque op %s done", rid, op)
 
-    async def rekey(self, pin: str, scheme: int = rp.SIG_RSA):
+    async def rekey(
+        self, pin: str, scheme: int = rp.SIG_RSA, opaque: bool = False
+    ):
         """
         Replace the key pair of the current (authenticated) component.
 
@@ -1353,6 +1365,10 @@ class Twin(Supervised):
             The secret of the component tenant (not sent on the wire).
         scheme : int, optional
             `rp.SIG_RSA` (default) or `rp.SIG_ECDSA`.
+        opaque : bool, optional
+            Authorize the new key with an OPAQUE login (`Opaque` packet,
+            `op` 2) instead of the pin proof. The tenant must have an OPAQUE
+            record.
 
         Raises
         ------
@@ -1368,10 +1384,15 @@ class Twin(Supervised):
             privkey = rp.ecdsa_private_key()
 
         pubkey = rp.pem_public_key(privkey)
-        response = await self._pin_exchange(
-            rp.RekeyMsg, self.rid, pin, pubkey, scheme
-        )
-        response_data(response)
+        if opaque:
+            await self._opaque_register(
+                self.rid, pin, scheme, pubkey, rp.OPAQUE_OP_REKEY
+            )
+        else:
+            response = await self._pin_exchange(
+                rp.RekeyMsg, self.rid, pin, pubkey, scheme
+            )
+            response_data(response)
 
         rp.save_private_key(self.rid, privkey)
         logger.debug("cid %s rekeyed", self.rid)

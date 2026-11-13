@@ -61,9 +61,34 @@ def enroll(router_id: str, tenant: str, pin: str) -> bytes:
     ).get_password_file()
 
 
-def key_mac(session_key: bytes, cid: str, key_type: int, pubkey: bytes) -> bytes:
-    """MAC binding the public key to register to the OPAQUE session."""
-    msg = b"rembus-register" + hashlib.sha256(
+LABELS = {1: b"rembus-register", 2: b"rembus-rekey"}
+
+
+def key_mac(
+    session_key: bytes, cid: str, key_type: int, pubkey: bytes, op: int = 1
+) -> bytes:
+    """MAC binding the public key and the operation to the OPAQUE session.
+
+    `op` is 1 (Register, label ``rembus-register``) or 2 (Rekey, label
+    ``rembus-rekey``).
+    """
+    msg = LABELS[op] + hashlib.sha256(
         cid.encode() + bytes([key_type]) + pubkey
     ).digest()
     return hmac.new(session_key, msg, hashlib.sha256).digest()
+
+
+def fake_record(router_id: str) -> bytes:
+    """Return a record of no tenant, used to answer stage 1 for a tenant
+    without a record so that the reply does not reveal whether it exists.
+
+    The record belongs to a random pin that is discarded, so the exchange
+    can never complete; it is created once per process.
+    """
+    global _FAKE  # pylint: disable=global-statement
+    if _FAKE is None:
+        _FAKE = enroll(router_id, "-fake-", os.urandom(32).hex())
+    return _FAKE
+
+
+_FAKE: bytes | None = None

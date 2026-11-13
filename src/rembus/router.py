@@ -43,6 +43,8 @@ logger = logging.getLogger(__name__)
 PIN_NONCE_SIZE = 32
 PIN_NONCE_TTL = 60.0  # seconds
 MAX_PIN_NONCES = 8  # outstanding nonces per connection
+OPAQUE_TTL = 60.0  # seconds, lifetime of a stage 1 exchange
+OPAQUE_MAX_EXCHANGES = 8  # outstanding OPAQUE exchanges per connection
 BUILTIN_TOPICS = frozenset({"rid", "version", "uptime"})
 """
 Topic names registered in `Router.handler` that are built-in admin
@@ -1233,7 +1235,11 @@ class Router(Supervised):
         The outstanding nonce is discarded whatever the outcome.
         """
         tenant = tenant_of(msg.cid, self.config.tenants_enabled)
-        pin = self.tenants.get(tenant)
+        # A tenant is either pin-proof or opaque-only, never both: an
+        # OPAQUE record takes precedence and no pin proof can succeed.
+        pin = (
+            None if tenant in self.opaque_tenants else self.tenants.get(tenant)
+        )
         entry = twin.pin_nonces.pop((op, msg.cid), None)
         valid = (
             entry is not None
@@ -1326,30 +1332,51 @@ class Router(Supervised):
         sts = rp.STS_GENERIC_ERROR
         data = None
         tenant = tenant_of(msg.cid, self.config.tenants_enabled)
+        rekey = msg.op == rp.OPAQUE_OP_REKEY
         try:
-            if msg.stage == rp.OPAQUE_START:
+            if not valid_cid(msg.cid) or msg.op not in (
+                rp.OPAQUE_OP_REGISTER,
+                rp.OPAQUE_OP_REKEY,
+            ):
+                data = "invalid opaque request"
+            elif rekey and not self._rekey_session_ok(twin, msg.cid):
+                data = "invalid operation"
+            elif msg.stage == rp.OPAQUE_START:
                 record = self.opaque_tenants.get(tenant)
+                if self._opaque_setup is None:
+                    self._opaque_setup = opaque.load_setup(self.id)
                 if record is None:
-                    data = f"tenant [{tenant}] not enabled"
+                    # Same reply as for an existing tenant: the exchange
+                    # fails at the finish stage (no enumeration oracle).
+                    record = opaque.fake_record(self.id)
+                states = twin.handler.setdefault("opaque", {})
+                now = time.monotonic()
+                for k in [k for k, v in states.items() if v[1] <= now]:
+                    del states[k]
+                key = (msg.cid, msg.op)
+                if key not in states and len(states) >= OPAQUE_MAX_EXCHANGES:
+                    data = "too many opaque exchanges"
                 else:
-                    if self._opaque_setup is None:
-                        self._opaque_setup = opaque.load_setup(self.id)
                     out = ok.server_login_start(
                         self._opaque_setup,
                         record,
                         bytes(msg.data),
                         tenant.encode(),
                     )
-                    twin.handler["opaque"] = (out.get_state(), msg.cid)
+                    states[key] = (out.get_state(), now + OPAQUE_TTL)
                     data = bytes_to_b64(out.get_message(), twin.enc)
                     sts = rp.STS_OK
             elif msg.stage == rp.OPAQUE_FINISH:
                 # A login state is valid for one finalization only.
-                state = twin.handler.pop("opaque", None)
-                if state is None or state[1] != msg.cid:
+                entry = twin.handler.get("opaque", {}).pop(
+                    (msg.cid, msg.op), None
+                )
+                if entry is None or entry[1] <= time.monotonic():
                     data = "unexpected opaque message"
                 else:
-                    sts, data = self._opaque_finish(msg, state[0], ok, opaque)
+                    sts, data = self._opaque_finish(
+                        msg, entry[0], ok, opaque
+                    )
             else:
                 data = "invalid opaque stage"
         except Exception as e:  # pylint: disable=broad-exception-caught
@@ -1358,6 +1385,11 @@ class Router(Supervised):
             data = "opaque register failed"
         finally:
             await twin.response(sts, msg, data)
+
+    @staticmethod
+    def _rekey_session_ok(twin, cid: str) -> bool:
+        """An OPAQUE Rekey needs a connection authenticated as `cid`."""
+        return bool(twin.isauth and twin.rid == cid)
 
     def _opaque_finish(self, msg: rp.OpaqueMsg, state, ok, opaque):
         """Verify the OPAQUE login and store the public key.
@@ -1375,17 +1407,28 @@ class Router(Supervised):
         pubkey = msg.pubkey
         if not isinstance(pubkey, bytes) or not isinstance(msg.type, int):
             return err, "invalid public key"
-        expected = opaque.key_mac(session_key, msg.cid, msg.type, pubkey)
+        expected = opaque.key_mac(
+            session_key, msg.cid, msg.type, pubkey, msg.op
+        )
         if not isinstance(msg.mac, bytes) or not hmac.compare_digest(
             expected, msg.mac
         ):
             return err, "wrong tenant/pin"
-        if rp.isregistered(self.id, msg.cid):
-            return rp.STS_NAME_ALREADY_TAKEN, f"[{msg.cid}] not available"
+        rekey = msg.op == rp.OPAQUE_OP_REKEY
+        if rekey and not self._rekey_session_ok(msg.twin, msg.cid):
+            return err, "invalid operation"
         try:
             rp.validate_pubkey(pubkey, msg.type)
         except ValueError as e:
             return err, str(e)
+        if rekey:
+            if not rp.isregistered(self.id, msg.cid):
+                return err, f"[{msg.cid}] not registered"
+            rp.replace_pubkey(self.id, msg.cid, pubkey, msg.type)
+            logger.debug("cid %s rekeyed (opaque)", msg.cid)
+            return rp.STS_OK, None
+        if rp.isregistered(self.id, msg.cid):
+            return rp.STS_NAME_ALREADY_TAKEN, f"[{msg.cid}] not available"
         os.makedirs(rs.keys_dir(self.id), exist_ok=True)
         rp.save_pubkey(self.id, msg.cid, pubkey, msg.type)
         logger.debug("cid %s registered (opaque)", msg.cid)

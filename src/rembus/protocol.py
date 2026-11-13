@@ -90,6 +90,8 @@ TYPE_ATTESTATION = 11
 
 OPAQUE_START = 1
 OPAQUE_FINISH = 2
+OPAQUE_OP_REGISTER = 1
+OPAQUE_OP_REKEY = 2
 
 STS_OK = 0
 STS_GENERIC_ERROR = 0x0A
@@ -712,6 +714,8 @@ class OpaqueMsg(RembusMsg):
     pubkey: Optional[bytes | str] = None
     type: Optional[int] = None
     mac: Optional[bytes | str] = None
+    # OPAQUE_OP_REGISTER (default, omitted on the wire) or OPAQUE_OP_REKEY
+    op: int = 1
 
     def to_payload(self, enc: int) -> bytes | str:
         """Serialize the OPAQUE message."""
@@ -726,6 +730,7 @@ class OpaqueMsg(RembusMsg):
                     self.pubkey,
                     self.type,
                     self.mac,
+                    *([self.op] if self.op != OPAQUE_OP_REGISTER else []),
                     *self.extra,
                 ]
             )
@@ -739,6 +744,8 @@ class OpaqueMsg(RembusMsg):
             params["key_val"] = self.pubkey
             params["key_type"] = self.type
             params["mac"] = self.mac
+        if self.op != OPAQUE_OP_REGISTER:
+            params["op"] = self.op
 
         return json_dumps(
             {
@@ -917,6 +924,7 @@ def jsonrpc_request(pkt, msg_id, params) -> RembusMsg:
                 pubkey=_b64_field(params.get("key_val")),
                 type=params.get("key_type", SIG_RSA),
                 mac=_b64_field(params.get("mac")),
+                op=params.get("op", OPAQUE_OP_REGISTER),
             )
         elif msg_type == TYPE_UNREGISTER:
             return UnregisterMsg(id=msg_id)
@@ -1082,6 +1090,7 @@ def cbor_parse(pkt) -> RembusMsg:
             pubkey=pkt[5],
             type=pkt[6],
             mac=pkt[7],
+            op=pkt[8] if len(pkt) > 8 else OPAQUE_OP_REGISTER,
         ),
         TYPE_UNREGISTER: lambda: UnregisterMsg(id=from_bytes(pkt[1])),
     }
@@ -1096,7 +1105,8 @@ def cbor_parse(pkt) -> RembusMsg:
         TYPE_ATTESTATION: 5,
         TYPE_REGISTER: 6,
         TYPE_REKEY: 6,
-        TYPE_OPAQUE: 8,
+        # `op` (index 8) is optional and is handled by the constructor.
+        TYPE_OPAQUE: 9 if len(pkt) > 8 else 8,
         TYPE_UNREGISTER: 2,
     }
 

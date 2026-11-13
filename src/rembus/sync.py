@@ -187,9 +187,12 @@ class Node:
         """
         return self.exec(self._rb.register, rid, pin, scheme, opaque)
 
-    def rekey(self, pin: str, scheme: int = SIG_RSA):
-        """Replace the key pair of the authenticated component."""
-        return self.exec(self._rb.rekey, pin, scheme)
+    def rekey(self, pin: str, scheme: int = SIG_RSA, opaque: bool = False):
+        """Replace the key pair of the authenticated component.
+
+        With `opaque` the new key is authorized by an OPAQUE login.
+        """
+        return self.exec(self._rb.rekey, pin, scheme, opaque)
 
     def unregister(self):
         """Unregister the component."""
