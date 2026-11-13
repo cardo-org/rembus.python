@@ -537,6 +537,11 @@ derived by the OPAQUE exchange. Byte fields are base64 text in JSON.</p>
 <span class="sig-name descname"><span class="pre">mac</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">bytes</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#rembus.protocol.OpaqueMsg.mac" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
+<dl class="py attribute">
+<dt class="sig sig-object py" id="rembus.protocol.OpaqueMsg.op">
+<span class="sig-name descname"><span class="pre">op</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#rembus.protocol.OpaqueMsg.op" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
 <dl class="py method">
 <dt class="sig sig-object py" id="rembus.protocol.OpaqueMsg.to_payload">
 <span class="sig-name descname"><span class="pre">to_payload</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">enc</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.protocol.OpaqueMsg.to_payload" title="Link to this definition">¶</a></dt>
@@ -1489,7 +1494,7 @@ OPAQUE record for the tenant (see <code class="docutils literal notranslate"><sp
 
 <dl class="py method">
 <dt class="sig sig-object py" id="rembus.twin.Twin.rekey">
-<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">rekey</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scheme</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.Twin.rekey" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">rekey</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scheme</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">opaque</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rembus.twin.Twin.rekey" title="Link to this definition">¶</a></dt>
 <dd><p>Replace the key pair of the current (authenticated) component.</p>
 <p>A new key pair is generated according to <cite>scheme</cite> and the new public
 key is sent to the broker in a Rekey packet. The local private key is
@@ -1501,6 +1506,9 @@ the new key is used from the next authentication.</p>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>pin</strong> (<em>str</em>) – The secret of the component tenant (not sent on the wire).</p></li>
 <li><p><strong>scheme</strong> (<em>int</em><em>, </em><em>optional</em>) – <cite>rp.SIG_RSA</cite> (default) or <cite>rp.SIG_ECDSA</cite>.</p></li>
+<li><p><strong>opaque</strong> (<em>bool</em><em>, </em><em>optional</em>) – Authorize the new key with an OPAQUE login (<cite>Opaque</cite> packet,
+<cite>op</cite> 2) instead of the pin proof. The tenant must have an OPAQUE
+record.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
@@ -2605,6 +2613,7 @@ messages towards <cite>twin</cite> without waiting for individual
 <li><a class="reference internal" href="#rembus.protocol.OpaqueMsg.pubkey"><code class="docutils literal notranslate"><span class="pre">OpaqueMsg.pubkey</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.OpaqueMsg.type"><code class="docutils literal notranslate"><span class="pre">OpaqueMsg.type</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.OpaqueMsg.mac"><code class="docutils literal notranslate"><span class="pre">OpaqueMsg.mac</span></code></a></li>
+<li><a class="reference internal" href="#rembus.protocol.OpaqueMsg.op"><code class="docutils literal notranslate"><span class="pre">OpaqueMsg.op</span></code></a></li>
 <li><a class="reference internal" href="#rembus.protocol.OpaqueMsg.to_payload"><code class="docutils literal notranslate"><span class="pre">OpaqueMsg.to_payload()</span></code></a></li>
 </ul>
 </li>
