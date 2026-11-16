@@ -585,6 +585,11 @@ class Twin(Supervised):
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.warning("[%s] error: %s", self, e)
         finally:
+            if self.isclient and getattr(self.socket, "close_code", None) == (
+                rp.WS_CLOSE_AUTH_TIMEOUT
+            ):
+                logger.warning("[%s] closed: authentication timeout", self)
+                self.handler["phase"] = lambda: "CLOSED"
             if (
                 self.isclient
                 and getattr(self.socket, "close_code", None)

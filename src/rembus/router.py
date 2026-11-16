@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import asyncio
+from contextlib import suppress
 import base64
 import hmac
 from enum import Enum
@@ -1094,6 +1095,11 @@ class Router(Supervised):
         await asyncio.sleep(self.config.challenge_timeout)
         if not twin.isauth:
             logger.warning("[%s] authentication timeout", twin)
+            if twin.socket is not None:
+                with suppress(Exception):
+                    await twin.socket.close(
+                        rp.WS_CLOSE_AUTH_TIMEOUT, "authentication timeout"
+                    )
             await twin.close()
 
     async def serve_ws(self, port: int, issecure: bool = False):

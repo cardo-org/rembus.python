@@ -45,6 +45,9 @@ logger = logging.getLogger(__name__)
 
 # WebSocket close code sent to a connection replaced by overwrite_connection.
 WS_CLOSE_OVERWRITTEN = 4000
+# WebSocket close code sent to a component that did not authenticate in time:
+# reconnecting would be refused again.
+WS_CLOSE_AUTH_TIMEOUT = 4001
 # WebSocket close code sent on an empty, truncated or undecodable message.
 WS_CLOSE_MALFORMED = 1008
 # WebSocket close code sent when the message type (text/binary) differs from
