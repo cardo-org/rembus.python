@@ -3,6 +3,13 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.6] Unreleased
+
+### Changed
+
+- The `cid` grammar now also allows `@`: a `cid` must match
+  `[A-Za-z0-9._@-]{1,255}` (`core.valid_cid`).
+
 ## [0.9.5] 2026-11-16
 
 ### Added

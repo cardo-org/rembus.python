@@ -62,7 +62,7 @@ def domain(s: str) -> str:
     return "."
 
 
-_CID_RE = re.compile(r"[A-Za-z0-9._-]{1,255}")
+_CID_RE = re.compile(r"[A-Za-z0-9._@-]{1,255}")
 
 
 def valid_cid(cid: Any) -> bool:
