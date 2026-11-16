@@ -23,7 +23,7 @@ PIN = "11223344"
 PORT = 8991
 
 
-def test_authenticated_mode():
+def test_authenticated_mode(monkeypatch):
     """Only authenticated components can send commands."""
     rembus.add_tenant(".", PIN)
     try:
@@ -40,9 +40,13 @@ def test_authenticated_mode():
     with pytest.raises(ValueError):
         rembus.node(f"ws://:{PORT}", authenticated=True)
 
-    # An unregistered component cannot authenticate.
-    with pytest.raises(rp.RembusError):
-        rembus.node(f"ws://:{PORT}/unknown_cmp", authenticated=True)
+    # An unregistered component cannot authenticate when it is remote.
+    with monkeypatch.context() as m:
+        m.setattr(
+            rembus.router.Router, "_remote_host", lambda self, twin: "10.0.0.1"
+        )
+        with pytest.raises(rp.RembusError):
+            rembus.node(f"ws://:{PORT}/unknown_cmp", authenticated=True)
 
     # The registered component is authenticated.
     cmp = rembus.node(f"ws://:{PORT}/{NAME}", authenticated=True)
@@ -59,6 +63,21 @@ def test_anonymous_loopback_component_is_allowed():
     try:
         server.expose(echo)
         cmp = rembus.node(f"ws://:{PORT}")
+        try:
+            assert cmp.rpc("echo", 1) == 1
+        finally:
+            cmp.close()
+    finally:
+        server.close()
+
+
+def test_named_unprovisioned_loopback_component_is_allowed():
+    """A named component with no registered key may connect from the
+    loopback even when it runs in authenticated mode."""
+    server = rembus.node(port=PORT, authenticated=True)
+    try:
+        server.expose(echo)
+        cmp = rembus.node(f"ws://:{PORT}/loopback_noprov", authenticated=True)
         try:
             assert cmp.rpc("echo", 1) == 1
         finally:

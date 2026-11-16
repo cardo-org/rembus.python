@@ -588,7 +588,7 @@ class Twin(Supervised):
             if self.isclient and getattr(self.socket, "close_code", None) == (
                 rp.WS_CLOSE_AUTH_TIMEOUT
             ):
-                logger.warning("[%s] closed: authentication timeout", self)
+                logger.info("[%s] closed: authentication timeout", self)
                 self.handler["phase"] = lambda: "CLOSED"
             if (
                 self.isclient
@@ -831,7 +831,7 @@ class Twin(Supervised):
         RembusTimeout
             If the remote peer does not respond within the expected time.
         """
-        if self.router.authenticated:
+        if self.router.authenticated and self._has_private_key():
             # The router sends the challenge without waiting for an
             # Identity message.
             response = await self.wait_response(self._challenge_fut)

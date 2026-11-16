@@ -36,6 +36,10 @@ def pytest_configure(config):  # pylint: disable=unused-argument
     """
     Configure pytest settings before any tests are run.
     """
+    # Never run against a real catalog inherited from the environment.
+    url = os.environ.get("DUCKLAKE_URL", "")
+    if url and "test" not in url.rsplit("/", 1)[-1].lower():
+        del os.environ["DUCKLAKE_URL"]
     logging.getLogger().setLevel(logging.DEBUG)
     logging.getLogger("rembus").setLevel(logging.DEBUG)
     logging.getLogger("websockets").setLevel(logging.INFO)

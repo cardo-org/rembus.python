@@ -182,12 +182,22 @@ def parse_dburl():
     return [o.username, o.password, o.hostname, o.path.lstrip("/")]
 
 
-def reset_db(broker_name):
-    """Create an empy database."""
+def reset_db(broker_name, force: bool = False):
+    """Create an empy database.
+
+    When `DUCKLAKE_URL` is set the target database is dropped, so unless
+    `force` is true the database name must contain "test"; this prevents
+    destroying a real catalog from a test run that inherited the variable.
+    """
     dl_url = os.environ.get("DUCKLAKE_URL")
 
     if dl_url:
         user, password, host, db = parse_dburl()
+        if not force and "test" not in db.lower():
+            raise RuntimeError(
+                f"refusing to reset database [{db}]: the name does not "
+                "contain 'test' (pass force=True to override)"
+            )
         if dl_url.startswith("ducklake:postgres"):
             env = os.environ.copy()
             if user:

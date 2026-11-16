@@ -49,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The minimum supported Python version is now 3.12 (required by the
   `opaque-ke-py` dependency).
 
+- A component that does not authenticate within the challenge timeout is
+  closed with WebSocket code 4001 (`protocol.WS_CLOSE_AUTH_TIMEOUT`). A client
+  receiving it logs a warning and stops reconnecting, since it would be
+  refused again.
+
 ## [0.9.4] 2026-11-11
 
 ### Added
