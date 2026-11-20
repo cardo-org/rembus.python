@@ -211,7 +211,7 @@ def test_outstanding_nonces_bounded(server):
 
 
 @pytest.mark.parametrize(
-    "cid", ["", ".hidden", "a..b", "a/b", "a b", "a@b", "x" * 256, "a\n"]
+    "cid", ["", ".hidden", "a..b", "a/b", "a b", "a#b", "x" * 256, "a\n"]
 )
 def test_invalid_cid_rejected(server, cid):
     with connect(f"ws://127.0.0.1:{PORT}") as ws:
@@ -220,7 +220,7 @@ def test_invalid_cid_rejected(server, cid):
 
 
 def test_valid_cid_grammar():
-    assert all(valid_cid(c) for c in ("a", "a.b", "A_z-9", "x" * 255))
+    assert all(valid_cid(c) for c in ("a", "a.b", "A_z-9", "a@b", "x" * 255))
     assert not any(valid_cid(c) for c in ("", ".a", "a..b", "x" * 256, None))
 
 
