@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `cid` grammar now also allows `@`: a `cid` must match
   `[A-Za-z0-9._@-]{1,255}` (`core.valid_cid`).
 
+### Fixed
+
+- Anonymous twins (random, never reused `cid`) are no longer persisted on
+  shutdown: `save_twin` is skipped when the twin has no name, so they stop
+  accumulating orphan rows in the `mark`, `subscriber` and `exposer` tables.
+
 ## [0.9.5] 2026-11-16
 
 ### Added

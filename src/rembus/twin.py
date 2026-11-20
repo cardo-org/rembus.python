@@ -472,7 +472,10 @@ class Twin(Supervised):
             pending_save = getattr(self.router, "_data_at_rest_task", None)
             if pending_save is not None and not pending_save.done():
                 await pending_save
-            save_twin(self)
+            # Anonymous twins have a random id never reused: persisting
+            # them would only accumulate orphan rows.
+            if self.uid.hasname:
+                save_twin(self)
 
         if self.uid.isbroker():
             await self._shutdown_twins()
